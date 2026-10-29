@@ -54,6 +54,15 @@ Record confirmed choices separately from open proposals. Never rewrite history s
 - **Affected files/modules:** Android share intent handling, import flow.
 - **Open implementation details:** Which content types each source app shares and what can be extracted must be verified.
 
+### DEC-007 — Quick, forgiving review before saving
+- **Status:** Approved
+- **Date:** 2026-10-29
+- **Decision:** After importing, show the captured recipe for review and correction before saving. The common successful path should be a quick check and save; when correction is needed, make the problem easy to spot and the fix painless.
+- **Rationale:** Automatic extraction may not be perfect, but users should not have to rebuild a recipe manually. The app should feel intuitive and efficient.
+- **Approved by:** Matthew Mundy
+- **Affected files/modules:** Import pipeline, review screen, editable recipe model, error recovery.
+- **Design requirement:** Preserve extracted content, focus attention on missing or uncertain fields, allow direct edits, and avoid unnecessary steps when extraction is complete.
+
 ## Open questions
 | ID | Question | Status |
 |---|---|---|
@@ -71,3 +80,4 @@ Record confirmed choices separately from open proposals. Never rewrite history s
 | 2026-10-29 | Initial project planning decisions recorded. |
 | 2026-10-29 | Confirmed social-media recipe capture as a product requirement. |
 | 2026-10-29 | Confirmed Android Share menu entry labeled “Import to Touch Recipe.” |
+| 2026-10-29 | Defined quick, forgiving pre-save review and correction. |
