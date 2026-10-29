@@ -63,15 +63,15 @@ Record confirmed choices separately from open proposals. Never rewrite history s
 - **Affected files/modules:** Import pipeline, review screen, editable recipe model, error recovery.
 - **Design requirement:** Preserve extracted content, focus attention on missing or uncertain fields, allow direct edits, and avoid unnecessary steps when extraction is complete.
 
-### DEC-008 — Import recipes from cookbook pages and recipe cards
+### DEC-008 — Capture printed recipes by camera or file
 - **Status:** Approved
 - **Date:** 2026-10-29
-- **Decision:** Include a way to photograph or scan a cookbook page or recipe card and turn it into an editable recipe.
-- **Rationale:** The owner considers camera/scan import very important and wants it included in Touch Recipe's ambitious plan.
+- **Decision:** Include a way to photograph or scan a cookbook page or recipe card, and to import recipe images or PDFs already saved on the phone, turning them into editable recipes.
+- **Rationale:** The owner considers camera/scan capture very important and approved importing existing phone files as well.
 - **Approved by:** Matthew Mundy
-- **Affected files/modules:** Camera/photo input, OCR/recipe extraction, review screen, image handling.
-- **Design requirement:** Let users check and correct recognized text before saving; preserve the source image when useful.
-- **Implementation note:** Handwriting recognition, page layouts, image quality, offline processing and device performance require feasibility testing.
+- **Affected files/modules:** Camera/photo input, Android document picker, PDF/image handling, OCR/recipe extraction, review screen.
+- **Design requirement:** Let users check and correct recognized text before saving; preserve the source image/PDF when useful.
+- **Implementation note:** Handwriting recognition, page layouts, file size, image quality, offline processing and device performance require feasibility testing.
 
 ## Open questions
 | ID | Question | Status |
@@ -91,4 +91,4 @@ Record confirmed choices separately from open proposals. Never rewrite history s
 | 2026-10-29 | Confirmed social-media recipe capture as a product requirement. |
 | 2026-10-29 | Confirmed Android Share menu entry labeled “Import to Touch Recipe.” |
 | 2026-10-29 | Defined quick, forgiving pre-save review and correction. |
-| 2026-10-29 | Confirmed camera/photo and scan capture for printed recipes. |
+| 2026-10-29 | Confirmed camera, scan and existing phone-file import for printed recipes. |
