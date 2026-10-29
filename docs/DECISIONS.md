@@ -73,11 +73,19 @@ Record confirmed choices separately from open proposals. Never rewrite history s
 - **Design requirement:** Let users check and correct recognized text before saving; preserve the source image/PDF when useful.
 - **Implementation note:** Handwriting recognition, page layouts, file size, image quality, offline processing and device performance require feasibility testing.
 
+### DEC-009 — One clear import hub with multiple input methods
+- **Status:** Approved
+- **Date:** 2026-10-29
+- **Decision:** The main “Import Recipe” action opens a simple choice of ways to add a recipe: enter a website or social link, take a photo, choose a saved image/PDF, or type/paste recipe text. Android Share imports can enter directly with the shared content ready.
+- **Rationale:** Make all common input methods easy to find without crowding the home screen, while keeping direct sharing fast.
+- **Approved by:** Matthew Mundy
+- **Affected files/modules:** Home screen, import chooser, camera/document/text input and import routing.
+
 ## Open questions
 | ID | Question | Status |
 |---|---|---|
 | Q-001 | What feature set belongs in the ambitious first release versus later phases? | Open |
-| Q-002 | Which other import inputs are required at launch (built-in browser, clipboard text)? | Open |
+| Q-002 | Which other import inputs are required at launch (built-in browser)? | Open |
 | Q-003 | How should unsupported/partial imports recover and what parser sources are feasible? | Open |
 | Q-004 | Which destinations/screens and navigation model are needed? | Open |
 | Q-005 | Local-only, optional cloud sync, household sharing, and backup/export model? | Open |
@@ -92,3 +100,4 @@ Record confirmed choices separately from open proposals. Never rewrite history s
 | 2026-10-29 | Confirmed Android Share menu entry labeled “Import to Touch Recipe.” |
 | 2026-10-29 | Defined quick, forgiving pre-save review and correction. |
 | 2026-10-29 | Confirmed camera, scan and existing phone-file import for printed recipes. |
+| 2026-10-29 | Defined one import hub for links, photos, saved files and typed/pasted text. |
