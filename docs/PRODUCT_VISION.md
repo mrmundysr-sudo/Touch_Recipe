@@ -14,8 +14,9 @@
 - [x] Be ambitious and aim for a feature-rich first pass, with discovery and feasibility work before implementation.
 - [x] Recipe capture from online sites is a central product priority; automatic extraction must allow customization and corrections.
 - [x] Plan recipe capture from social-media sources, including TikTok, Instagram and Facebook, to get ahead of Paprika 4.
-- [x] Include photographing/scanning cookbook pages and recipe cards to create editable recipes.
+- [x] Include photographing/scanning cookbook pages and recipe cards, plus importing recipe images/PDFs already saved on the phone.
 - [x] Route shared links/content into the app through Android Share, labeled “Import to Touch Recipe.”
+- [x] The main Import Recipe action opens a simple chooser for website/social links, taking a photo, choosing an image/PDF, or typing/pasting recipe text.
 - [x] Show an easy review and correction step before saving; usual imports should need only a quick check.
 - [x] Give photography, attractive typography, color and visual polish high priority.
 - [x] Use custom illustration for backgrounds and buttons, following the visual craftsmanship of Touch games.
@@ -25,7 +26,7 @@
 - [x] Current preferred concept is modern food magazine: clean editorial layouts, food photography, deep green and tomato-orange accents, expressive headings and tasteful illustrations.
 
 ## Proposed feature areas — scope to define
-- Recipe capture: website URL, Android share sheet, built-in browsing, copied recipe text, social/video sources, camera/photo scan of printed recipes, and robust manual fallback. Research each source's real technical availability and restrictions.
+- Recipe capture: website/social links, Android share sheet, optional built-in browsing, camera/photos, saved images/PDFs, typed or pasted text, and robust manual fallback. Research each source's real technical availability and restrictions.
 - Import review: editable title, photo, ingredients, directions, times, servings, categories, source URL and notes; clearly show missing or uncertain extraction and preserve everything captured when recovery is needed.
 - Recipe library: powerful search, filters, tags/custom categories, favorites, ratings, notes, collections/cookbooks, sorting and duplicate handling.
 - Recipe use: serving scaling, unit preferences/conversions, readable cook mode, timers, ingredient check-off, screen-awake option and accessibility.
@@ -34,9 +35,9 @@
 - Optional enhancements: nutrition, dietary filters, smart suggestions, recipe discovery and household collaboration; feasibility and data sources need review.
 
 ## User journeys to design
-1. **Save a website recipe:** share or paste a recipe link → extract → review/edit → save with source and image.
-2. **Save a social recipe:** choose “Import to Touch Recipe” from Android Share → capture available post text/caption/transcript → review and correct → save with source link. Exact supported platforms and behavior require feasibility testing.
-3. **Scan a printed recipe:** photograph or select a cookbook/card image → recognize recipe text → review and correct → save, optionally keeping the source photo.
+1. **Use the Import Recipe button:** choose a link, camera, saved image/PDF, or typed/pasted text → capture/extract → review/edit → save.
+2. **Share from another app:** choose “Import to Touch Recipe” from Android Share → start directly with the shared link/content → review and correct → save. Exact behavior and content shared by each source require feasibility testing.
+3. **Scan a printed recipe:** photograph or select a cookbook/card image or PDF → recognize recipe text → review and correct → save, optionally keeping the source file.
 4. **Recover a partial import:** see what needs attention → correct fields or use assisted/manual capture → save without losing captured content.
 5. **Find and cook:** search/filter library → open photo-rich recipe → scale servings → cook with clear steps and timers.
 6. **Plan and shop:** place meals on a calendar → generate/adjust a grocery list → organize items for shopping.
@@ -56,7 +57,7 @@
 - Keep personal recipe data under user control; privacy and sync choices must be explicit.
 
 ## First release
-- **In scope:** not yet approved. Owner wants an ambitious, feature-rich first pass with web/social capture, share-to-import and scan/photo capture planned as key capabilities.
+- **In scope:** not yet approved. Owner wants an ambitious, feature-rich first pass with web/social capture, share-to-import, camera/file scans and text paste planned as key capabilities.
 - **Out of scope:** not yet defined.
 - **Success criteria:** define measurable import accuracy/coverage and recovery, usability, performance, accessibility, data safety and visual quality criteria before implementation.
 
