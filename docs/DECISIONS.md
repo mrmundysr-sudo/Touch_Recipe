@@ -36,11 +36,20 @@ Record confirmed choices separately from open proposals. Never rewrite history s
 - **Approved by:** Matthew Mundy
 - **Open details:** Which screens, exact duration, replay/reset behavior, reduced-motion/accessibility alternative.
 
+### DEC-005 — Include social-media recipe capture in product scope
+- **Status:** Approved
+- **Date:** 2026-10-29
+- **Decision:** Plan for saving recipes from social-media sources, including TikTok, Instagram and Facebook, alongside ordinary recipe websites.
+- **Rationale:** The owner explicitly wants Touch Recipe to get ahead of Paprika 4's social import update.
+- **Approved by:** Matthew Mundy
+- **Affected files/modules:** Product vision, import research, feasibility audit.
+- **Implementation note:** Supported behavior, platform restrictions, available captions/text and lawful/authorized access must be researched; do not promise universal extraction until tested.
+
 ## Open questions
 | ID | Question | Status |
 |---|---|---|
 | Q-001 | What feature set belongs in the ambitious first release versus later phases? | Open |
-| Q-002 | Which import inputs are required at launch (URL/share, built-in browser, clipboard text, photo/scan, social/video)? | Open |
+| Q-002 | Which other import inputs are required at launch (URL/share, built-in browser, clipboard text, photo/scan)? | Open |
 | Q-003 | How should unsupported/partial imports recover and what parser sources are feasible? | Open |
 | Q-004 | Which destinations/screens and navigation model are needed? | Open |
 | Q-005 | Local-only, optional cloud sync, household sharing, and backup/export model? | Open |
@@ -51,3 +60,4 @@ Record confirmed choices separately from open proposals. Never rewrite history s
 | Date | Change |
 |---|---|
 | 2026-10-29 | Initial project planning decisions recorded. |
+| 2026-10-29 | Confirmed social-media recipe capture as a product requirement. |
