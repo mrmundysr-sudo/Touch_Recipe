@@ -1,10 +1,15 @@
 # Touch Recipe — Draft Built-In Category Catalog
 
-> Draft for owner review. Category names and the starting checked/unchecked state are not final yet.
+> Draft for owner review. The short initial category list is approved in principle; its exact contents remain open.
 
-The goal is to offer a broad set of familiar categories without forcing users to use all of them. Users can check the categories they want and uncheck the rest. They can also create up to 50 custom categories.
+The category system should feel simple during normal use while still offering depth when wanted:
+- Show only a short common set in the recipe's initial category picker.
+- Keep **Add Category** visible.
+- Add Category opens the full built-in catalog and the Custom option.
+- Users can enable/disable built-in categories and create up to 50 custom categories.
+- A recipe may have multiple selected categories.
 
-## Proposed built-in catalog
+## Proposed full built-in catalog
 
 ### Meal and course
 - Breakfast
@@ -115,19 +120,17 @@ These are organizational labels and do not certify a recipe as medically safe.
 - Camping and Outdoors
 
 ## Proposed category behavior
-- Built-in categories are presented in grouped sections with checkboxes.
-- Users may enable or disable categories they do not want in their own category picker.
-- A recipe may have multiple enabled categories.
-- The category-management screen clearly shows the custom-category count (for example, 7 of 50).
-- The Custom option opens a text-entry field. Pressing Enter saves the new category, marks it enabled, selects it for the recipe being edited when appropriate, and presents a fresh entry field immediately.
-- Prevent duplicate custom names after trimming extra spaces and comparing case-insensitively; explain the duplicate instead of silently making another.
-- Provide clear editing and deletion controls for custom categories. Deleting a category should explain what happens to recipes assigned to it and avoid silent data loss.
-- Proposed safe default: turning off a category hides it from routine selection but preserves existing recipe assignments; turning it back on restores it. Owner review required.
+- The normal recipe screen shows a short common list and a visible **Add Category** option.
+- Add Category opens grouped sections of built-in choices, each with a checkbox, and a Custom section.
+- Users can enable more built-in choices from this expanded screen; they then appear in their category picker.
+- Custom opens text entry. Pressing Enter saves the new category, marks it enabled, selects it for the recipe being edited when appropriate, and leaves a fresh entry field ready immediately.
+- Show the custom-category count (for example, 7 of 50).
+- Prevent duplicate custom names after trimming extra spaces and comparing case-insensitively; explain the duplicate.
+- Provide editing and deletion controls for custom categories. Explain what deleting a category does to recipes assigned to it; avoid silent data loss.
+- Proposed safe behavior: disabling a category hides it from routine selection but preserves existing recipe assignments; re-enabling restores it.
 
 ## Open choices
-- Which built-in categories start checked.
-- Whether users choose categories during first-run setup or later from settings (recommend later/optional setup so first launch remains quick).
-- Whether disabling a category only hides it from selection or also removes it from existing recipes (recommend preserve).
-- Whether “Custom” is an entry in the same list or a clearly labeled separate section.
-- Final category names, translations and order.
-
+- Which categories belong in the short common list.
+- Exact names and order of the full built-in list.
+- Whether users choose optional categories during setup or later in Settings (recommend optional setup later to keep first launch quick).
+- Whether “Custom” is grouped with Add Category or shown as its own visible option.
