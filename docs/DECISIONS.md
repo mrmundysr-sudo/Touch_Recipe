@@ -45,11 +45,20 @@ Record confirmed choices separately from open proposals. Never rewrite history s
 - **Affected files/modules:** Product vision, import research, feasibility audit.
 - **Implementation note:** Supported behavior, platform restrictions, available captions/text and lawful/authorized access must be researched; do not promise universal extraction until tested.
 
+### DEC-006 — Android Share menu import entry
+- **Status:** Approved
+- **Date:** 2026-10-29
+- **Decision:** Touch Recipe should be available as a destination from Android's Share menu, using the action label “Import to Touch Recipe.” Choosing it starts the import flow with the shared link or content ready for review.
+- **Rationale:** Let users send recipes directly from browsers and supported social apps without manually switching apps and re-entering a URL.
+- **Approved by:** Matthew Mundy
+- **Affected files/modules:** Android share intent handling, import flow.
+- **Open implementation details:** Which content types each source app shares and what can be extracted must be verified.
+
 ## Open questions
 | ID | Question | Status |
 |---|---|---|
 | Q-001 | What feature set belongs in the ambitious first release versus later phases? | Open |
-| Q-002 | Which other import inputs are required at launch (URL/share, built-in browser, clipboard text, photo/scan)? | Open |
+| Q-002 | Which other import inputs are required at launch (built-in browser, clipboard text, photo/scan)? | Open |
 | Q-003 | How should unsupported/partial imports recover and what parser sources are feasible? | Open |
 | Q-004 | Which destinations/screens and navigation model are needed? | Open |
 | Q-005 | Local-only, optional cloud sync, household sharing, and backup/export model? | Open |
@@ -61,3 +70,4 @@ Record confirmed choices separately from open proposals. Never rewrite history s
 |---|---|
 | 2026-10-29 | Initial project planning decisions recorded. |
 | 2026-10-29 | Confirmed social-media recipe capture as a product requirement. |
+| 2026-10-29 | Confirmed Android Share menu entry labeled “Import to Touch Recipe.” |
