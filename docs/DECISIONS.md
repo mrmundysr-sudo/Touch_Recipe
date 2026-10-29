@@ -51,14 +51,17 @@ Record confirmed choices separately from open proposals. Never rewrite history s
 - **Status:** Approved · **Date:** 2026-10-29
 - **Decision:** Provide a thorough built-in recipe category list whose categories users can enable or disable, plus a Custom category option. Allow up to 50 user-created categories.
 - **Custom entry behavior:** Enabling Custom reveals a text box. Enter commits the typed category, adds it as an enabled/checked category (and selects it for the current recipe where applicable), then leaves a fresh text box ready for another entry.
-- **Open details:** Exact built-in starter list; editing/deleting custom categories and consequences for existing recipes.
 
 ### DEC-011 — Keep the category picker simple, with Add Category always visible
 - **Status:** Approved · **Date:** 2026-10-29
 - **Decision:** Show only a short common set of categories in the initial category picker, with a visible “Add Category” option.
 - **Expanded behavior:** Add Category opens the broader built-in category catalog and Custom option, so users can enable more built-in categories or create their own without crowding the normal recipe screen.
-- **Rationale:** Keep everyday categorization quick while preserving the depth of a thorough, customizable system.
-- **Open detail:** Which common categories appear in the initial short list.
+- **Open detail:** Which common categories appear in the short list.
+
+### DEC-012 — Add Category is a modular illustrated button
+- **Status:** Approved · **Date:** 2026-10-29
+- **Decision:** Create “Add Category” as its own replaceable illustrated button asset, consistent with the Import Recipe and Save Recipe controls.
+- **Implementation detail:** Keep the actual label as app text over/alongside the art for readability, accessibility and easy wording changes.
 
 ## Open questions
 | ID | Question | Status |
@@ -78,3 +81,4 @@ Record confirmed choices separately from open proposals. Never rewrite history s
 | 2026-10-29 | Initial project decisions recorded. |
 | 2026-10-29 | Confirmed social capture, Android Share, quick review, camera/file inputs, unified import chooser and flexible category system. |
 | 2026-10-29 | Confirmed short common category picker with visible Add Category expansion. |
+| 2026-10-29 | Added modular illustrated Add Category button to the visual system. |
