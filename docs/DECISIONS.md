@@ -50,9 +50,15 @@ Record confirmed choices separately from open proposals. Never rewrite history s
 ### DEC-010 — User-selectable built-in and custom categories
 - **Status:** Approved · **Date:** 2026-10-29
 - **Decision:** Provide a thorough built-in recipe category list whose categories users can enable or disable, plus a Custom category option. Allow up to 50 user-created categories.
-- **Custom entry behavior:** Enabling Custom reveals a text box. Enter commits the typed category, adds it as an enabled/checked category (and selects it for the current recipe where applicable), then leaves a fresh text box ready for another entry. Users can continue adding categories without reopening the control.
-- **Rationale:** Give users useful organization immediately while letting them build a recipe book around their own cooking habits.
-- **Open details:** Which built-in categories are selected by default; exact starter catalog; editing/deleting custom categories and consequences for existing recipes.
+- **Custom entry behavior:** Enabling Custom reveals a text box. Enter commits the typed category, adds it as an enabled/checked category (and selects it for the current recipe where applicable), then leaves a fresh text box ready for another entry.
+- **Open details:** Exact built-in starter list; editing/deleting custom categories and consequences for existing recipes.
+
+### DEC-011 — Keep the category picker simple, with Add Category always visible
+- **Status:** Approved · **Date:** 2026-10-29
+- **Decision:** Show only a short common set of categories in the initial category picker, with a visible “Add Category” option.
+- **Expanded behavior:** Add Category opens the broader built-in category catalog and Custom option, so users can enable more built-in categories or create their own without crowding the normal recipe screen.
+- **Rationale:** Keep everyday categorization quick while preserving the depth of a thorough, customizable system.
+- **Open detail:** Which common categories appear in the initial short list.
 
 ## Open questions
 | ID | Question | Status |
@@ -64,10 +70,11 @@ Record confirmed choices separately from open proposals. Never rewrite history s
 | Q-005 | Local-only, optional cloud sync, household sharing, and backup/export model? | Open |
 | Q-006 | Monetization/free limits? | Open |
 | Q-007 | Exact artwork sizes, slice format, names, density variants and screen safe areas? | Open |
-| Q-008 | Which starter categories should be enabled by default? | Open |
+| Q-008 | Which categories belong in the short common list? | Open |
 
 ## Change history
 | Date | Change |
 |---|---|
 | 2026-10-29 | Initial project decisions recorded. |
 | 2026-10-29 | Confirmed social capture, Android Share, quick review, camera/file inputs, unified import chooser and flexible category system. |
+| 2026-10-29 | Confirmed short common category picker with visible Add Category expansion. |
