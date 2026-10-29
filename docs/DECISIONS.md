@@ -63,11 +63,21 @@ Record confirmed choices separately from open proposals. Never rewrite history s
 - **Affected files/modules:** Import pipeline, review screen, editable recipe model, error recovery.
 - **Design requirement:** Preserve extracted content, focus attention on missing or uncertain fields, allow direct edits, and avoid unnecessary steps when extraction is complete.
 
+### DEC-008 — Import recipes from cookbook pages and recipe cards
+- **Status:** Approved
+- **Date:** 2026-10-29
+- **Decision:** Include a way to photograph or scan a cookbook page or recipe card and turn it into an editable recipe.
+- **Rationale:** The owner considers camera/scan import very important and wants it included in Touch Recipe's ambitious plan.
+- **Approved by:** Matthew Mundy
+- **Affected files/modules:** Camera/photo input, OCR/recipe extraction, review screen, image handling.
+- **Design requirement:** Let users check and correct recognized text before saving; preserve the source image when useful.
+- **Implementation note:** Handwriting recognition, page layouts, image quality, offline processing and device performance require feasibility testing.
+
 ## Open questions
 | ID | Question | Status |
 |---|---|---|
 | Q-001 | What feature set belongs in the ambitious first release versus later phases? | Open |
-| Q-002 | Which other import inputs are required at launch (built-in browser, clipboard text, photo/scan)? | Open |
+| Q-002 | Which other import inputs are required at launch (built-in browser, clipboard text)? | Open |
 | Q-003 | How should unsupported/partial imports recover and what parser sources are feasible? | Open |
 | Q-004 | Which destinations/screens and navigation model are needed? | Open |
 | Q-005 | Local-only, optional cloud sync, household sharing, and backup/export model? | Open |
@@ -81,3 +91,4 @@ Record confirmed choices separately from open proposals. Never rewrite history s
 | 2026-10-29 | Confirmed social-media recipe capture as a product requirement. |
 | 2026-10-29 | Confirmed Android Share menu entry labeled “Import to Touch Recipe.” |
 | 2026-10-29 | Defined quick, forgiving pre-save review and correction. |
+| 2026-10-29 | Confirmed camera/photo and scan capture for printed recipes. |
