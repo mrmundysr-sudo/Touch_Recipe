@@ -1,0 +1,2153 @@
+{
+ "schema": "touch-recipe/art@1",
+ "artSize": [
+  841,
+  1870
+ ],
+ "pages": {
+  "splash": {
+   "clean": "art/splash/clean.webp",
+   "bg": "#F6E9D3",
+   "targets": [],
+   "regions": {}
+  },
+  "hub": {
+   "clean": "art/hub/clean.webp",
+   "bg": "#24382B",
+   "targets": [
+    {
+     "id": "stove",
+     "label": "Stove and oven",
+     "hint": "Opens Cook Mode",
+     "glow": true,
+     "layer": "art/hub/cutout_1.webp",
+     "box": [
+      0.00238,
+      0.37861,
+      0.27943,
+      0.24171
+     ],
+     "hit": [
+      0.0,
+      0.37112,
+      0.29845,
+      0.25668
+     ]
+    },
+    {
+     "id": "calendar",
+     "label": "Cat calendar",
+     "hint": "Opens the Meal Planner",
+     "glow": true,
+     "layer": "art/hub/cutout_2.webp",
+     "box": [
+      0.40547,
+      0.07005,
+      0.26992,
+      0.19037
+     ],
+     "hit": [
+      0.38882,
+      0.06257,
+      0.30321,
+      0.20535
+     ]
+    },
+    {
+     "id": "new_recipe",
+     "label": "Refrigerator new recipe card",
+     "hint": "Opens Import Recipe",
+     "glow": true,
+     "layer": "art/hub/cutout_3.webp",
+     "box": [
+      0.78716,
+      0.17914,
+      0.17004,
+      0.09786
+     ],
+     "hit": [
+      0.76576,
+      0.16952,
+      0.21284,
+      0.11711
+     ]
+    },
+    {
+     "id": "search",
+     "label": "Magnifying glass",
+     "hint": "Opens Search",
+     "glow": true,
+     "layer": "art/hub/cutout_4.webp",
+     "box": [
+      0.81807,
+      0.34652,
+      0.1415,
+      0.10321
+     ],
+     "hit": [
+      0.79191,
+      0.33476,
+      0.19382,
+      0.12674
+     ]
+    },
+    {
+     "id": "grocery",
+     "label": "Grocery bag",
+     "hint": "Opens the Grocery List",
+     "glow": true,
+     "layer": "art/hub/cutout_5.webp",
+     "box": [
+      0.35672,
+      0.27219,
+      0.34483,
+      0.12727
+     ],
+     "hit": [
+      0.34007,
+      0.26471,
+      0.37812,
+      0.14225
+     ]
+    },
+    {
+     "id": "drawer",
+     "label": "Kitchen junk drawer",
+     "hint": "Opens the Kitchen Junk Drawer",
+     "glow": true,
+     "layer": "art/hub/cutout_6.webp",
+     "box": [
+      0.48633,
+      0.42139,
+      0.19382,
+      0.04278
+     ],
+     "hit": [
+      0.45541,
+      0.40749,
+      0.25565,
+      0.07059
+     ]
+    },
+    {
+     "id": "rolodex",
+     "label": "Recipe Rolodex",
+     "hint": "Opens your Recipe Collection",
+     "glow": true,
+     "layer": "art/hub/cutout_7.webp",
+     "box": [
+      0.20095,
+      0.63102,
+      0.61831,
+      0.26203
+     ],
+     "hit": [
+      0.18906,
+      0.62567,
+      0.64209,
+      0.27273
+     ]
+    }
+   ],
+   "regions": {}
+  },
+  "collection": {
+   "clean": "art/collection/clean.webp",
+   "bg": "#2B3A2E",
+   "targets": [
+    {
+     "id": "search",
+     "label": "Search recipes",
+     "hint": "Opens search",
+     "glow": true,
+     "layer": "art/collection/cutout_1.webp",
+     "box": [
+      0.044,
+      0.07059,
+      0.21046,
+      0.04973
+     ],
+     "hit": [
+      0.0321,
+      0.06524,
+      0.23424,
+      0.06043
+     ]
+    },
+    {
+     "id": "new_recipe",
+     "label": "New Recipe",
+     "hint": "Opens Import Recipe",
+     "glow": true,
+     "layer": "art/collection/cutout_2.webp",
+     "box": [
+      0.3258,
+      0.94064,
+      0.33769,
+      0.04813
+     ],
+     "hit": [
+      0.31391,
+      0.93529,
+      0.36147,
+      0.05882
+     ]
+    },
+    {
+     "id": "tab0",
+     "label": "All recipes tab",
+     "hint": "Shows every recipe",
+     "glow": true,
+     "box": [
+      0.26397,
+      0.0738,
+      0.14269,
+      0.04171
+     ],
+     "hit": [
+      0.26397,
+      0.0738,
+      0.14269,
+      0.04171
+     ]
+    },
+    {
+     "id": "tab1",
+     "label": "Favorites tab",
+     "hint": "Shows favorite recipes",
+     "glow": true,
+     "box": [
+      0.41617,
+      0.07487,
+      0.14031,
+      0.04064
+     ],
+     "hit": [
+      0.41617,
+      0.07487,
+      0.14031,
+      0.04064
+     ]
+    },
+    {
+     "id": "tab2",
+     "label": "Category tab",
+     "hint": "Filters by this category",
+     "glow": true,
+     "box": [
+      0.56361,
+      0.07487,
+      0.13793,
+      0.04064
+     ],
+     "hit": [
+      0.56361,
+      0.07487,
+      0.13793,
+      0.04064
+     ]
+    },
+    {
+     "id": "tab3",
+     "label": "Category tab",
+     "hint": "Filters by this category",
+     "glow": true,
+     "box": [
+      0.7063,
+      0.0738,
+      0.16647,
+      0.04171
+     ],
+     "hit": [
+      0.7063,
+      0.0738,
+      0.16647,
+      0.04171
+     ]
+    },
+    {
+     "id": "tab4",
+     "label": "More filters and sorting",
+     "hint": "Opens filters and sorting",
+     "glow": true,
+     "box": [
+      0.87753,
+      0.07594,
+      0.06659,
+      0.03957
+     ],
+     "hit": [
+      0.87753,
+      0.07594,
+      0.06659,
+      0.03957
+     ]
+    }
+   ],
+   "regions": {
+    "list": [
+     0.07848,
+     0.14011,
+     0.84661,
+     0.77005
+    ]
+   }
+  },
+  "detail": {
+   "clean": "art/detail/clean.webp",
+   "bg": "#F2E6D0",
+   "targets": [
+    {
+     "id": "back",
+     "label": "Back",
+     "hint": "Returns to the Recipe Collection",
+     "glow": true,
+     "layer": "art/detail/cutout_4.webp",
+     "box": [
+      0.03448,
+      0.01123,
+      0.08323,
+      0.0385
+     ],
+     "hit": [
+      0.01546,
+      0.00267,
+      0.12128,
+      0.05561
+     ]
+    },
+    {
+     "id": "favorite",
+     "label": "Favorite",
+     "hint": "Toggles favorite",
+     "glow": true,
+     "layer": "art/detail/cutout_3.webp",
+     "box": [
+      0.8799,
+      0.0123,
+      0.08561,
+      0.03743
+     ],
+     "hit": [
+      0.86088,
+      0.00374,
+      0.12366,
+      0.05455
+     ]
+    },
+    {
+     "id": "cook",
+     "label": "Cook Mode",
+     "hint": "Step by step cooking",
+     "glow": true,
+     "layer": "art/detail/cutout_1.webp",
+     "box": [
+      0.04043,
+      0.71765,
+      0.46254,
+      0.0861
+     ],
+     "hit": [
+      0.03329,
+      0.71444,
+      0.47681,
+      0.09251
+     ]
+    },
+    {
+     "id": "grocery",
+     "label": "Add to Grocery List",
+     "hint": "Adds ingredients to the grocery list",
+     "glow": true,
+     "layer": "art/detail/cutout_2.webp",
+     "box": [
+      0.522,
+      0.71711,
+      0.44114,
+      0.08877
+     ],
+     "hit": [
+      0.51486,
+      0.7139,
+      0.45541,
+      0.09519
+     ]
+    },
+    {
+     "id": "serv_dec",
+     "label": "Fewer servings",
+     "hint": "Decreases servings and scales ingredients",
+     "glow": true,
+     "box": [
+      0.60166,
+      0.41176,
+      0.08799,
+      0.03957
+     ],
+     "hit": [
+      0.60166,
+      0.41176,
+      0.08799,
+      0.03957
+     ]
+    },
+    {
+     "id": "serv_inc",
+     "label": "More servings",
+     "hint": "Increases servings and scales ingredients",
+     "glow": true,
+     "box": [
+      0.79429,
+      0.41176,
+      0.08799,
+      0.03957
+     ],
+     "hit": [
+      0.79429,
+      0.41176,
+      0.08799,
+      0.03957
+     ]
+    },
+    {
+     "id": "photo",
+     "label": "Recipe photo",
+     "hint": "Shows, replaces or removes the photo",
+     "glow": false,
+     "box": [
+      0.04281,
+      0.05561,
+      0.91439,
+      0.15615
+     ],
+     "hit": [
+      0.04281,
+      0.05561,
+      0.91439,
+      0.15615
+     ]
+    },
+    {
+     "id": "ingredients_head",
+     "label": "Edit ingredients",
+     "hint": "Opens the ingredient editor",
+     "glow": true,
+     "box": [
+      0.03329,
+      0.45455,
+      0.61831,
+      0.03743
+     ],
+     "hit": [
+      0.03329,
+      0.45455,
+      0.61831,
+      0.03743
+     ]
+    },
+    {
+     "id": "directions_head",
+     "label": "Edit directions",
+     "hint": "Opens the direction editor",
+     "glow": true,
+     "box": [
+      0.03329,
+      0.7893,
+      0.61831,
+      0.03743
+     ],
+     "hit": [
+      0.03329,
+      0.7893,
+      0.61831,
+      0.03743
+     ]
+    }
+   ],
+   "regions": {
+    "photo": [
+     0.0,
+     0.0,
+     1.0,
+     0.21818
+    ],
+    "title": [
+     0.04756,
+     0.22674,
+     0.70155,
+     0.1262
+    ],
+    "meta0": [
+     0.11653,
+     0.36578,
+     0.11891,
+     0.02781
+    ],
+    "meta1": [
+     0.38288,
+     0.36578,
+     0.11891,
+     0.02781
+    ],
+    "meta2": [
+     0.58264,
+     0.36578,
+     0.14863,
+     0.02781
+    ],
+    "meta3": [
+     0.8371,
+     0.36578,
+     0.11891,
+     0.02781
+    ],
+    "servings_value": [
+     0.70155,
+     0.41604,
+     0.09037,
+     0.03209
+    ],
+    "ingredients": [
+     0.04756,
+     0.49198,
+     0.61831,
+     0.2139
+    ],
+    "directions": [
+     0.04756,
+     0.83743,
+     0.82045,
+     0.14439
+    ]
+   }
+  },
+  "cook": {
+   "clean": "art/cook/clean.webp",
+   "bg": "#F2E6D0",
+   "targets": [
+    {
+     "id": "back",
+     "label": "Back",
+     "hint": "Returns to the recipe",
+     "glow": true,
+     "layer": "art/cook/cutout_4.webp",
+     "box": [
+      0.03805,
+      0.01979,
+      0.11296,
+      0.05241
+     ],
+     "hit": [
+      0.0214,
+      0.0123,
+      0.14625,
+      0.06738
+     ]
+    },
+    {
+     "id": "clock",
+     "label": "Timer clock",
+     "hint": "Shows the countdown",
+     "glow": true,
+     "layer": "art/cook/cutout_1.webp",
+     "box": [
+      0.17479,
+      0.73209,
+      0.15458,
+      0.07219
+     ],
+     "hit": [
+      0.1629,
+      0.72674,
+      0.17836,
+      0.08289
+     ]
+    },
+    {
+     "id": "start",
+     "label": "Start timer",
+     "hint": "Starts, pauses or resets the timer",
+     "glow": true,
+     "layer": "art/cook/cutout_2.webp",
+     "box": [
+      0.43163,
+      0.73529,
+      0.49465,
+      0.06791
+     ],
+     "hit": [
+      0.42212,
+      0.73102,
+      0.51367,
+      0.07647
+     ]
+    },
+    {
+     "id": "prev",
+     "label": "Previous step",
+     "hint": "Goes to the previous step",
+     "glow": true,
+     "layer": "art/cook/cutout_3.webp",
+     "box": [
+      0.0321,
+      0.84171,
+      0.32699,
+      0.05722
+     ],
+     "hit": [
+      0.02259,
+      0.83743,
+      0.34602,
+      0.06578
+     ]
+    },
+    {
+     "id": "next",
+     "label": "Next step",
+     "hint": "Completes this step and goes on",
+     "glow": true,
+     "layer": "art/cook/cutout_5.webp",
+     "box": [
+      0.63734,
+      0.84118,
+      0.32818,
+      0.05668
+     ],
+     "hit": [
+      0.62782,
+      0.8369,
+      0.34721,
+      0.06524
+     ]
+    }
+   ],
+   "regions": {
+    "stepchip": [
+     0.35672,
+     0.10267,
+     0.29013,
+     0.02995
+    ],
+    "top": [
+     0.08323,
+     0.14011,
+     0.83472,
+     0.31979
+    ],
+    "bottom": [
+     0.08323,
+     0.48128,
+     0.83472,
+     0.20321
+    ],
+    "clockface": [
+     0.18787,
+     0.73797,
+     0.12842,
+     0.06096
+    ]
+   }
+  },
+  "import": {
+   "clean": "art/import/clean.webp",
+   "bg": "#E9D8B7",
+   "targets": [
+    {
+     "id": "back",
+     "label": "Back",
+     "hint": "Returns to the Kitchen Hub",
+     "glow": true,
+     "layer": "art/import/cutout_1.webp",
+     "box": [
+      0.04281,
+      0.02032,
+      0.09275,
+      0.04385
+     ],
+     "hit": [
+      0.02378,
+      0.01176,
+      0.1308,
+      0.06096
+     ]
+    },
+    {
+     "id": "url",
+     "label": "Paste Recipe URL",
+     "hint": "Import a recipe from a web page link",
+     "glow": true,
+     "layer": "art/import/cutout_2.webp",
+     "box": [
+      0.03686,
+      0.3877,
+      0.46017,
+      0.16471
+     ],
+     "hit": [
+      0.02973,
+      0.38449,
+      0.47444,
+      0.17112
+     ]
+    },
+    {
+     "id": "text",
+     "label": "Paste or Type Recipe",
+     "hint": "Paste or type recipe text",
+     "glow": true,
+     "layer": "art/import/cutout_3.webp",
+     "box": [
+      0.50654,
+      0.4,
+      0.49346,
+      0.16898
+     ],
+     "hit": [
+      0.49941,
+      0.39679,
+      0.50059,
+      0.1754
+     ]
+    },
+    {
+     "id": "scan",
+     "label": "Scan a Recipe",
+     "hint": "Photograph a printed recipe",
+     "glow": true,
+     "layer": "art/import/cutout_4.webp",
+     "box": [
+      0.01784,
+      0.55989,
+      0.52556,
+      0.15348
+     ],
+     "hit": [
+      0.0107,
+      0.55668,
+      0.53983,
+      0.15989
+     ]
+    },
+    {
+     "id": "file",
+     "label": "Import PDF or File",
+     "hint": "Choose a PDF or image from your device",
+     "glow": true,
+     "layer": "art/import/cutout_5.webp",
+     "box": [
+      0.55054,
+      0.56471,
+      0.42687,
+      0.15455
+     ],
+     "hit": [
+      0.5434,
+      0.5615,
+      0.44114,
+      0.16096
+     ]
+    },
+    {
+     "id": "share",
+     "label": "Share to Touch Recipe",
+     "hint": "Explains how to share a recipe into the app",
+     "glow": true,
+     "layer": "art/import/cutout_6.webp",
+     "box": [
+      0.10702,
+      0.72086,
+      0.7824,
+      0.07807
+     ],
+     "hit": [
+      0.09988,
+      0.71765,
+      0.79667,
+      0.08449
+     ]
+    },
+    {
+     "id": "continue",
+     "label": "Continue to Review",
+     "hint": "Review and correct the imported recipe",
+     "glow": true,
+     "layer": "art/import/cutout_7.webp",
+     "box": [
+      0.18193,
+      0.80374,
+      0.64447,
+      0.1107
+     ],
+     "hit": [
+      0.17479,
+      0.80053,
+      0.65874,
+      0.11711
+     ]
+    }
+   ],
+   "regions": {}
+  },
+  "review": {
+   "clean": "art/review/clean.webp",
+   "bg": "#E9D8B7",
+   "targets": [
+    {
+     "id": "back",
+     "label": "Back",
+     "hint": "Returns without saving",
+     "glow": true,
+     "layer": "art/review/cutout_1.webp",
+     "box": [
+      0.04281,
+      0.01872,
+      0.09156,
+      0.04278
+     ],
+     "hit": [
+      0.02378,
+      0.01016,
+      0.12961,
+      0.05989
+     ]
+    },
+    {
+     "id": "photo",
+     "label": "Recipe photo",
+     "hint": "Choose, replace or remove the photo",
+     "glow": true,
+     "layer": "art/review/cutout_2.webp",
+     "box": [
+      0.05351,
+      0.20535,
+      0.28775,
+      0.13316
+     ],
+     "hit": [
+      0.04875,
+      0.20321,
+      0.29727,
+      0.13743
+     ]
+    },
+    {
+     "id": "add_ingredient",
+     "label": "Add ingredient",
+     "hint": "Adds an ingredient row",
+     "glow": true,
+     "box": [
+      0.85375,
+      0.34973,
+      0.11415,
+      0.04278
+     ],
+     "hit": [
+      0.85375,
+      0.34973,
+      0.11415,
+      0.04278
+     ]
+    },
+    {
+     "id": "add_direction",
+     "label": "Add direction",
+     "hint": "Adds a direction row",
+     "glow": true,
+     "box": [
+      0.85375,
+      0.55829,
+      0.11415,
+      0.04278
+     ],
+     "hit": [
+      0.85375,
+      0.55829,
+      0.11415,
+      0.04278
+     ]
+    },
+    {
+     "id": "ingredients_head",
+     "label": "Edit all ingredients",
+     "hint": "Opens the ingredient editor",
+     "glow": true,
+     "box": [
+      0.04281,
+      0.35508,
+      0.39239,
+      0.03102
+     ],
+     "hit": [
+      0.04281,
+      0.35508,
+      0.39239,
+      0.03102
+     ]
+    },
+    {
+     "id": "directions_head",
+     "label": "Edit all directions",
+     "hint": "Opens the direction editor",
+     "glow": true,
+     "box": [
+      0.04281,
+      0.56043,
+      0.39239,
+      0.03102
+     ],
+     "hit": [
+      0.04281,
+      0.56043,
+      0.39239,
+      0.03102
+     ]
+    },
+    {
+     "id": "add_category",
+     "label": "Add Category",
+     "hint": "Opens category choices",
+     "glow": true,
+     "layer": "art/review/cutout_5.webp",
+     "box": [
+      0.05707,
+      0.81123,
+      0.43163,
+      0.04866
+     ],
+     "hit": [
+      0.05232,
+      0.80909,
+      0.44114,
+      0.05294
+     ]
+    },
+    {
+     "id": "details",
+     "label": "Edit Details",
+     "hint": "Edit servings, times, source and notes",
+     "glow": true,
+     "layer": "art/review/cutout_6.webp",
+     "box": [
+      0.03686,
+      0.92193,
+      0.3912,
+      0.05348
+     ],
+     "hit": [
+      0.0321,
+      0.91979,
+      0.40071,
+      0.05775
+     ]
+    },
+    {
+     "id": "save",
+     "label": "Save Recipe",
+     "hint": "Validates and saves this recipe",
+     "glow": true,
+     "layer": "art/review/cutout_7.webp",
+     "box": [
+      0.45303,
+      0.92246,
+      0.51011,
+      0.05348
+     ],
+     "hit": [
+      0.44828,
+      0.92032,
+      0.51962,
+      0.05775
+     ]
+    }
+   ],
+   "regions": {
+    "title": [
+     0.36504,
+     0.21818,
+     0.55886,
+     0.0385
+    ],
+    "source": [
+     0.41141,
+     0.26898,
+     0.51843,
+     0.02781
+    ],
+    "ingredients": [
+     0.0547,
+     0.39305,
+     0.89893,
+     0.16043
+    ],
+    "directions": [
+     0.0547,
+     0.60214,
+     0.89893,
+     0.17647
+    ],
+    "categories": [
+     0.0547,
+     0.80856,
+     0.89893,
+     0.10695
+    ]
+   }
+  },
+  "planner": {
+   "clean": "art/planner/clean.webp",
+   "bg": "#3B2A1B",
+   "targets": [
+    {
+     "id": "week",
+     "label": "Week selector",
+     "hint": "Choose which week to plan",
+     "glow": true,
+     "layer": "art/planner/cutout_36.webp",
+     "box": [
+      0.15815,
+      0.10802,
+      0.3258,
+      0.02299
+     ],
+     "hit": [
+      0.14625,
+      0.10267,
+      0.34958,
+      0.03369
+     ]
+    },
+    {
+     "id": "calendar",
+     "label": "Cat calendar",
+     "hint": "Opens week and date selection",
+     "glow": true,
+     "layer": "art/planner/cutout_37.webp",
+     "box": [
+      0.32105,
+      0.20428,
+      0.28062,
+      0.0738
+     ],
+     "hit": [
+      0.30916,
+      0.19893,
+      0.3044,
+      0.08449
+     ]
+    },
+    {
+     "id": "grocery",
+     "label": "Grocery List basket",
+     "hint": "Opens the Grocery List",
+     "glow": true,
+     "layer": "art/planner/cutout_38.webp",
+     "box": [
+      0.62307,
+      0.04866,
+      0.37574,
+      0.22193
+     ],
+     "hit": [
+      0.62307,
+      0.04866,
+      0.37574,
+      0.22193
+     ]
+    },
+    {
+     "id": "day0",
+     "label": "Meal card 1",
+     "hint": "Opens the meal",
+     "glow": true,
+     "box": [
+      0.02378,
+      0.28449,
+      0.95244,
+      0.08182
+     ],
+     "hit": [
+      0.02378,
+      0.28449,
+      0.95244,
+      0.08182
+     ]
+    },
+    {
+     "id": "act0",
+     "label": "Meal options 1",
+     "hint": "Assign, replace or remove the meal",
+     "glow": true,
+     "box": [
+      0.83234,
+      0.29947,
+      0.11891,
+      0.05348
+     ],
+     "hit": [
+      0.83234,
+      0.29947,
+      0.11891,
+      0.05348
+     ]
+    },
+    {
+     "id": "day1",
+     "label": "Meal card 2",
+     "hint": "Opens the meal",
+     "glow": true,
+     "box": [
+      0.02378,
+      0.37326,
+      0.95244,
+      0.08342
+     ],
+     "hit": [
+      0.02378,
+      0.37326,
+      0.95244,
+      0.08342
+     ]
+    },
+    {
+     "id": "act1",
+     "label": "Meal options 2",
+     "hint": "Assign, replace or remove the meal",
+     "glow": true,
+     "box": [
+      0.83234,
+      0.38824,
+      0.11891,
+      0.05348
+     ],
+     "hit": [
+      0.83234,
+      0.38824,
+      0.11891,
+      0.05348
+     ]
+    },
+    {
+     "id": "day2",
+     "label": "Meal card 3",
+     "hint": "Opens the meal",
+     "glow": true,
+     "box": [
+      0.02378,
+      0.46364,
+      0.95244,
+      0.08289
+     ],
+     "hit": [
+      0.02378,
+      0.46364,
+      0.95244,
+      0.08289
+     ]
+    },
+    {
+     "id": "act2",
+     "label": "Meal options 3",
+     "hint": "Assign, replace or remove the meal",
+     "glow": true,
+     "box": [
+      0.83234,
+      0.47861,
+      0.11891,
+      0.05348
+     ],
+     "hit": [
+      0.83234,
+      0.47861,
+      0.11891,
+      0.05348
+     ]
+    },
+    {
+     "id": "day3",
+     "label": "Meal card 4",
+     "hint": "Opens the meal",
+     "glow": true,
+     "box": [
+      0.02378,
+      0.55775,
+      0.95244,
+      0.08182
+     ],
+     "hit": [
+      0.02378,
+      0.55775,
+      0.95244,
+      0.08182
+     ]
+    },
+    {
+     "id": "act3",
+     "label": "Meal options 4",
+     "hint": "Assign, replace or remove the meal",
+     "glow": true,
+     "box": [
+      0.83234,
+      0.57273,
+      0.11891,
+      0.05348
+     ],
+     "hit": [
+      0.83234,
+      0.57273,
+      0.11891,
+      0.05348
+     ]
+    },
+    {
+     "id": "day4",
+     "label": "Meal card 5",
+     "hint": "Opens the meal",
+     "glow": true,
+     "box": [
+      0.02378,
+      0.64813,
+      0.95244,
+      0.08235
+     ],
+     "hit": [
+      0.02378,
+      0.64813,
+      0.95244,
+      0.08235
+     ]
+    },
+    {
+     "id": "act4",
+     "label": "Meal options 5",
+     "hint": "Assign, replace or remove the meal",
+     "glow": true,
+     "box": [
+      0.83234,
+      0.6631,
+      0.11891,
+      0.05348
+     ],
+     "hit": [
+      0.83234,
+      0.6631,
+      0.11891,
+      0.05348
+     ]
+    },
+    {
+     "id": "day5",
+     "label": "Meal card 6",
+     "hint": "Opens the meal",
+     "glow": true,
+     "box": [
+      0.02378,
+      0.74171,
+      0.95244,
+      0.08182
+     ],
+     "hit": [
+      0.02378,
+      0.74171,
+      0.95244,
+      0.08182
+     ]
+    },
+    {
+     "id": "act5",
+     "label": "Meal options 6",
+     "hint": "Assign, replace or remove the meal",
+     "glow": true,
+     "box": [
+      0.83234,
+      0.75668,
+      0.11891,
+      0.05348
+     ],
+     "hit": [
+      0.83234,
+      0.75668,
+      0.11891,
+      0.05348
+     ]
+    },
+    {
+     "id": "day6",
+     "label": "Meal card 7",
+     "hint": "Opens the meal",
+     "glow": true,
+     "box": [
+      0.02378,
+      0.83422,
+      0.95244,
+      0.08289
+     ],
+     "hit": [
+      0.02378,
+      0.83422,
+      0.95244,
+      0.08289
+     ]
+    },
+    {
+     "id": "act6",
+     "label": "Meal options 7",
+     "hint": "Assign, replace or remove the meal",
+     "glow": true,
+     "box": [
+      0.83234,
+      0.8492,
+      0.11891,
+      0.05348
+     ],
+     "hit": [
+      0.83234,
+      0.8492,
+      0.11891,
+      0.05348
+     ]
+    }
+   ],
+   "regions": {},
+   "days": [
+    {
+     "label": [
+      0.06421,
+      0.29519,
+      0.11177,
+      0.02032
+     ],
+     "date": [
+      0.06302,
+      0.31711,
+      0.11296,
+      0.01604
+     ],
+     "title": [
+      0.49346,
+      0.29947,
+      0.45065,
+      0.0246
+     ],
+     "cook": [
+      0.54459,
+      0.33262,
+      0.07967,
+      0.01925
+     ],
+     "servings": [
+      0.69679,
+      0.33316,
+      0.11653,
+      0.01925
+     ],
+     "photo": [
+      0.20214,
+      0.28984,
+      0.26992,
+      0.07273
+     ],
+     "card": [
+      0.02378,
+      0.28449,
+      0.95244,
+      0.08182
+     ],
+     "action": [
+      0.83234,
+      0.29947,
+      0.11891,
+      0.05348
+     ]
+    },
+    {
+     "label": [
+      0.06302,
+      0.38396,
+      0.11177,
+      0.02086
+     ],
+     "date": [
+      0.06421,
+      0.40535,
+      0.11296,
+      0.01604
+     ],
+     "title": [
+      0.49346,
+      0.38717,
+      0.45065,
+      0.0246
+     ],
+     "cook": [
+      0.54578,
+      0.42299,
+      0.07848,
+      0.01872
+     ],
+     "servings": [
+      0.69679,
+      0.42193,
+      0.11415,
+      0.02086
+     ],
+     "photo": [
+      0.20214,
+      0.37861,
+      0.26992,
+      0.07273
+     ],
+     "card": [
+      0.02378,
+      0.37326,
+      0.95244,
+      0.08342
+     ],
+     "action": [
+      0.83234,
+      0.38824,
+      0.11891,
+      0.05348
+     ]
+    },
+    {
+     "label": [
+      0.06302,
+      0.47433,
+      0.11296,
+      0.01979
+     ],
+     "date": [
+      0.06421,
+      0.49572,
+      0.11177,
+      0.01551
+     ],
+     "title": [
+      0.49346,
+      0.47701,
+      0.45065,
+      0.02567
+     ],
+     "cook": [
+      0.54459,
+      0.51337,
+      0.07967,
+      0.01979
+     ],
+     "servings": [
+      0.6956,
+      0.5123,
+      0.11653,
+      0.02032
+     ],
+     "photo": [
+      0.20214,
+      0.46898,
+      0.26992,
+      0.07273
+     ],
+     "card": [
+      0.02378,
+      0.46364,
+      0.95244,
+      0.08289
+     ],
+     "action": [
+      0.83234,
+      0.47861,
+      0.11891,
+      0.05348
+     ]
+    },
+    {
+     "label": [
+      0.06183,
+      0.56845,
+      0.11415,
+      0.01925
+     ],
+     "date": [
+      0.06302,
+      0.58984,
+      0.11058,
+      0.01497
+     ],
+     "title": [
+      0.49227,
+      0.57005,
+      0.45184,
+      0.02513
+     ],
+     "cook": [
+      0.5434,
+      0.60588,
+      0.08205,
+      0.01979
+     ],
+     "servings": [
+      0.69798,
+      0.60588,
+      0.11296,
+      0.01979
+     ],
+     "photo": [
+      0.20214,
+      0.5631,
+      0.26992,
+      0.07273
+     ],
+     "card": [
+      0.02378,
+      0.55775,
+      0.95244,
+      0.08182
+     ],
+     "action": [
+      0.83234,
+      0.57273,
+      0.11891,
+      0.05348
+     ]
+    },
+    {
+     "label": [
+      0.06421,
+      0.65882,
+      0.11177,
+      0.02139
+     ],
+     "date": [
+      0.06183,
+      0.68128,
+      0.11296,
+      0.01497
+     ],
+     "title": [
+      0.49465,
+      0.6615,
+      0.45065,
+      0.02513
+     ],
+     "cook": [
+      0.54578,
+      0.69679,
+      0.07848,
+      0.02032
+     ],
+     "servings": [
+      0.69679,
+      0.69733,
+      0.11534,
+      0.01925
+     ],
+     "photo": [
+      0.20214,
+      0.65348,
+      0.26992,
+      0.07273
+     ],
+     "card": [
+      0.02378,
+      0.64813,
+      0.95244,
+      0.08235
+     ],
+     "action": [
+      0.83234,
+      0.6631,
+      0.11891,
+      0.05348
+     ]
+    },
+    {
+     "label": [
+      0.06183,
+      0.75241,
+      0.11415,
+      0.02032
+     ],
+     "date": [
+      0.06183,
+      0.77487,
+      0.11415,
+      0.01551
+     ],
+     "title": [
+      0.49346,
+      0.75508,
+      0.44946,
+      0.0246
+     ],
+     "cook": [
+      0.54578,
+      0.78984,
+      0.07848,
+      0.01979
+     ],
+     "servings": [
+      0.6956,
+      0.79037,
+      0.11653,
+      0.01925
+     ],
+     "photo": [
+      0.20214,
+      0.74706,
+      0.26992,
+      0.07273
+     ],
+     "card": [
+      0.02378,
+      0.74171,
+      0.95244,
+      0.08182
+     ],
+     "action": [
+      0.83234,
+      0.75668,
+      0.11891,
+      0.05348
+     ]
+    },
+    {
+     "label": [
+      0.06421,
+      0.84492,
+      0.11177,
+      0.01979
+     ],
+     "date": [
+      0.06421,
+      0.86684,
+      0.11058,
+      0.01658
+     ],
+     "title": [
+      0.49465,
+      0.84813,
+      0.44946,
+      0.0246
+     ],
+     "cook": [
+      0.54459,
+      0.88342,
+      0.07848,
+      0.01925
+     ],
+     "servings": [
+      0.69798,
+      0.88342,
+      0.11177,
+      0.01979
+     ],
+     "photo": [
+      0.20214,
+      0.83957,
+      0.26992,
+      0.07273
+     ],
+     "card": [
+      0.02378,
+      0.83422,
+      0.95244,
+      0.08289
+     ],
+     "action": [
+      0.83234,
+      0.8492,
+      0.11891,
+      0.05348
+     ]
+    }
+   ]
+  },
+  "grocery": {
+   "clean": "art/grocery/clean.webp",
+   "bg": "#5B3F28",
+   "targets": [
+    {
+     "id": "back",
+     "label": "Back",
+     "hint": "Returns to the previous page",
+     "glow": true,
+     "layer": "art/grocery/cutout_1.webp",
+     "box": [
+      0.04875,
+      0.01444,
+      0.0761,
+      0.03476
+     ],
+     "hit": [
+      0.02973,
+      0.00588,
+      0.11415,
+      0.05187
+     ]
+    },
+    {
+     "id": "week",
+     "label": "Week range",
+     "hint": "Choose the grocery week",
+     "glow": true,
+     "layer": "art/grocery/cutout_2.webp",
+     "box": [
+      0.05113,
+      0.16203,
+      0.34721,
+      0.03102
+     ],
+     "hit": [
+      0.03924,
+      0.15668,
+      0.37099,
+      0.04171
+     ]
+    },
+    {
+     "id": "basket",
+     "label": "Grocery basket",
+     "hint": "Refresh from planned meals",
+     "glow": true,
+     "layer": "art/grocery/cutout_3.webp",
+     "box": [
+      0.49941,
+      0.0,
+      0.50059,
+      0.22299
+     ],
+     "hit": [
+      0.49941,
+      0.0,
+      0.50059,
+      0.22299
+     ]
+    },
+    {
+     "id": "add",
+     "label": "Add Item",
+     "hint": "Adds a grocery item",
+     "glow": true,
+     "layer": "art/grocery/cutout_24.webp",
+     "box": [
+      0.04281,
+      0.9385,
+      0.61593,
+      0.03529
+     ],
+     "hit": [
+      0.03567,
+      0.93529,
+      0.6302,
+      0.04171
+     ]
+    },
+    {
+     "id": "clear",
+     "label": "Clear Checked",
+     "hint": "Removes purchased items",
+     "glow": true,
+     "layer": "art/grocery/cutout_25.webp",
+     "box": [
+      0.6849,
+      0.93636,
+      0.28537,
+      0.03904
+     ],
+     "hit": [
+      0.67776,
+      0.93316,
+      0.29964,
+      0.04545
+     ]
+    },
+    {
+     "id": "head_produce",
+     "label": "Produce category",
+     "hint": "Expands or collapses this category",
+     "glow": true,
+     "box": [
+      0.02735,
+      0.2246,
+      0.95363,
+      0.04492
+     ],
+     "hit": [
+      0.02735,
+      0.2246,
+      0.95363,
+      0.04492
+     ]
+    },
+    {
+     "id": "head_meat",
+     "label": "Meat and Seafood category",
+     "hint": "Expands or collapses this category",
+     "glow": true,
+     "box": [
+      0.02616,
+      0.38128,
+      0.95363,
+      0.04492
+     ],
+     "hit": [
+      0.02616,
+      0.38128,
+      0.95363,
+      0.04492
+     ]
+    },
+    {
+     "id": "head_dairy",
+     "label": "Dairy and Eggs category",
+     "hint": "Expands or collapses this category",
+     "glow": true,
+     "box": [
+      0.02616,
+      0.51925,
+      0.95244,
+      0.04492
+     ],
+     "hit": [
+      0.02616,
+      0.51925,
+      0.95244,
+      0.04492
+     ]
+    },
+    {
+     "id": "head_pantry",
+     "label": "Pantry category",
+     "hint": "Expands or collapses this category",
+     "glow": true,
+     "box": [
+      0.02616,
+      0.6615,
+      0.95125,
+      0.04492
+     ],
+     "hit": [
+      0.02616,
+      0.6615,
+      0.95125,
+      0.04492
+     ]
+    },
+    {
+     "id": "head_bakery",
+     "label": "Bakery category",
+     "hint": "Expands or collapses this category",
+     "glow": true,
+     "box": [
+      0.02735,
+      0.81658,
+      0.97146,
+      0.04492
+     ],
+     "hit": [
+      0.02735,
+      0.81658,
+      0.97146,
+      0.04492
+     ]
+    }
+   ],
+   "regions": {},
+   "cards": [
+    {
+     "key": "produce",
+     "card": [
+      0.02735,
+      0.2246,
+      0.95363,
+      0.1508
+     ],
+     "head": [
+      0.02854,
+      0.22567,
+      0.94887,
+      0.07219
+     ],
+     "check": [
+      0.0654,
+      0.27326,
+      0.02497,
+      0.01176
+     ],
+     "qty": [
+      0.49346,
+      0.27273,
+      0.04281,
+      0.0139
+     ]
+    },
+    {
+     "key": "meat",
+     "card": [
+      0.02616,
+      0.38128,
+      0.95363,
+      0.13155
+     ],
+     "head": [
+      0.02735,
+      0.38128,
+      0.95244,
+      0.04278
+     ],
+     "check": [
+      0.06421,
+      0.43209,
+      0.02735,
+      0.01123
+     ],
+     "qty": [
+      0.49584,
+      0.43209,
+      0.03805,
+      0.01337
+     ]
+    },
+    {
+     "key": "dairy",
+     "card": [
+      0.02616,
+      0.51925,
+      0.95244,
+      0.13583
+     ],
+     "head": [
+      0.02854,
+      0.51925,
+      0.95125,
+      0.04278
+     ],
+     "check": [
+      0.06421,
+      0.56738,
+      0.02616,
+      0.0123
+     ],
+     "qty": [
+      0.49703,
+      0.56738,
+      0.04162,
+      0.01444
+     ]
+    },
+    {
+     "key": "pantry",
+     "card": [
+      0.02616,
+      0.6615,
+      0.95125,
+      0.14866
+     ],
+     "head": [
+      0.02854,
+      0.6615,
+      0.95006,
+      0.05027
+     ],
+     "check": [
+      0.06302,
+      0.70909,
+      0.02854,
+      0.0123
+     ],
+     "qty": [
+      0.49703,
+      0.71016,
+      0.04043,
+      0.01283
+     ]
+    },
+    {
+     "key": "bakery",
+     "card": [
+      0.02735,
+      0.81658,
+      0.97146,
+      0.11711
+     ],
+     "head": [
+      0.02735,
+      0.81711,
+      0.9453,
+      0.05775
+     ],
+     "check": [
+      0.0654,
+      0.86203,
+      0.02616,
+      0.01176
+     ],
+     "qty": [
+      0.49584,
+      0.86257,
+      0.03805,
+      0.01176
+     ]
+    }
+   ]
+  },
+  "drawer": {
+   "clean": "art/drawer/clean.webp",
+   "bg": "#2F4A36",
+   "targets": [
+    {
+     "id": "back",
+     "label": "Back",
+     "hint": "Returns to the Kitchen Hub",
+     "glow": true,
+     "layer": "art/drawer/cutout_8.webp",
+     "box": [
+      0.04043,
+      0.01872,
+      0.11058,
+      0.05134
+     ],
+     "hit": [
+      0.02378,
+      0.01123,
+      0.14388,
+      0.06631
+     ]
+    },
+    {
+     "id": "settings",
+     "label": "Settings, brass gear",
+     "hint": "Opens Settings",
+     "glow": true,
+     "layer": "art/drawer/cutout_1.webp",
+     "box": [
+      0.10107,
+      0.43048,
+      0.26397,
+      0.12086
+     ],
+     "hit": [
+      0.09394,
+      0.42727,
+      0.27824,
+      0.12727
+     ]
+    },
+    {
+     "id": "categories",
+     "label": "Category cards",
+     "hint": "Opens Category Management",
+     "glow": true,
+     "layer": "art/drawer/cutout_2.webp",
+     "box": [
+      0.33532,
+      0.41925,
+      0.32105,
+      0.16096
+     ],
+     "hit": [
+      0.33056,
+      0.41711,
+      0.33056,
+      0.16524
+     ]
+    },
+    {
+     "id": "backup",
+     "label": "Backup and Export notebook",
+     "hint": "Opens Backup and Export",
+     "glow": true,
+     "layer": "art/drawer/cutout_3.webp",
+     "box": [
+      0.59215,
+      0.44278,
+      0.40666,
+      0.19358
+     ],
+     "hit": [
+      0.58977,
+      0.44171,
+      0.41023,
+      0.19572
+     ]
+    },
+    {
+     "id": "themes",
+     "label": "Theme swatches",
+     "hint": "Opens Themes",
+     "glow": true,
+     "layer": "art/drawer/cutout_4.webp",
+     "box": [
+      0.00119,
+      0.53316,
+      0.32818,
+      0.14973
+     ],
+     "hit": [
+      0.0,
+      0.53209,
+      0.33175,
+      0.15187
+     ]
+    },
+    {
+     "id": "help",
+     "label": "Help card",
+     "hint": "Opens Help",
+     "glow": true,
+     "layer": "art/drawer/cutout_5.webp",
+     "box": [
+      0.28894,
+      0.58342,
+      0.24257,
+      0.11925
+     ],
+     "hit": [
+      0.28419,
+      0.58128,
+      0.25208,
+      0.12353
+     ]
+    },
+    {
+     "id": "tools",
+     "label": "Chef timer and tools",
+     "hint": "Opens timer, conversions and measurements",
+     "glow": true,
+     "layer": "art/drawer/cutout_6.webp",
+     "box": [
+      0.46968,
+      0.60909,
+      0.21046,
+      0.12781
+     ],
+     "hit": [
+      0.46254,
+      0.60588,
+      0.22473,
+      0.13422
+     ]
+    },
+    {
+     "id": "print",
+     "label": "Print and Share card",
+     "hint": "Opens Print and Share",
+     "glow": true,
+     "layer": "art/drawer/cutout_7.webp",
+     "box": [
+      0.68847,
+      0.61979,
+      0.27824,
+      0.15668
+     ],
+     "hit": [
+      0.68609,
+      0.61872,
+      0.283,
+      0.15882
+     ]
+    }
+   ],
+   "regions": {}
+  }
+ }
+}

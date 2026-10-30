@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <include domain="database" path="touch_recipe.db" />
+    <include domain="file" path="photos/" />
+    <include domain="sharedpref" path="touch_recipe_prefs.xml" />
+</full-backup-content>

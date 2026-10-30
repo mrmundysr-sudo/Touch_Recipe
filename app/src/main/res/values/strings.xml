@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Touch Recipe</string>
+    <string name="share_label">Import to Touch Recipe</string>
+    <string name="timer_channel">Cook timers</string>
+    <string name="timer_done_title">Timer finished</string>
+    <string name="timer_done_text">Your cooking timer is done.</string>
+</resources>
