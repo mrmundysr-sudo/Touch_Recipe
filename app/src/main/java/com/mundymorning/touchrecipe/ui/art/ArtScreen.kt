@@ -52,6 +52,7 @@ private val Gold = Color(0xFFFFD27A)
 /** Layout helpers for placing code-rendered content inside the artwork. 1 design px = 1 px of the 841-wide artwork. */
 class ArtScope(val page: ArtPageData, val widthPx: Float, val heightPx: Float, val density: Density) {
     private val k get() = widthPx / 841f
+    val widthDp: Dp get() = with(density) { widthPx.toDp() }
     fun dp(designPx: Float): Dp = with(density) { (designPx * k).toDp() }
     fun sp(designPx: Float): TextUnit = (designPx * k / density.density).sp
     fun Modifier.region(r: NRect): Modifier = this

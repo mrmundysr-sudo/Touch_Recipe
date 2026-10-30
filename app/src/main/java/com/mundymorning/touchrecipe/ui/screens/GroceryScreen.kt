@@ -55,10 +55,11 @@ fun aisleName(key: String) = AISLE_NAMES[key] ?: key
 fun GroceryScreen(c: AppContainer, nav: NavController) {
     val week by c.selectedWeek.collectAsState()
     val items by remember(week) { c.repo.groceryItems(week) }.collectAsState(initial = emptyList())
-    val customAisles by c.repo.customAisles().collectAsState(initial = emptyList())
+    val customAisles by remember { c.repo.customAisles() }.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val snack = LocalSnack.current
     val collapsed = remember { mutableStateListOf<String>() }
+    val sundayStart by c.prefs.sundayStart.collectAsState()
     var weekSheet by remember { mutableStateOf(false) }
     var addSheet by remember { mutableStateOf(false) }
     var basketSheet by remember { mutableStateOf(false) }
@@ -96,7 +97,7 @@ fun GroceryScreen(c: AppContainer, nav: NavController) {
         }
     }
 
-    if (weekSheet) WeekSheet(week, c.prefs.sundayStart.value, { weekSheet = false }, { c.selectedWeek.value = it })
+    if (weekSheet) WeekSheet(week, sundayStart, { weekSheet = false }, { c.selectedWeek.value = it })
     rowSheet?.let { item -> ItemSheet(item, allAisles, items, onDismiss = { rowSheet = null }, onSave = { scope.launch { c.repo.updateGroceryItem(it.copy(edited = true)) }; rowSheet = null },
         onDelete = { scope.launch { c.repo.deleteGroceryItem(item.id); snack.undoable("Removed ${item.name}") { c.repo.restoreGroceryItems(listOf(item)) } }; rowSheet = null },
         onMove = { dir -> scope.launch { val l = items.filter { it.aisle == item.aisle }.map { it.id }.toMutableList(); val i = l.indexOf(item.id); val j = i + dir; if (j in l.indices) { l.add(j, l.removeAt(i)); c.repo.reorderGrocery(week, item.aisle, l) } } })
@@ -244,7 +245,7 @@ private fun AddItemSheet(c: AppContainer, week: java.time.LocalDate, aisles: Lis
 @Composable
 private fun BasketSheet(c: AppContainer, week: java.time.LocalDate, onDismiss: () -> Unit, onOpenPlanner: () -> Unit) {
     val meals by remember(week) { c.repo.meals(week, week.plusDays(6)) }.collectAsState(initial = emptyList())
-    val recipes by c.repo.recipes().collectAsState(initial = emptyList())
+    val recipes by remember { c.repo.recipes() }.collectAsState(initial = emptyList())
     ModalBottomSheet(onDismiss) {
         Column(Modifier.padding(20.dp).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Meals feeding this list", style = MaterialTheme.typography.headlineSmall)

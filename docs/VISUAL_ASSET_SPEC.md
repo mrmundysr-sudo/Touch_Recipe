@@ -65,7 +65,11 @@ Touch-Recipe-Visual-Assets/
   references/
 ```
 
-## Pending
+## Answered by the 2026-10-30 asset package and implementation
+- Source art: 841×1870 PNG per page (720×1600 aspect), PSD cutout layers, no coords/markup files. Slice format: WebP at 841 px, cutouts with alpha. Names/targets: `tools/art_map.py`. Safe areas: art is fitted inside system bars and display cutouts, letterboxed on the page background colour. See `docs/ART_WIRING.md`.
+- Day/night: art pages are identical in both themes; menus, sheets and utility pages follow Light / Dark / System.
+
+## Still pending
 - Final screen inventory and annotated flow.
 - Exact resolution, transparent PNG vs layered formats, naming, crop rules and 9-patch/slice strategy.
 - Day/night themes, custom photography behavior and any mascot/brand art.

@@ -1,5 +1,11 @@
 # Verified Reusable Patterns
 
-No patterns validated yet.
-
-For each pattern record ID, use case, solution, code location/version, limitations, accessibility/security implications, test evidence, date and work-report link. Mark proposed or untested ideas clearly.
+| ID | Use case | Solution | Location | Limitations / a11y / security | Evidence |
+|---|---|---|---|---|---|
+| P-001 | Illustrated pages with physical-object navigation | Manifest-driven art (`clean.webp` + PSD cutouts + generated targets); one tap layer resolves opaque pixels first, then smallest explicit box, then nearest padded region; separate semantic nodes for TalkBack/keyboard | `ui/art/*`, `tools/build_assets.py` | Fixed art means content windows are small; keep ≥ 44 dp targets | `FlowsTest`, `ManifestTest` |
+| P-002 | First-load illumination | Staggered silhouette glow from the cutout alpha; reduced-motion variant; per-page play counter; “Highlighted” semantic state | `ui/art/ArtScreen.kt` | Never intercepts touches | `firstLoadIlluminates…`, `reducedMotion…` |
+| P-003 | Dynamic editable rows | `EditableRows`: drag handle + accessible Move up/Move down/Delete actions, auto-numbering, empty-row validation, Enter adds a row, undo via snackbar | `ui/components/Components.kt` | Drag is vertical-only | `reviewDynamicRows…`, `keyboardEnter…` |
+| P-004 | Timers that survive leaving the screen / process death | Store absolute end time and remaining ms; recompute from the wall clock; inexact alarm for background notification | `core/timer/CookTimer.kt`, `data/TimerAlarm.kt` | Inexact alarm may fire a little late; needs notification permission to alert | `cookModeTimerStepsAndPersistence`, `EnginesTest` |
+| P-005 | Safe recipe scaling | Scale only the leading amount; leave text amounts and unparseable lines untouched; pluralise the adjacent unit | `core/quantity/Quantity.kt` | Mixed units inside one line are not rescaled | `QuantityTest`, `servingScaling…` |
+| P-006 | Import with honest confidence | Extractor order JSON-LD → microdata → HTML heuristics → text; `Confidence` and per-field warnings; raw source preserved; never auto-save | `core/importer/*`, `data/ImportService.kt` | Heuristics are best-effort; sites that block access are reported, not bypassed | `ImporterTest`, `ImporterCorpusTest`, `DataTest` |
+| P-007 | Backup that cannot lose data | ZIP of `data.json` + photos, validated before any write, merge/replace with confirmation | `core/backup`, `data/BackupManager.kt`, `docs/BACKUP_FORMAT.md` | Photos only if present in the store | `DataTest.backupExportRestore…` |

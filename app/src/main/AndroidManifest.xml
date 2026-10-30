@@ -5,6 +5,8 @@
     <!-- Only network access is requested up front. Camera, files and notifications are requested at the moment of use. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Normal permission (no prompt): vibrate when a cooking timer finishes. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 

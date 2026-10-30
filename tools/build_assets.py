@@ -114,7 +114,7 @@ def main():
             for c in cards:
                 x, y, w, h = c["card"]
                 head = [x, y, w, round(84 / ART_H, 5)]
-                entry["targets"].append({"id": f"head_{c['key']}", "label": f"{names[c['key']]} category", "hint": "Expands or collapses this category", "glow": True, "box": head, "hit": head})
+                entry["targets"].append({"id": f"head_{c['key']}", "label": f"{names[c['key']]} category", "hint": "Expands or collapses this category", "glow": True, "box": head, "hit": norm(pad_box((round(x * ART_W), round(y * ART_H), round((x + w) * ART_W), round((y + head[3]) * ART_H)), 12))})
         manifest["pages"][key] = entry
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1))
     print("wrote", out / "manifest.json")

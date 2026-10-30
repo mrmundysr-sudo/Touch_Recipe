@@ -43,6 +43,9 @@ import kotlinx.coroutines.launch
 /** Snackbar access for undo actions anywhere in the UI. */
 val LocalSnack = staticCompositionLocalOf<SnackbarHostState> { SnackbarHostState() }
 
+/** Shows a message now: an older message never blocks a newer, more relevant one. */
+suspend fun SnackbarHostState.say(message: String) { currentSnackbarData?.dismiss(); showSnackbar(message) }
+
 suspend fun SnackbarHostState.undoable(message: String, onUndo: suspend () -> Unit) {
     currentSnackbarData?.dismiss()
     val r = showSnackbar(message, actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Long)
@@ -92,7 +95,7 @@ data class EditRow(val id: String, val text: String, val header: Boolean = false
 fun EditableRows(
     rows: List<EditRow>, onRows: (List<EditRow>) -> Unit, onDelete: (EditRow, Int) -> Unit, modifier: Modifier = Modifier,
     numbered: Boolean = false, hint: String, showErrors: Boolean = false, compact: Boolean = false,
-    textStyle: TextStyle = TextStyle(fontSize = 16.sp, color = Palette.Ink), rowBackground: Color = Color(0xFFFBF4E6).copy(alpha = 0.92f),
+    textStyle: TextStyle = TextStyle(fontSize = 16.sp, color = Palette.Ink), rowBackground: Color = Color(0xFFFBF4E6),
     newRow: () -> EditRow, tag: String = "rows", allowHeaders: Boolean = false, onEmptyRowClear: Boolean = false,
 ) {
     val state = rememberLazyListState()
@@ -200,5 +203,23 @@ fun IconButtonBox(label: String, glyph: String, tint: Color, size: Dp = 48.dp, o
 @Composable
 fun Chip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     // selection is conveyed by a check mark and weight, never by colour alone
-    FilterChip(selected, onClick, label = { Text(if (selected) "✓ $label" else label, maxLines = 1, overflow = TextOverflow.Ellipsis) }, modifier = modifier.heightIn(min = 40.dp).semantics { this.selected = selected })
+    // fixed palette: chips sit on the always-light illustrated paper as well as on themed sheets, so they must not follow dark mode
+    FilterChip(
+        selected, onClick, label = { Text(if (selected) "✓ $label" else label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        modifier = modifier.heightIn(min = 40.dp).semantics { this.selected = selected },
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = Color(0xFFFBF4E6), labelColor = Palette.Ink, selectedContainerColor = Palette.Forest, selectedLabelColor = Palette.Cream,
+        ),
+        border = FilterChipDefaults.filterChipBorder(enabled = true, selected = selected, borderColor = Palette.Brass, selectedBorderColor = Palette.Forest),
+    )
+}
+
+/** Back control for pages whose artwork has no back arrow (Collection, Planner). Code-rendered so it stays accessible. */
+@Composable
+fun BackChip(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier.size(48.dp).clip(CircleShape).background(Color(0xFFFBF4E6).copy(alpha = 0.95f)).border(1.5.dp, Palette.Brass, CircleShape)
+            .clickable(onClickLabel = "Go back", role = Role.Button, onClick = onClick).semantics { contentDescription = "Back" }.testTag("back-chip"),
+        contentAlignment = Alignment.Center,
+    ) { Text("←", fontSize = 24.sp, color = Palette.Ink, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) }
 }

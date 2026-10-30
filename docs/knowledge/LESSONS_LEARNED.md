@@ -1,5 +1,14 @@
 # Lessons Learned
 
-No verified implementation lessons recorded yet.
+Each entry is backed by a test run or observation in the 2026-10-30 first-release work (see `reports/2026-10-30-first-production-release.md`).
 
-For each entry record date, work-report link, observed problem, evidence-supported cause, solution, prevention rule, tests and remaining uncertainty.
+| ID | Observed problem | Cause (evidence) | Solution / prevention rule | Tests | Uncertainty |
+|---|---|---|---|---|---|
+| L-001 | Taps on Save / Next / Add Item did nothing right after a screen opened. | A bottom-anchored snackbar covered the bottom art controls and swallowed touches (taps never reached the art layer; confirmed by logging the tap layer). | Never anchor transient UI over bottom art controls. Snackbars live at the top over decorative title space. | `FlowsTest.reviewSavesCorrectionsAndCategories`, `importPastedTextCorrectAndSave` | None |
+| L-002 | Opening a recipe after Save waited several seconds. | `showSnackbar` suspends until dismissed and navigation came after it. | Navigate first; show messages in a separate coroutine; use `SnackbarHostState.say` so an old message never blocks a new one. | `importUrlThroughReviewToSave` | None |
+| L-003 | Dialog lists sometimes stayed empty. | A new repository `Flow` was created on every recomposition, restarting `collectAsState`. | `remember` repository flows; for one-shot dialogs prefetch the data in the handler. | Full-suite flake disappeared after the change (3 consecutive clean runs) | Moderate: root cause inferred from the pattern plus the fix, not from a trace |
+| L-004 | Crash “setCurrentState must be called on the main thread” navigating after a database call. | Continuation resumed off the main thread under the test dispatcher. | Wrap navigation after suspend calls in `withContext(Dispatchers.Main.immediate)`. | `plannerAssignReplaceRemove…` | Could be test-environment only; the guard is harmless on device |
+| L-005 | Small round art controls (back arrows, heart, servings −/+) were 30–40 dp. | Objects are small in the art. | Pad hit regions from `art_map.py` until every target is ≥ 44 dp on a 360 dp phone; enforced by `ManifestTest`. | `ManifestTest` | None |
+| L-006 | Chips were unreadable in dark mode on the parchment art. | Material colours follow the dark theme but the art is always light. | Controls drawn over art use a fixed palette; themes only restyle sheets and utility pages. | `DarkModeTest` screenshots | Visual check only |
+| L-007 | Test class failed to initialise (“Failed to instantiate test runner”). | `@Test fun x() = runBlocking {…}` returned a non-Unit value. | Wrap blocking bodies so test methods return `Unit`. | `DataTest` | None |
+| L-008 | Dependency downloads failed with HTTP 429 in the build sandbox. | Maven Central rate limits the shared egress address. | Retry with fewer workers, and fetch large test artifacts (Robolectric `android-all`) from Google's Maven Central mirror into `ROBOLECTRIC_DEPS_DIR`. | n/a | Environment-specific |

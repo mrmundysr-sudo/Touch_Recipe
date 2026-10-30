@@ -40,5 +40,5 @@ for key, p in m["pages"].items():
         for n, r in c.items():
             if n != "key":
                 rect(d, r, (200, 0, 200, 255), 2)
-    im.save(out / f"{key}.png")
-    print("wrote", out / f"{key}.png")
+    im.convert("RGB").save(out / f"{key}.jpg", quality=78)
+    print("wrote", out / f"{key}.jpg")

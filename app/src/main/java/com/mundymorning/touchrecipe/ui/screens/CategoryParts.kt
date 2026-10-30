@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CategoryCatalogContent(c: AppContainer, selected: Set<String>?, onSelect: ((String, Boolean) -> Unit)?, modifier: Modifier = Modifier) {
-    val cats by c.repo.categories().collectAsState(initial = emptyList())
+    val cats by remember { c.repo.categories() }.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val customs = cats.filter { !it.builtIn }
     var name by remember { mutableStateOf("") }

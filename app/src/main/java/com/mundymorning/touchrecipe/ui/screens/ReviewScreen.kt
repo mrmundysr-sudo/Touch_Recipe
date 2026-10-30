@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
@@ -144,7 +145,7 @@ fun ReviewScreen(c: AppContainer, nav: NavController, editId: String?) {
     val s by vm.state.collectAsState()
     val ready by vm.ready.collectAsState()
     val saved by vm.saved.collectAsState()
-    val cats by c.repo.categories().collectAsState(initial = emptyList())
+    val cats by remember { c.repo.categories() }.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val snack = LocalSnack.current
     var confirmLeave by remember { mutableStateOf(false) }
@@ -158,8 +159,8 @@ fun ReviewScreen(c: AppContainer, nav: NavController, editId: String?) {
 
     LaunchedEffect(saved) {
         val id = saved ?: return@LaunchedEffect
-        snack.showSnackbar("Saved to your collection")
-        nav.navigate(Routes.detail(id)) { popUpTo(Routes.HUB) }
+        nav.navigate(Routes.detail(id)) { popUpTo(Routes.HUB) }   // never make the user wait for the toast
+        launch { snack.say("Saved to your collection") }
     }
     LaunchedEffect(ready) { if (ready && s.confidence != null && s.confidence != Confidence.HIGH) snack.showSnackbar("Some parts were guessed. Look for the yellow ! marks.") }
     fun leave() { if (s.dirty && saved == null) confirmLeave = true else nav.popBackStack() }
@@ -169,7 +170,7 @@ fun ReviewScreen(c: AppContainer, nav: NavController, editId: String?) {
 
     fun trySave() {
         val problems = vm.problems()
-        if (problems.isNotEmpty()) { vm.edit { it.copy(showErrors = true) }; scope.launch { snack.showSnackbar(problems.first()) }; return }
+        if (problems.isNotEmpty()) { vm.edit { it.copy(showErrors = true) }; scope.launch { snack.say(problems.first()) }; return }
         val r = vm.buildRecipe()
         scope.launch { val dup = vm.duplicateOf(r); if (dup != null) duplicate = dup else vm.save(r) }
     }
@@ -230,7 +231,7 @@ fun ReviewScreen(c: AppContainer, nav: NavController, editId: String?) {
             textStyle = TextStyle(fontFamily = BodyFont, fontSize = 16.sp, color = Palette.Ink), newRow = { EditRow(newId(), "") },
         )
         // categories: the enabled ones, tap to attach
-        FlowRow(Modifier.region(NRect(0.505f, 0.811f, 0.45f, 0.1f)).verticalScroll(rememberScrollState()).testTag("review-categories"), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        FlowRow(Modifier.region(NRect(0.505f, 0.811f, 0.45f, 0.1f)).clipToBounds().verticalScroll(rememberScrollState()).testTag("review-categories"), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
             cats.filter { it.enabled || it.id in s.categories }.forEach { cat ->
                 Chip(cat.name, cat.id in s.categories, { vm.edit { it.copy(categories = if (cat.id in it.categories) it.categories - cat.id else it.categories + cat.id) } })
             }

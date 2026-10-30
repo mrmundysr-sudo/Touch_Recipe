@@ -19,6 +19,7 @@ class Repository(val db: AppDatabase, private val clock: () -> Long = System::cu
     fun recipe(id: String): Flow<Recipe?> = db.recipes().observe(id).map { it?.toModel() }
     suspend fun getRecipe(id: String): Recipe? = db.recipes().get(id)?.toModel()
     suspend fun recipeCount() = db.recipes().count()
+    suspend fun allRecipes(): List<Recipe> = db.recipes().all().map { it.toModel() }.sortedByDescending { it.updatedAt }
 
     suspend fun saveRecipe(r: Recipe): Recipe {
         val now = clock()

@@ -44,9 +44,10 @@ fun PlannerScreen(c: AppContainer, nav: NavController) {
     val week by c.selectedWeek.collectAsState()
     val days = remember(week) { Planner.days(week) }
     val meals by remember(week) { c.repo.meals(week, week.plusDays(6)) }.collectAsState(initial = emptyList())
-    val recipes by c.repo.recipes().collectAsState(initial = emptyList())
+    val recipes by remember { c.repo.recipes() }.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val snack = LocalSnack.current
+    val sundayStart by c.prefs.sundayStart.collectAsState()
     var weekSheet by remember { mutableStateOf(false) }
     var daySheet by remember { mutableStateOf<Int?>(null) }
     var picker by remember { mutableStateOf<Int?>(null) }
@@ -65,11 +66,12 @@ fun PlannerScreen(c: AppContainer, nav: NavController) {
     }, onTarget = { id ->
         when {
             id == "week" || id == "calendar" -> weekSheet = true
-            id == "grocery" -> scope.launch { val n = c.repo.generateGroceries(week); nav.navigate(Routes.GROCERY) }
+            id == "grocery" -> scope.launch { c.repo.generateGroceries(week); kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) { nav.navigate(Routes.GROCERY) } }
             id.startsWith("day") -> { val i = id.removePrefix("day").toInt(); val r = recipeFor(i); if (r != null) nav.navigate(Routes.detail(r.id)) else if (recipes.isEmpty()) daySheet = i else picker = i }
             id.startsWith("act") -> daySheet = id.removePrefix("act").toInt()
         }
     }) {
+        BackChip({ nav.goBackOr(Routes.HUB) }, Modifier.offset(widthDp - 60.dp, dp(14f)))
         val weekBox = page.target("week").box
         Box(Modifier.region(weekBox).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
             FitText(Planner.rangeLabel(week), TextStyle(fontFamily = BodyFont, fontWeight = FontWeight.Bold, fontSize = sp(24f), color = Palette.Ink), textAlign = TextAlign.Center, modifier = Modifier.testTag("week-label"))
@@ -95,7 +97,7 @@ fun PlannerScreen(c: AppContainer, nav: NavController) {
         }
     }
 
-    if (weekSheet) WeekSheet(week, c.prefs.sundayStart.value, onDismiss = { weekSheet = false }, onPick = { c.selectedWeek.value = it })
+    if (weekSheet) WeekSheet(week, sundayStart, onDismiss = { weekSheet = false }, onPick = { c.selectedWeek.value = it })
     daySheet?.let { i ->
         val r = recipeFor(i); val e = byDate[days[i].toString()]
         ModalBottomSheet({ daySheet = null }) {

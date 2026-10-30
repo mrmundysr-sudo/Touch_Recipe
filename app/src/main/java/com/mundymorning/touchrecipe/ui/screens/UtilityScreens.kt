@@ -57,7 +57,7 @@ fun UtilityPage(title: String, onBack: () -> Unit, content: @Composable ColumnSc
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background))
         },
     ) { pad ->
-        Column(Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 32.dp).testTag("utility:$title"), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+        Column(Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 32.dp).testTag("utility:$title").semantics { paneTitle = title }, verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
     }
 }
 
@@ -250,7 +250,7 @@ fun PrintShareScreen(c: AppContainer, nav: NavController) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snack = LocalSnack.current
-    val recipes by c.repo.recipes().collectAsState(initial = emptyList())
+    val recipes by remember { c.repo.recipes() }.collectAsState(initial = emptyList())
     val week by c.selectedWeek.collectAsState()
     var chosen by remember { mutableStateOf<String?>(null) }
     suspend fun planText(): String { val meals = c.repo.mealsFor(week, week.plusDays(6)).associateBy { it.date }

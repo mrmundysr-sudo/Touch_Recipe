@@ -73,7 +73,7 @@ fun DetailScreen(c: AppContainer, nav: NavController, id: String) {
     val recipe by vm.recipe.collectAsState()
     val servings by vm.servings.collectAsState()
     val loaded by vm.loaded.collectAsState()
-    val cats by c.repo.categories().collectAsState(initial = emptyList())
+    val cats by remember { c.repo.categories() }.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val snack = LocalSnack.current
@@ -143,7 +143,7 @@ fun DetailScreen(c: AppContainer, nav: NavController, id: String) {
             }
         }
         Box(Modifier.region("servings_value").semantics { contentDescription = "Servings: ${servings ?: "not set"}"; liveRegion = LiveRegionMode.Polite }, contentAlignment = Alignment.Center) {
-            Text((servings ?: r.servings)?.toString() ?: "—", fontSize = sp(34f), fontWeight = FontWeight.Bold, color = Palette.Ink, modifier = Modifier.testTag("servings-value"))
+            FitText((servings ?: r.servings)?.toString() ?: "—", TextStyle(fontSize = sp(34f), fontWeight = FontWeight.Bold, color = Palette.Ink), textAlign = TextAlign.Center, modifier = Modifier.testTag("servings-value"))
         }
         // ingredients (rows generated from the recipe; amounts scaled safely)
         Box(Modifier.region("ingredients")) {

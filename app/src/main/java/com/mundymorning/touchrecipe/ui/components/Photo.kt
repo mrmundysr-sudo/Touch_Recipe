@@ -27,25 +27,30 @@ private val bitmapCache = object : LruCache<String, Bitmap>(16 * 1024 * 1024) { 
 /** Recipe photo with a safe placeholder: missing or unreadable files never break layout. */
 @Composable
 fun PhotoImage(store: PhotoStore, name: String?, modifier: Modifier, fallbackText: String = "", maxEdge: Int = 700, description: String? = null, scale: ContentScale = ContentScale.Crop) {
-    val bmp by produceState<Bitmap?>(null, name, maxEdge) {
-        value = if (name == null) null else {
-            val key = "$name@$maxEdge"
-            bitmapCache.get(key) ?: withContext(Dispatchers.IO) {
-                runCatching {
-                    val f = store.file(name)
-                    val b = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    BitmapFactory.decodeFile(f.path, b)
-                    var sample = 1
-                    while (max(b.outWidth, b.outHeight) / (sample * 2) >= maxEdge) sample *= 2
-                    BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = sample })
-                }.getOrNull()
-            }?.also { bitmapCache.put(key, it) }
-        }
-    }
+    var bmp by remember(name, maxEdge) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(name, maxEdge) { bmp = loadBitmap(store, name, maxEdge) }
     val m = if (description != null) modifier.semantics { contentDescription = description } else modifier
     val image = bmp
     if (image != null) Image(image.asImageBitmap(), null, m, contentScale = scale)
     else Box(m.background(Palette.Forest.copy(alpha = 0.88f)), contentAlignment = Alignment.Center) {
         Text(fallbackText.trim().take(1).uppercase().ifEmpty { "✦" }, color = Palette.Cream, fontFamily = DisplayFont, fontSize = 34.sp)
     }
+}
+
+private suspend fun loadBitmap(store: PhotoStore, name: String?, maxEdge: Int): Bitmap? {
+    if (name == null) return null
+    val key = "$name@$maxEdge"
+    bitmapCache.get(key)?.let { return it }
+    val loaded = withContext(Dispatchers.IO) {
+        runCatching {
+            val f = store.file(name)
+            val b = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(f.path, b)
+            var sample = 1
+            while (max(b.outWidth, b.outHeight) / (sample * 2) >= maxEdge) sample *= 2
+            BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = sample })
+        }.getOrNull()
+    }
+    if (loaded != null) bitmapCache.put(key, loaded)
+    return loaded
 }

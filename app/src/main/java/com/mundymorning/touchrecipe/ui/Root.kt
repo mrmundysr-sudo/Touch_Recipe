@@ -10,7 +10,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.*
@@ -103,7 +105,8 @@ fun TouchRecipeRoot(c: AppContainer, activity: Activity? = null) {
                     composable(Routes.TOOLS) { ToolsScreen(c, nav) }
                     composable(Routes.PRINT) { PrintShareScreen(c, nav) }
                 }
-                SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+                // Top, over the pages' decorative title space: a bottom snackbar would cover (and swallow taps on) Save, Next, Add Item.
+                SnackbarHost(snack, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 68.dp))
             }
         }
     }

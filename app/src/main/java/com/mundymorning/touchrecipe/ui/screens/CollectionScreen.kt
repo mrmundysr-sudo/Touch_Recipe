@@ -92,6 +92,7 @@ fun CollectionScreen(c: AppContainer, nav: NavController, openSearch: Boolean) {
             "tab4" -> filters = true
         }
     }) {
+        BackChip({ nav.goBackOr(Routes.HUB) }, Modifier.offset(widthDp - 60.dp, dp(14f)))
         // tab labels (code-rendered on the blank tabs)
         val tabs = listOf(
             "tab0" to Triple("All", category == null && !favOnly, true), "tab1" to Triple("Favorites", favOnly, true),
@@ -171,7 +172,7 @@ fun RecipeCard(c: AppContainer, r: Recipe, cats: List<Category>, onOpen: () -> U
             Text(r.title.ifBlank { "Untitled recipe" }, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Palette.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (names.isNotEmpty()) Text(names.joinToString(" · "), color = Palette.Forest, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val meta = metaLine(r)
-            if (meta.isNotEmpty()) Text(meta, color = Palette.Ink.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (meta.isNotEmpty()) Text(meta, color = Palette.Ink.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
         Box(
             Modifier.size(52.dp).clickable(onClickLabel = if (r.favorite) "Remove from favorites" else "Add to favorites", role = Role.Button, onClick = onFavorite)

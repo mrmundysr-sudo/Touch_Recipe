@@ -57,6 +57,15 @@ android {
         unitTests {
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
+            all {
+                // Optional: run Robolectric from a pre-downloaded directory (restricted networks).
+                System.getenv("ROBOLECTRIC_DEPS_DIR")?.let { dir ->
+                    it.systemProperty("robolectric.offline", "true")
+                    it.systemProperty("robolectric.dependency.dir", dir)
+                }
+                it.maxHeapSize = "3g"
+                it.jvmArgs("-XX:+UseParallelGC")
+            }
         }
     }
     sourceSets["androidTest"].assets.srcDir("$projectDir/schemas")

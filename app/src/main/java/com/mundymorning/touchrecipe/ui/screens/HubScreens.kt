@@ -37,12 +37,14 @@ fun SplashScreen(c: AppContainer, onDone: () -> Unit) {
 fun HubScreen(c: AppContainer, nav: NavController) {
     val scope = rememberCoroutineScope()
     var showWelcome by remember { mutableStateOf(!c.prefs.welcomeSeen) }
-    var chooser by remember { mutableStateOf(false) }
+    var chooser by remember { mutableStateOf<List<Recipe>?>(null) }
     ArtScreen("hub", title = "Kitchen Hub", onTarget = { id ->
         when (id) {
             "stove" -> scope.launch {
                 val active = c.repo.activeCookSession()
-                if (active != null && c.repo.getRecipe(active.recipeId) != null) nav.navigate(Routes.cook(active.recipeId)) else chooser = true
+                val ok = active != null && c.repo.getRecipe(active.recipeId) != null
+                val all = if (ok) emptyList() else c.repo.allRecipes()
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) { if (ok) nav.navigate(Routes.cook(active!!.recipeId)) else chooser = all }
             }
             "calendar" -> nav.navigate(Routes.PLANNER)
             "new_recipe" -> nav.navigate(Routes.IMPORT)
@@ -52,7 +54,7 @@ fun HubScreen(c: AppContainer, nav: NavController) {
             "rolodex" -> nav.navigate(Routes.collection())
         }
     })
-    if (chooser) CookChooser(c, onDismiss = { chooser = false }, onImport = { chooser = false; nav.navigate(Routes.IMPORT) }, onPick = { chooser = false; nav.navigate(Routes.cook(it)) })
+    chooser?.let { list -> CookChooser(list, onDismiss = { chooser = null }, onImport = { chooser = null; nav.navigate(Routes.IMPORT) }, onPick = { chooser = null; nav.navigate(Routes.cook(it)) }) }
     if (showWelcome) AlertDialog(
         onDismissRequest = {}, title = { Text("Welcome to Touch Recipe") },
         text = { Text("Tap anything in the kitchen to explore: the Rolodex holds your recipes, the fridge card brings new ones in, and the stove starts cooking.\n\nYour recipes stay on this phone. Nothing is uploaded unless you choose to import from a web link.") },
@@ -62,8 +64,7 @@ fun HubScreen(c: AppContainer, nav: NavController) {
 
 /** "Stove → Cook Mode or active recipe": with nothing in progress, pick what to cook. */
 @Composable
-fun CookChooser(c: AppContainer, onDismiss: () -> Unit, onImport: () -> Unit, onPick: (String) -> Unit) {
-    val recipes by c.repo.recipes().collectAsState(initial = emptyList())
+fun CookChooser(recipes: List<Recipe>, onDismiss: () -> Unit, onImport: () -> Unit, onPick: (String) -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss, title = { Text("What are we cooking?") },
         text = {

@@ -58,7 +58,7 @@ class HttpPageFetcher : PageFetcher {
                 val buf = ByteArray(16 * 1024); var total = 0
                 while (true) { val n = ins.read(buf); if (n < 0) break; total += n; if (total > 6 * 1024 * 1024) break; out.write(buf, 0, n) }
             }
-            FetchOutcome.Page(out.toString(runCatching { charset(charset) }.getOrDefault(Charsets.UTF_8)), final)
+            FetchOutcome.Page(String(out.toByteArray(), runCatching { charset(charset) }.getOrDefault(Charsets.UTF_8)), final)
         } catch (e: java.net.UnknownHostException) { FetchOutcome.Failure("No internet connection, or the address could not be found.", offline = true)
         } catch (e: java.net.SocketTimeoutException) { FetchOutcome.Failure("The site took too long to answer.", offline = true)
         } catch (e: javax.net.ssl.SSLException) { FetchOutcome.Failure("A secure connection to the site could not be made.")
