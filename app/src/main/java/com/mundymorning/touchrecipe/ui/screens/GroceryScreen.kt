@@ -88,9 +88,9 @@ fun GroceryScreen(c: AppContainer, nav: NavController) {
         page.cards.forEach { card ->
             val list = items.filter { it.aisle == card.key }
             // the art's cards only have room for a row or two, so every aisle gets a button that opens its whole list
-            Box(Modifier.region(NRect(card.head.x + card.head.w * 0.795f, card.head.y + 0.008f, card.head.w * 0.17f, 0.026f)).clip(RoundedCornerShape(50)).background(Palette.Forest.copy(alpha = 0.92f))
+            Box(Modifier.region(NRect(card.head.x + card.head.w * 0.835f, card.head.y + 0.006f, card.head.w * 0.14f, 0.026f)).clip(RoundedCornerShape(50)).background(Palette.Forest.copy(alpha = 0.92f))
                 .clickable(onClickLabel = "Open the whole ${aisleName(card.key)} list") { aisleSheet = card.key }.semantics { contentDescription = "Open the whole ${aisleName(card.key)} list, ${list.size} items" }.testTag("aisle-open:${card.key}"), contentAlignment = Alignment.Center) {
-                Text("All ${list.size}", color = Palette.Cream, fontSize = sp(21f), fontWeight = FontWeight.Bold, maxLines = 1)
+                Text("All ${list.size}", color = Palette.Cream, maxLines = 1, style = TextStyle(fontSize = sp(21f), fontWeight = FontWeight.Bold, lineHeight = sp(21f), lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both)))
             }
             val rowArea = NRect(54f / 841f, card.check.y - 10f / 1870f, 560f / 841f, (card.card.y + card.card.h) - card.check.y - 4f / 1870f)
             if (card.key in collapsed) {

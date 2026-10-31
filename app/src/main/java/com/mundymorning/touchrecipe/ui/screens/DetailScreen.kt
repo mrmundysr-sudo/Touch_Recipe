@@ -177,7 +177,7 @@ fun DetailScreen(c: AppContainer, nav: NavController, id: String) {
                         Row(Modifier.padding(vertical = 3.dp).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.Top) {
                             Box(Modifier.size(32.dp).clip(CircleShape).background(Palette.Forest), contentAlignment = Alignment.Center) { Text("$n", color = Palette.Cream, fontSize = 15.sp, lineHeight = 15.sp, fontWeight = FontWeight.Bold) }
                             Spacer(Modifier.width(10.dp))
-                            Text(d.text, color = Palette.Ink, fontSize = sp(24f), lineHeight = sp(30f), modifier = Modifier.weight(1f))
+                            Text(d.text, color = Palette.Ink, fontSize = sp(24f), lineHeight = sp(30f), modifier = Modifier.weight(1f).padding(end = dp(70f)))
                         }
                     }
                 }
