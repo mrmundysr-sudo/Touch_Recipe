@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -51,6 +52,18 @@ suspend fun SnackbarHostState.undoable(message: String, onUndo: suspend () -> Un
     val r = showSnackbar(message, actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Long)
     if (r == SnackbarResult.ActionPerformed) onUndo()
 }
+
+/** Softly fades the bottom edge of a scrolling region so a row cut off by the artwork frame dissolves instead of being sliced in half. */
+fun Modifier.fadeBottom(height: androidx.compose.ui.unit.Dp = 30.dp): Modifier = this
+    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val h = height.toPx().coerceAtMost(size.height / 2)
+        drawRect(
+            androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Black, Color.Transparent), startY = size.height - h, endY = size.height),
+            topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - h), size = androidx.compose.ui.geometry.Size(size.width, h), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+        )
+    }
 
 /** Text that shrinks (down to [minScale]) to stay inside a fixed artwork region instead of clipping. */
 @Composable

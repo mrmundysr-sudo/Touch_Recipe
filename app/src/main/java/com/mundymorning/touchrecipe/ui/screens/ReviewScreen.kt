@@ -202,7 +202,7 @@ fun ReviewScreen(c: AppContainer, nav: NavController, editId: String?) {
         if (s.showErrors && s.title.isBlank()) Box(Modifier.region("title").border(3.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(dp(14f))).clearAndSetSemantics { })
         WarnBadge("title", warn("title"), Modifier.region(NRect(0.80f, 0.205f, 0.12f, 0.05f)))
         Box(Modifier.region("source").padding(start = dp(10f), end = dp(10f)), contentAlignment = Alignment.CenterStart) {
-            val st = TextStyle(fontFamily = BodyFont, fontSize = sp(25f), color = Palette.Ink)
+            val st = TextStyle(fontFamily = BodyFont, fontSize = sp(28f), color = Palette.Ink)
             BasicTextField(s.sourceText, { v -> vm.edit { it.copy(sourceText = v) } }, Modifier.fillMaxWidth().testTag("source-field").semantics { contentDescription = "Source" },
                 textStyle = st, singleLine = true, cursorBrush = SolidColor(Palette.Tomato), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
                 decorationBox = { inner -> if (s.sourceText.isEmpty()) Text("Source (website or cookbook)", style = st, color = Palette.Ink.copy(alpha = 0.45f)); inner() })
@@ -217,8 +217,8 @@ fun ReviewScreen(c: AppContainer, nav: NavController, editId: String?) {
                 if (before.size == 1) vm.edit { it.copy(ingredients = listOf(EditRow(newId(), ""))) } else vm.edit { it.copy(ingredients = before.filter { x -> x.id != row.id }) }
                 scope.launch { snack.undoable("Removed ingredient ${i + 1}") { vm.edit { it.copy(ingredients = before) } } }
             },
-            Modifier.region("ingredients"), hint = "Ingredient, e.g. 2 cups flour", showErrors = false, compact = true, tag = "ing-rows",
-            textStyle = TextStyle(fontFamily = BodyFont, fontSize = 16.sp, color = Palette.Ink), newRow = { EditRow(newId(), "") },
+            Modifier.region("ingredients").fadeBottom(), hint = "Ingredient, e.g. 2 cups flour", showErrors = false, compact = true, tag = "ing-rows",
+            textStyle = TextStyle(fontFamily = BodyFont, fontSize = sp(30f), lineHeight = sp(38f), color = Palette.Ink), newRow = { EditRow(newId(), "") },
         )
         WarnBadge("directions", warn("directions"), Modifier.region(NRect(0.52f, 0.552f, 0.12f, 0.04f)))
         EditableRows(
@@ -227,11 +227,11 @@ fun ReviewScreen(c: AppContainer, nav: NavController, editId: String?) {
                 if (before.size == 1) vm.edit { it.copy(directions = listOf(EditRow(newId(), ""))) } else vm.edit { it.copy(directions = before.filter { x -> x.id != row.id }) }
                 scope.launch { snack.undoable("Removed step ${i + 1}") { vm.edit { it.copy(directions = before) } } }
             },
-            Modifier.region("directions"), numbered = true, hint = "Describe this step", compact = true, tag = "dir-rows",
-            textStyle = TextStyle(fontFamily = BodyFont, fontSize = 16.sp, color = Palette.Ink), newRow = { EditRow(newId(), "") },
+            Modifier.region("directions").fadeBottom(), numbered = true, hint = "Describe this step", compact = true, tag = "dir-rows",
+            textStyle = TextStyle(fontFamily = BodyFont, fontSize = sp(30f), lineHeight = sp(38f), color = Palette.Ink), newRow = { EditRow(newId(), "") },
         )
         // categories: the enabled ones, tap to attach
-        FlowRow(Modifier.region(NRect(0.505f, 0.811f, 0.45f, 0.1f)).clipToBounds().verticalScroll(rememberScrollState()).testTag("review-categories"), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        FlowRow(Modifier.region(NRect(0.505f, 0.811f, 0.45f, 0.1f)).fadeBottom(18.dp).clipToBounds().verticalScroll(rememberScrollState()).testTag("review-categories"), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
             cats.filter { it.enabled || it.id in s.categories }.forEach { cat ->
                 Chip(cat.name, cat.id in s.categories, { vm.edit { it.copy(categories = if (cat.id in it.categories) it.categories - cat.id else it.categories + cat.id) } })
             }

@@ -80,13 +80,13 @@ fun PlannerScreen(c: AppContainer, nav: NavController) {
             val date = days[i]
             val r = recipeFor(i)
             val entry = byDate[date.toString()]
-            Box(Modifier.region(d.label).clearAndSetSemantics { }, contentAlignment = Alignment.Center) { FitText(Planner.dayLabel(date), TextStyle(fontFamily = BodyFont, fontWeight = FontWeight.Bold, fontSize = sp(22f), color = Palette.Forest), textAlign = TextAlign.Center, modifier = Modifier.testTag("day-label:$i")) }
+            Box(Modifier.region(d.label).clearAndSetSemantics { }, contentAlignment = Alignment.Center) { FitText(date.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault()), TextStyle(fontFamily = BodyFont, fontWeight = FontWeight.Bold, fontSize = sp(24f), color = Palette.Forest), minScale = 0.8f, textAlign = TextAlign.Center, modifier = Modifier.testTag("day-label:$i")) }
             Box(Modifier.region(d.date).clearAndSetSemantics { }, contentAlignment = Alignment.Center) { FitText(Planner.dateLabel(date), TextStyle(fontFamily = BodyFont, fontWeight = FontWeight.SemiBold, fontSize = sp(21f), color = Palette.Ink), textAlign = TextAlign.Center, modifier = Modifier.testTag("day-date:$i")) }
             Box(Modifier.region(d.photo).clip(RoundedCornerShape(dp(12f))).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
                 if (r != null) PhotoImage(c.photos, r.photo, Modifier.fillMaxSize(), r.title, maxEdge = 400)
                 else Text("＋", fontSize = sp(52f), color = Palette.Brass.copy(alpha = 0.8f))
             }
-            Box(Modifier.region(d.title).padding(horizontal = dp(10f)).clearAndSetSemantics { }, contentAlignment = Alignment.CenterStart) {
+            Box(Modifier.region(d.title).padding(start = dp(10f), end = dp(64f)).clearAndSetSemantics { }, contentAlignment = Alignment.CenterStart) {
                 FitText(r?.title ?: "Nothing planned", TextStyle(fontFamily = DisplayFont, fontWeight = if (r != null) FontWeight.Bold else FontWeight.Normal, fontSize = sp(28f), color = if (r != null) Palette.Ink else Palette.Ink.copy(alpha = 0.55f)), minScale = 0.5f, modifier = Modifier.testTag("day-title:$i"))
             }
             Box(Modifier.region(d.cook).clearAndSetSemantics { }, contentAlignment = Alignment.Center) { FitText(minutesLabel(r?.cookMinutes ?: r?.effectiveTotal) ?: "—", TextStyle(fontFamily = BodyFont, fontWeight = FontWeight.SemiBold, fontSize = sp(21f), color = Palette.Ink), textAlign = TextAlign.Center) }

@@ -195,14 +195,14 @@ fun CookScreen(c: AppContainer, nav: NavController, id: String) {
             Text(timerText, fontWeight = FontWeight.Bold, fontSize = sp(32f), color = Palette.Forest, modifier = Modifier.semantics { })
         }
         // progress + step list (or step image when the direction has one)
-        Column(Modifier.region("bottom").padding(horizontal = dp(22f), vertical = dp(36f))) {
+        Column(Modifier.region("bottom").padding(start = dp(22f), end = dp(22f), top = dp(36f), bottom = dp(76f))) {
             val progress = u.completed.size.toFloat() / u.steps.size
             LinearProgressIndicator(progress = { progress }, Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).semantics { progressBarRangeInfo = ProgressBarRangeInfo(progress, 0f..1f); contentDescription = "${u.completed.size} of ${u.steps.size} steps completed" }.testTag("cook-progress"),
                 color = Palette.Tomato, trackColor = Palette.CreamDeep)
             Text("${u.completed.size} of ${u.steps.size} steps done", Modifier.padding(vertical = 4.dp), color = Palette.Ink, fontWeight = FontWeight.SemiBold, fontSize = sp(24f))
             val img = u.step.image
             if (img != null) PhotoImage(c.photos, img, Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(12.dp)), description = "Photo for step ${u.index + 1}")
-            else LazyColumn(Modifier.weight(1f).testTag("step-list")) {
+            else LazyColumn(Modifier.weight(1f).fadeBottom().testTag("step-list")) {
                 itemsIndexed(u.steps, key = { _, d -> d.id }) { i, d ->
                     val done = i in u.completed
                     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClickLabel = "Go to step ${i + 1}") { vm.jump(i) }

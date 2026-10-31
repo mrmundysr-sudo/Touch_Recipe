@@ -148,7 +148,7 @@ fun DetailScreen(c: AppContainer, nav: NavController, id: String) {
         // ingredients (rows generated from the recipe; amounts scaled safely)
         Box(Modifier.region("ingredients")) {
             if (r.ingredients.isEmpty()) Text("No ingredients yet. Tap “Ingredients” to add some.", color = Palette.Ink.copy(alpha = 0.7f), fontSize = sp(22f))
-            LazyColumn(Modifier.fillMaxSize().testTag("ingredient-list")) {
+            LazyColumn(Modifier.fillMaxSize().fadeBottom().testTag("ingredient-list")) {
                 itemsIndexed(r.ingredients, key = { _, i -> i.id }) { _, ing ->
                     val shown = if (ing.header) ing.text else Quantities.scale(ing.text, factor)
                     if (ing.header) Text(shown, fontWeight = FontWeight.Bold, color = Palette.Forest, fontSize = sp(24f), modifier = Modifier.padding(top = 6.dp).semantics { heading() })
@@ -168,14 +168,14 @@ fun DetailScreen(c: AppContainer, nav: NavController, id: String) {
         // directions with automatic numbering
         Box(Modifier.region("directions")) {
             if (r.directions.isEmpty()) Text("No directions yet. Tap “Directions” to add some.", color = Palette.Ink.copy(alpha = 0.7f), fontSize = sp(22f))
-            LazyColumn(Modifier.fillMaxSize().testTag("direction-list")) {
+            LazyColumn(Modifier.fillMaxSize().fadeBottom().testTag("direction-list")) {
                 var n = 0
                 itemsIndexed(r.directions, key = { _, d -> d.id }) { _, d ->
                     if (d.header) Text(d.text, fontWeight = FontWeight.Bold, color = Palette.Forest, fontSize = sp(24f), modifier = Modifier.padding(top = 6.dp).semantics { heading() })
                     else {
                         n++
                         Row(Modifier.padding(vertical = 3.dp).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.Top) {
-                            Box(Modifier.size(dp(36f)).clip(CircleShape).background(Palette.Forest), contentAlignment = Alignment.Center) { Text("$n", color = Palette.Cream, fontSize = sp(22f), fontWeight = FontWeight.Bold) }
+                            Box(Modifier.size(32.dp).clip(CircleShape).background(Palette.Forest), contentAlignment = Alignment.Center) { Text("$n", color = Palette.Cream, fontSize = 15.sp, lineHeight = 15.sp, fontWeight = FontWeight.Bold) }
                             Spacer(Modifier.width(10.dp))
                             Text(d.text, color = Palette.Ink, fontSize = sp(24f), lineHeight = sp(30f), modifier = Modifier.weight(1f))
                         }

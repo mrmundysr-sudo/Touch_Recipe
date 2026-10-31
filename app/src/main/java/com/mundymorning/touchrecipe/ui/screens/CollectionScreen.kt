@@ -58,8 +58,8 @@ class CollectionViewModel(private val c: AppContainer) : ViewModel() {
 fun minutesLabel(m: Int?): String? = m?.let { if (it >= 60) "${it / 60} hr" + (if (it % 60 != 0) " ${it % 60} min" else "") else "$it min" }
 
 fun metaLine(r: Recipe): String = listOfNotNull(
-    r.prepMinutes?.let { "Prep ${minutesLabel(it)}" }, r.cookMinutes?.let { "Cook ${minutesLabel(it)}" },
-    r.effectiveTotal?.let { "Total ${minutesLabel(it)}" }, r.servings?.let { "Serves $it" },
+    r.prepMinutes?.let { "${minutesLabel(it)} prep" }, r.cookMinutes?.let { "${minutesLabel(it)} cook" },
+    r.servings?.let { "Serves $it" },
 ).joinToString(" · ")
 
 @Composable
@@ -104,7 +104,7 @@ fun CollectionScreen(c: AppContainer, nav: NavController, openSearch: Boolean) {
             val t = page.target(id)
             Box(Modifier.region(t.box).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    FitText(v.first, androidx.compose.ui.text.TextStyle(fontFamily = DisplayFont, fontSize = sp(if (id == "tab4") 30f else 21f), fontWeight = if (v.second) FontWeight.Bold else FontWeight.Medium, color = Palette.Ink), Modifier.padding(horizontal = dp(6f)), textAlign = TextAlign.Center)
+                    FitText(v.first, androidx.compose.ui.text.TextStyle(fontFamily = DisplayFont, fontSize = sp(if (id == "tab4") 30f else 19f), fontWeight = if (v.second) FontWeight.Bold else FontWeight.Medium, color = Palette.Ink), Modifier.padding(horizontal = dp(4f)), minScale = 0.8f, textAlign = TextAlign.Center)
                     if (v.second) Box(Modifier.padding(top = dp(3f)).height(dp(4f)).width(dp(34f)).background(Palette.Tomato))
                 }
             }
@@ -163,7 +163,7 @@ private fun EmptyState(title: String, text: String, action: String, onAction: ()
 fun RecipeCard(c: AppContainer, r: Recipe, cats: List<Category>, onOpen: () -> Unit, onFavorite: () -> Unit) {
     val names = r.categoryIds.mapNotNull { id -> cats.firstOrNull { it.id == id }?.name }
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 112.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFFFBF4E6)).border(1.dp, Palette.Brass.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+        Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min).heightIn(min = 112.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFFFBF4E6)).border(1.dp, Palette.Brass.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
             .clickable(onClickLabel = "Open recipe", onClick = onOpen).testTag("recipe-card:${r.id}")
             .semantics(mergeDescendants = true) { contentDescription = "${r.title.ifBlank { "Untitled recipe" }}. ${metaLine(r)}. ${if (names.isNotEmpty()) names.joinToString() else ""}${if (r.favorite) ". Favorite" else ""}" },
     ) {
@@ -172,7 +172,7 @@ fun RecipeCard(c: AppContainer, r: Recipe, cats: List<Category>, onOpen: () -> U
             Text(r.title.ifBlank { "Untitled recipe" }, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Palette.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (names.isNotEmpty()) Text(names.joinToString(" · "), color = Palette.Forest, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val meta = metaLine(r)
-            if (meta.isNotEmpty()) Text(meta, color = Palette.Ink.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            if (meta.isNotEmpty()) Text(meta, color = Palette.Ink.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         Box(
             Modifier.size(52.dp).clickable(onClickLabel = if (r.favorite) "Remove from favorites" else "Add to favorites", role = Role.Button, onClick = onFavorite)
