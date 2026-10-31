@@ -79,6 +79,10 @@ fun SettingsScreen(c: AppContainer, nav: NavController) {
     val vibrate by c.prefs.timerVibrate.collectAsState(); val sunday by c.prefs.sundayStart.collectAsState()
     var wipe by remember { mutableStateOf(false) }
     UtilityPage("Settings", { nav.goBackOr("drawer") }) {
+        val textSize by c.prefs.textSize.collectAsState()
+        Text("Text size", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { TextSize.values().forEach { t -> Chip(t.label, textSize == t, { c.prefs.setTextSize(t) }, Modifier.weight(1f).testTag("text-size:${t.name}")) } }
+        Text("Makes the words bigger on every page. This stacks with Android's own font size setting.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         SwitchRow("Highlight things to tap", "A brief glow shows tappable objects the first times you open a page.", glow) { c.prefs.setGlowGuide(it) }
         OutlinedButton({ c.prefs.resetGlow(); scope.launch { snack.showSnackbar("Tips will show again the next time you open each page.") } }, Modifier.heightIn(min = 48.dp)) { Text("Replay first-time tips") }
         SwitchRow("Reduce motion", "Softens glows and removes page transitions. Android's “remove animations” setting is always respected.", motion == MotionPref.REDUCED) { c.prefs.setMotion(if (it) MotionPref.REDUCED else MotionPref.SYSTEM) }

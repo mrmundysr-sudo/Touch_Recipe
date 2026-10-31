@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK, GARDEN, HARVEST, BERRY }
 enum class MotionPref { SYSTEM, REDUCED }
+/** App-wide text size multiplier (on top of Android's own font size setting). */
+enum class TextSize(val scale: Float, val label: String) { NORMAL(1.0f, "Normal"), LARGE(1.2f, "Large"), XLARGE(1.4f, "Extra large") }
 
 /** Small, privacy-conscious preference store (local only, included in backups, no identifiers). */
 class Prefs(private val sp: SharedPreferences) {
@@ -18,6 +20,10 @@ class Prefs(private val sp: SharedPreferences) {
     private val _theme = MutableStateFlow(runCatching { ThemeMode.valueOf(sp.getString("theme", "SYSTEM")!!) }.getOrDefault(ThemeMode.SYSTEM))
     val theme: StateFlow<ThemeMode> = _theme.asStateFlow()
     fun setTheme(m: ThemeMode) { sp.edit().putString("theme", m.name).apply(); _theme.value = m }
+
+    private val _textSize = MutableStateFlow(runCatching { TextSize.valueOf(sp.getString("text_size", "LARGE")!!) }.getOrDefault(TextSize.LARGE))
+    val textSize: StateFlow<TextSize> = _textSize.asStateFlow()
+    fun setTextSize(t: TextSize) { sp.edit().putString("text_size", t.name).apply(); _textSize.value = t }
 
     private val _glow = MutableStateFlow(sp.getBoolean("glow", true))
     val glowGuide: StateFlow<Boolean> = _glow.asStateFlow()
@@ -54,12 +60,13 @@ class Prefs(private val sp: SharedPreferences) {
     fun resetGlow() { val e = sp.edit(); sp.all.keys.filter { it.startsWith("glow_") }.forEach { e.remove(it) }; e.apply(); welcomeSeen = false }
 
     fun exportable(): Map<String, String> = mapOf(
-        "theme" to _theme.value.name, "glow" to _glow.value.toString(), "motion" to _motion.value.name,
+        "theme" to _theme.value.name, "text_size" to _textSize.value.name, "glow" to _glow.value.toString(), "motion" to _motion.value.name,
         "keep_awake" to _keepAwake.value.toString(), "sunday_start" to _sundayStart.value.toString(), "vibrate" to _vibrate.value.toString(),
     )
 
     fun restore(map: Map<String, String>) {
         map["theme"]?.let { runCatching { setTheme(ThemeMode.valueOf(it)) } }
+        map["text_size"]?.let { runCatching { setTextSize(TextSize.valueOf(it)) } }
         map["glow"]?.let { setGlowGuide(it.toBoolean()) }
         map["motion"]?.let { runCatching { setMotion(MotionPref.valueOf(it)) } }
         map["keep_awake"]?.let { setKeepAwake(it.toBoolean()) }

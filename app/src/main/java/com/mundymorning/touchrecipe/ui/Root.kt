@@ -69,6 +69,7 @@ fun TouchRecipeRoot(c: AppContainer, activity: Activity? = null) {
     val context = LocalContext.current
     val theme by c.prefs.theme.collectAsState()
     val motion by c.prefs.motion.collectAsState()
+    val textSize by c.prefs.textSize.collectAsState()
     val glow by c.prefs.glowGuide.collectAsState()
     val reduced = motion == MotionPref.REDUCED || systemReducedMotion(context)
     val snack = remember { SnackbarHostState() }
@@ -81,8 +82,9 @@ fun TouchRecipeRoot(c: AppContainer, activity: Activity? = null) {
         }
     }
 
+    val baseDensity = androidx.compose.ui.platform.LocalDensity.current
     TouchRecipeTheme(theme, reduced, glow) {
-        CompositionLocalProvider(LocalArt provides c.art, LocalGlowController provides remember { PrefsGlow(c) }, LocalSnack provides snack) {
+        CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(baseDensity.density, (baseDensity.fontScale * textSize.scale).coerceAtMost(2.2f)), LocalArt provides c.art, LocalGlowController provides remember { PrefsGlow(c) }, LocalSnack provides snack) {
             Box(Modifier.fillMaxSize()) {
                 val enter: androidx.compose.animation.AnimatedContentTransitionScope<*>.() -> EnterTransition = { if (reduced) EnterTransition.None else fadeIn(tween(220)) }
                 val exit: androidx.compose.animation.AnimatedContentTransitionScope<*>.() -> ExitTransition = { if (reduced) ExitTransition.None else fadeOut(tween(160)) }

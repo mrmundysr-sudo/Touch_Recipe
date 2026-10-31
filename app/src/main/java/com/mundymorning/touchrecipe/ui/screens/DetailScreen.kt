@@ -249,7 +249,7 @@ fun GroceryAddSheet(r: Recipe, servings: Int?, c: AppContainer, onDismiss: () ->
     var onlyChecked by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
     ModalBottomSheet(onDismiss) {
-        Column(Modifier.padding(20.dp).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(20.dp).navigationBarsPadding().padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Add to Grocery List", style = MaterialTheme.typography.headlineSmall)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton({ week = week.minusWeeks(1) }) { Text("‹ Earlier") }
@@ -265,7 +265,7 @@ fun GroceryAddSheet(r: Recipe, servings: Int?, c: AppContainer, onDismiss: () ->
                 BigButton("Add", { scope.launch {
                     val n = c.repo.addIngredientsToGroceries(week, r, servings ?: r.servings, if (onlyChecked) checked else null)
                     c.selectedWeek.value = week   // so "Open list" (and the Grocery page) show the week these were added to
-                    result = if (n == 0) "Everything is already on the list for ${Planner.rangeLabel(week)}." else "Added or updated $n ${if (n == 1) "item" else "items"} on the list for ${Planner.rangeLabel(week)}."
+                    result = if (n == 0) "Everything is already on the list for ${Planner.rangeLabel(week)}." else "Added or updated $n ${if (n == 1) "item" else "items"} on the list for ${Planner.rangeLabel(week)}. Tap Open list to see them."
                 } }, Modifier.weight(1f))
                 BigButton("Open list", onOpenList, Modifier.weight(1f), primary = false)
             }

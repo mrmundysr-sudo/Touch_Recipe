@@ -332,6 +332,17 @@ class FlowsTest {
         rule.tapArt("head_produce"); rule.waitTag("aisle:produce")
     }
 
+    @Test fun addFromRecipeThenOpenListShowsTheItems() {
+        start(); rule.tapArt("rolodex"); rule.waitTag("recipe-card:r1"); rule.clickTag("recipe-card:r1"); rule.assertPage("Spaghetti al Pomodoro")
+        rule.tapArt("grocery"); rule.waitText("Add to Grocery List"); rule.onNodeWithText("Add", useUnmergedTree = true).performClick()
+        rule.waitText("Tap Open list to see them", substring = true)
+        rule.onNodeWithText("Open list").performClick(); rule.assertPage("Grocery List")
+        val total = runBlocking { c.db.grocery().all() }.size
+        assertTrue(total >= 4)
+        // the page must actually show them: at least one aisle button reports a non-zero count
+        rule.waitUntil(20000) { listOf("produce", "meat", "dairy", "pantry", "bakery").any { a -> rule.onAllNodesWithTag("aisle-open:$a").fetchSemanticsNodes().firstOrNull()?.config?.getOrNull(SemanticsProperties.ContentDescription)?.any { d -> !d.contains(", 0 items") } == true } }
+    }
+
     @Test fun groceryAisleOpensFullList() {
         start(); runBlocking { c.repo.addGroceryItem(c.selectedWeek.value, "Apples", "3", "produce"); c.repo.addGroceryItem(c.selectedWeek.value, "Basil", "", "produce") }
         rule.tapArt("grocery"); rule.assertPage("Grocery List"); rule.waitTag("aisle-open:produce")

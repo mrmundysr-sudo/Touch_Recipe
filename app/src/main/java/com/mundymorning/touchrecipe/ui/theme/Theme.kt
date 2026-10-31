@@ -72,12 +72,12 @@ private val AppTypography = Typography(
     titleLarge = TextStyle(fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 20.sp),
     titleMedium = TextStyle(fontFamily = BodyFont, fontWeight = FontWeight.SemiBold, fontSize = 17.sp),
     titleSmall = TextStyle(fontFamily = BodyFont, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
-    bodyLarge = TextStyle(fontFamily = BodyFont, fontSize = 17.sp, lineHeight = 24.sp),
-    bodyMedium = TextStyle(fontFamily = BodyFont, fontSize = 15.sp, lineHeight = 21.sp),
-    bodySmall = TextStyle(fontFamily = BodyFont, fontSize = 13.sp, lineHeight = 18.sp),
+    bodyLarge = TextStyle(fontFamily = BodyFont, fontSize = 17.sp, lineHeight = 25.sp, letterSpacing = 0.15.sp),
+    bodyMedium = TextStyle(fontFamily = BodyFont, fontSize = 16.sp, lineHeight = 23.sp, letterSpacing = 0.15.sp),
+    bodySmall = TextStyle(fontFamily = BodyFont, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.1.sp),
     labelLarge = TextStyle(fontFamily = BodyFont, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
     labelMedium = TextStyle(fontFamily = BodyFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
-    labelSmall = TextStyle(fontFamily = BodyFont, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+    labelSmall = TextStyle(fontFamily = BodyFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
 )
 
 /** True when the user wants less motion (system "remove animations" or the in-app switch). */
