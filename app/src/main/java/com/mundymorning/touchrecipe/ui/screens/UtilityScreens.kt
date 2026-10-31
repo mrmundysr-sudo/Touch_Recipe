@@ -34,6 +34,8 @@ import com.mundymorning.touchrecipe.core.grocery.DEFAULT_AISLES
 import com.mundymorning.touchrecipe.core.model.Recipe
 import com.mundymorning.touchrecipe.core.planner.Planner
 import com.mundymorning.touchrecipe.core.timer.CookTimer
+import com.mundymorning.touchrecipe.core.timer.NamedTimer
+import com.mundymorning.touchrecipe.core.timer.NamedTimers
 import com.mundymorning.touchrecipe.core.units.Convert
 import com.mundymorning.touchrecipe.core.units.Kind
 import com.mundymorning.touchrecipe.data.*
@@ -96,7 +98,7 @@ fun SettingsScreen(c: AppContainer, nav: NavController) {
         Text("Open-source notices: Playfair Display and Source Sans 3 (SIL Open Font License 1.1), jsoup (MIT), AndroidX, Room and Kotlin libraries (Apache 2.0), Google ML Kit text recognition (on-device; Google ML Kit terms). Full license texts are bundled with the app.", style = MaterialTheme.typography.bodySmall)
     }
     if (wipe) ConfirmDialog("Delete everything?", "This permanently removes all recipes, photos, meal plans, grocery lists and cooking progress from this phone. This can't be undone. Make a backup first if you might want them back.", "Delete everything", destructive = true,
-        onDismiss = { wipe = false }, onConfirm = { wipe = false; scope.launch { c.db.recipes().clear(); c.db.meals().clear(); c.db.grocery().clear(); c.db.cook().clear(); c.photos.all().forEach { it.delete() }; snack.showSnackbar("All data deleted.") } })
+        onDismiss = { wipe = false }, onConfirm = { wipe = false; scope.launch { c.db.recipes().clear(); c.db.meals().clear(); c.db.grocery().clear(); c.db.cook().clear(); c.prefs.saveTimers(emptyList()); c.photos.all().forEach { it.delete() }; snack.showSnackbar("All data deleted.") } })
 }
 
 @Composable
@@ -111,13 +113,22 @@ fun CategoriesScreen(c: AppContainer, nav: NavController) {
 fun ThemesScreen(c: AppContainer, nav: NavController) {
     val theme by c.prefs.theme.collectAsState()
     UtilityPage("Themes", { nav.goBackOr("drawer") }) {
-        Text("The illustrated pages keep their warm look in every theme. Themes change menus, sheets and utility pages.", style = MaterialTheme.typography.bodyMedium)
-        listOf(ThemeMode.SYSTEM to ("Match my phone" to "Follows Android's light or dark setting."), ThemeMode.LIGHT to ("Kitchen Light" to "Warm cream and forest green."), ThemeMode.DARK to ("Forest Night" to "Deep green with cream text, easier on the eyes in a dim kitchen.")).forEach { (m, t) ->
+        Text("Themes restyle the menus, sheets, timer, tools and settings pages. The illustrated pages (kitchen, recipes, planner, grocery) are fixed artwork and keep their warm look in every theme.", style = MaterialTheme.typography.bodyMedium)
+        data class Opt(val mode: ThemeMode, val title: String, val detail: String, val swatches: List<Color>)
+        listOf(
+            Opt(ThemeMode.SYSTEM, "Match my phone", "Follows Android's light or dark setting.", listOf(Palette.Cream, Palette.Forest, Palette.Tomato, Color(0xFF17211B))),
+            Opt(ThemeMode.LIGHT, "Kitchen Light", "Warm cream and forest green.", listOf(Palette.Cream, Palette.Forest, Palette.Tomato, Palette.Brass)),
+            Opt(ThemeMode.DARK, "Forest Night", "Deep green with cream text, easier on the eyes in a dim kitchen.", listOf(Color(0xFF17211B), Color(0xFF8FD1AE), Color(0xFFFF8A65), Color(0xFFE0B865))),
+            Opt(ThemeMode.GARDEN, "Garden Sage", "Fresh herb greens on a soft sage background.", listOf(Color(0xFFE8F1E2), Color(0xFF2E6B3F), Color(0xFF8A4B14), Color(0xFF6B8E23))),
+            Opt(ThemeMode.HARVEST, "Harvest Amber", "Toasted amber and terracotta, like a baked crust.", listOf(Color(0xFFFBE9CF), Color(0xFF9A3412), Color(0xFF7A4A00), Color(0xFFB45309))),
+            Opt(ThemeMode.BERRY, "Berry Night", "Dark plum with pink and apricot accents.", listOf(Color(0xFF241421), Color(0xFFE6A8D7), Color(0xFFFFB68A), Color(0xFFD9C27A))),
+        ).forEach { o ->
+            val m = o.mode; val t = o.title to o.detail
             val sel = theme == m
             Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).clip(RoundedCornerShape(14.dp)).border(if (sel) 3.dp else 1.dp, if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp))
                 .selectable(sel, role = Role.RadioButton, onClick = { c.prefs.setTheme(m) }).padding(14.dp).testTag("theme:${m.name}"), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.padding(end = 12.dp)) {
-                    listOf(if (m == ThemeMode.DARK) Color(0xFF17211B) else Palette.Cream, Palette.Forest, Palette.Tomato, Palette.Brass).forEach { Box(Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)).background(it).border(1.dp, Color.Gray.copy(alpha = 0.4f), RoundedCornerShape(5.dp))) }
+                    o.swatches.forEach { Box(Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)).background(it).border(1.dp, Color.Gray.copy(alpha = 0.4f), RoundedCornerShape(5.dp))) }
                 }
                 Column(Modifier.weight(1f)) { Text(t.first, style = MaterialTheme.typography.titleMedium); Text(t.second, style = MaterialTheme.typography.bodySmall) }
                 Text(if (sel) "✓ Selected" else "", style = MaterialTheme.typography.labelLarge)
@@ -193,30 +204,67 @@ fun ToolsScreen(c: AppContainer, nav: NavController) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun KitchenTimer(c: AppContainer) {
-    var total by rememberSaveable { mutableLongStateOf(0L) }
-    var left by rememberSaveable { mutableLongStateOf(0L) }
-    var endAt by rememberSaveable { mutableLongStateOf(-1L) }
-    val timer = CookTimer(total, left, endAt.takeIf { it >= 0 })
-    fun set(t: CookTimer) { total = t.totalMs; left = t.remainingMs; endAt = t.endAtMs ?: -1L }
-    var now by remember { mutableLongStateOf(c.clock()) }
-    var mins by rememberSaveable { mutableStateOf("") }
+    val timers by c.prefs.timers.collectAsState()
     val ctx = LocalContext.current
-    LaunchedEffect(timer.running) { while (timer.running) { now = c.clock(); delay(250) }; now = c.clock() }
-    LaunchedEffect(now, endAt) { if (timer.running && timer.remaining(now) == 0L) { set(timer.copy(remainingMs = 0, endAtMs = null)); TimerAlarm.cancel(ctx, "kitchen-timer") } }
-    val shown = if (timer.configured) timer.remaining(now) else 0L
-    Text(CookTimer.format(shown), Modifier.fillMaxWidth().testTag("tool-timer"), fontSize = 64.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onBackground)
-    if (timer.configured && !timer.running && timer.remainingMs == 0L) Text("Time's up!", Modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.secondary)
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf(1, 5, 10, 15, 20, 30, 45, 60).forEach { m -> OutlinedButton({ set(CookTimer().withDuration(m * 60)) }, Modifier.heightIn(min = 48.dp)) { Text("$m min") } } }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(mins, { mins = it.filter(Char::isDigit).take(3) }, Modifier.weight(1f), label = { Text("Custom minutes") }, singleLine = true, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number))
-        OutlinedButton({ mins.toIntOrNull()?.let { set(CookTimer().withDuration(it * 60)) } }, Modifier.heightIn(min = 56.dp)) { Text("Set") }
+    var now by remember { mutableLongStateOf(c.clock()) }
+    var name by rememberSaveable { mutableStateOf("") }
+    var mins by rememberSaveable { mutableStateOf("") }
+    var renaming by remember { mutableStateOf<NamedTimer?>(null) }
+    val anyRunning = timers.any { it.endAtMs != null }
+    // keep the clock ticking while anything runs; a timer whose end passed while the app was closed settles here
+    LaunchedEffect(anyRunning) { while (anyRunning) { now = c.clock(); delay(250) }; now = c.clock() }
+    LaunchedEffect(now) {
+        val (settled, finished) = NamedTimers.settle(c.prefs.timers.value, now)
+        if (finished.isNotEmpty()) { c.prefs.saveTimers(settled); finished.forEach { TimerAlarm.cancel(ctx, "kt-" + it.id) } }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        BigButton(if (timer.running) "Pause" else "Start", {
-            if (timer.running) { set(timer.pause(c.clock())); TimerAlarm.cancel(ctx, "kitchen-timer") }
-            else { val t = timer.start(c.clock()); set(t); t.endAtMs?.let { TimerAlarm.ensureChannel(ctx); TimerAlarm.schedule(ctx, "kitchen-timer", "Kitchen timer", it) } }
-        }, Modifier.weight(1f), enabled = timer.configured)
-        BigButton("Reset", { set(timer.reset()); TimerAlarm.cancel(ctx, "kitchen-timer") }, Modifier.weight(1f), primary = false, enabled = timer.configured)
+    fun save(list: List<NamedTimer>) = c.prefs.saveTimers(list)
+    fun addTimer(minutes: Int) {
+        val before = timers
+        val list = NamedTimers.add(before, name, minutes, c.clock())
+        if (list.size == before.size) return
+        save(list); list.last().let { t -> t.endAtMs?.let { TimerAlarm.ensureChannel(ctx); TimerAlarm.schedule(ctx, "kt-" + t.id, t.name + " is done", it) } }
+        name = ""; mins = ""
+    }
+    Column(Modifier.fillMaxWidth().testTag("tool-timer"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Start as many timers as you need. They keep running when you leave this page or close the app, and you will be notified when each one finishes.", style = MaterialTheme.typography.bodyMedium)
+        OutlinedTextField(name, { name = it.take(40) }, Modifier.fillMaxWidth().testTag("timer-name"), label = { Text("Name (optional, e.g. Biscuits)") }, singleLine = true,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf(1, 5, 10, 15, 20, 30, 45, 60).forEach { m -> OutlinedButton({ addTimer(m) }, Modifier.heightIn(min = 48.dp)) { Text("$m min") } } }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(mins, { mins = it.filter(Char::isDigit).take(3) }, Modifier.weight(1f).testTag("timer-mins"), label = { Text("Custom minutes") }, singleLine = true, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number))
+            OutlinedButton({ mins.toIntOrNull()?.let { addTimer(it) } }, Modifier.heightIn(min = 56.dp)) { Text("Start") }
+        }
+        if (timers.size >= NamedTimers.MAX) Text("That's the most timers at once (${NamedTimers.MAX}). Delete one to add another.", style = MaterialTheme.typography.bodySmall)
+        HorizontalDivider()
+        if (timers.isEmpty()) Text("No timers yet. Pick a time above to start one.", style = MaterialTheme.typography.bodyMedium)
+        timers.forEach { t ->
+            val timer = t.timer
+            val left = timer.remaining(now)
+            val done = timer.configured && !timer.running && t.remainingMs == 0L
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(14.dp).testTag("timer:${t.id}"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(t.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    TextButton({ renaming = t }, Modifier.heightIn(min = 48.dp)) { Text("Rename") }
+                }
+                Text(if (done) "Time's up!" else CookTimer.format(left), Modifier.fillMaxWidth().semantics { contentDescription = if (done) "${t.name}: time's up" else "${t.name}: ${CookTimer.format(left)} left" },
+                    fontSize = 44.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, textAlign = TextAlign.Center, color = if (done) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BigButton(if (timer.running) "Pause" else "Start", {
+                        if (timer.running) { save(timers.map { if (it.id == t.id) it.with(timer.pause(c.clock())) else it }); TimerAlarm.cancel(ctx, "kt-" + t.id) }
+                        else { val started = timer.start(c.clock()); save(timers.map { if (it.id == t.id) it.with(started) else it }); started.endAtMs?.let { TimerAlarm.ensureChannel(ctx); TimerAlarm.schedule(ctx, "kt-" + t.id, t.name + " is done", it) } }
+                    }, Modifier.weight(1f))
+                    BigButton("Reset", { save(timers.map { if (it.id == t.id) it.with(timer.reset()) else it }); TimerAlarm.cancel(ctx, "kt-" + t.id) }, Modifier.weight(1f), primary = false)
+                    BigButton("Delete", { save(timers.filter { it.id != t.id }); TimerAlarm.cancel(ctx, "kt-" + t.id) }, Modifier.weight(1f), primary = false)
+                }
+            }
+        }
+    }
+    renaming?.let { t ->
+        var text by remember(t.id) { mutableStateOf(t.name) }
+        AlertDialog({ renaming = null }, title = { Text("Rename timer") },
+            text = { OutlinedTextField(text, { text = it.take(40) }, singleLine = true, modifier = Modifier.testTag("timer-rename")) },
+            confirmButton = { TextButton({ if (text.isNotBlank()) save(timers.map { if (it.id == t.id) it.copy(name = text.trim()) else it }); renaming = null }) { Text("Save") } },
+            dismissButton = { TextButton({ renaming = null }) { Text("Cancel") } })
     }
 }
 

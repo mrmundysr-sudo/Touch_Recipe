@@ -64,6 +64,7 @@ fun GroceryScreen(c: AppContainer, nav: NavController) {
     var addSheet by remember { mutableStateOf(false) }
     var basketSheet by remember { mutableStateOf(false) }
     var rowSheet by remember { mutableStateOf<GroceryItem?>(null) }
+    var aisleSheet by remember { mutableStateOf<String?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
     val allAisles = DEFAULT_AISLES + customAisles
     val checkedCount = items.count { it.checked }
@@ -86,6 +87,11 @@ fun GroceryScreen(c: AppContainer, nav: NavController) {
         }
         page.cards.forEach { card ->
             val list = items.filter { it.aisle == card.key }
+            // the art's cards only have room for a row or two, so every aisle gets a button that opens its whole list
+            Box(Modifier.region(NRect(card.head.x + card.head.w * 0.60f, card.head.y + 0.004f, card.head.w * 0.36f, 0.030f)).clip(RoundedCornerShape(50)).background(Palette.Forest.copy(alpha = 0.92f))
+                .clickable(onClickLabel = "Open the whole ${aisleName(card.key)} list") { aisleSheet = card.key }.semantics { contentDescription = "Open the whole ${aisleName(card.key)} list, ${list.size} items" }.testTag("aisle-open:${card.key}"), contentAlignment = Alignment.Center) {
+                Text("View all (${list.size})", color = Palette.Cream, fontSize = sp(20f), fontWeight = FontWeight.Bold, maxLines = 1)
+            }
             val rowArea = NRect(54f / 841f, card.check.y - 10f / 1870f, 560f / 841f, (card.card.y + card.card.h) - card.check.y - 4f / 1870f)
             if (card.key in collapsed) {
                 Box(Modifier.region(rowArea).padding(horizontal = dp(8f)), contentAlignment = Alignment.CenterStart) {
@@ -97,6 +103,7 @@ fun GroceryScreen(c: AppContainer, nav: NavController) {
         }
     }
 
+    aisleSheet?.let { key -> AisleSheet(aisleName(key), items.filter { it.aisle == key }, onDismiss = { aisleSheet = null }, onToggle = { it2, v -> scope.launch { c.repo.updateGroceryItem(it2.copy(checked = v)) } }, onOpen = { aisleSheet = null; rowSheet = it }) }
     if (weekSheet) WeekSheet(week, sundayStart, { weekSheet = false }, { c.selectedWeek.value = it })
     rowSheet?.let { item -> ItemSheet(item, allAisles, items, onDismiss = { rowSheet = null }, onSave = { scope.launch { c.repo.updateGroceryItem(it.copy(edited = true)) }; rowSheet = null },
         onDelete = { scope.launch { c.repo.deleteGroceryItem(item.id); snack.undoable("Removed ${item.name}") { c.repo.restoreGroceryItems(listOf(item)) } }; rowSheet = null },
@@ -154,6 +161,31 @@ private fun AisleRows(c: AppContainer, week: java.time.LocalDate, aisle: String,
 private fun Modifier.onFocusLost(block: () -> Unit): Modifier = composed {
     var had by remember { mutableStateOf(false) }
     onFocusChanged { if (it.isFocused) had = true else if (had) { had = false; block() } }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AisleSheet(title: String, list: List<GroceryItem>, onDismiss: () -> Unit, onToggle: (GroceryItem, Boolean) -> Unit, onOpen: (GroceryItem) -> Unit) {
+    ModalBottomSheet(onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.fillMaxHeight(0.9f).padding(horizontal = 20.dp)) {
+            Text(title, style = MaterialTheme.typography.headlineSmall)
+            Text("${list.size} ${if (list.size == 1) "item" else "items"} · ${list.count { it.checked }} bought", style = MaterialTheme.typography.bodySmall)
+            if (list.isEmpty()) Text("Nothing here yet. Add items from a recipe, the meal planner, or the Add Item button.", Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodyMedium)
+            LazyColumn(Modifier.weight(1f).testTag("aisle-sheet-list")) {
+                items(list, key = { it.id }) { it2 ->
+                    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).toggleable(it2.checked, role = Role.Checkbox, onValueChange = { v -> onToggle(it2, v) }), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(it2.checked, null)
+                        Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                            Text(it2.name, style = MaterialTheme.typography.titleMedium, textDecoration = if (it2.checked) TextDecoration.LineThrough else null)
+                            if (it2.quantityText.isNotEmpty()) Text(it2.quantityText, style = MaterialTheme.typography.bodySmall)
+                        }
+                        TextButton({ onOpen(it2) }) { Text("Edit") }
+                    }
+                }
+            }
+            BigButton("Done", onDismiss, Modifier.fillMaxWidth().padding(vertical = 12.dp), primary = false)
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)

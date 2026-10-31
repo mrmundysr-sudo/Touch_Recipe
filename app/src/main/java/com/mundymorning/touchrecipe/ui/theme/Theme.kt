@@ -45,6 +45,25 @@ private val DarkColors = darkColorScheme(
     outline = Color(0xFF9C9079), error = Color(0xFFFFB4AB),
 )
 
+private val GardenColors = lightColorScheme(
+    primary = Color(0xFF2E6B3F), onPrimary = Color.White, secondary = Color(0xFF8A4B14), onSecondary = Color.White,
+    tertiary = Color(0xFF6B8E23), background = Color(0xFFE8F1E2), onBackground = Color(0xFF14231A),
+    surface = Color(0xFFF3F8EE), onSurface = Color(0xFF14231A), surfaceVariant = Color(0xFFD3E4CA), onSurfaceVariant = Color(0xFF354A3C),
+    outline = Color(0xFF5F7566), error = Color(0xFFB3261E),
+)
+private val HarvestColors = lightColorScheme(
+    primary = Color(0xFF9A3412), onPrimary = Color.White, secondary = Color(0xFF7A4A00), onSecondary = Color.White,
+    tertiary = Color(0xFFB45309), background = Color(0xFFFBE9CF), onBackground = Color(0xFF2E1A0B),
+    surface = Color(0xFFFFF4E3), onSurface = Color(0xFF2E1A0B), surfaceVariant = Color(0xFFF2D5AA), onSurfaceVariant = Color(0xFF59391B),
+    outline = Color(0xFF8A6A47), error = Color(0xFFB3261E),
+)
+private val BerryColors = darkColorScheme(
+    primary = Color(0xFFE6A8D7), onPrimary = Color(0xFF3A0F31), secondary = Color(0xFFFFB68A), onSecondary = Color(0xFF3A1A06),
+    tertiary = Color(0xFFD9C27A), background = Color(0xFF241421), onBackground = Color(0xFFF7E8F2),
+    surface = Color(0xFF33202F), onSurface = Color(0xFFF7E8F2), surfaceVariant = Color(0xFF4A3045), onSurfaceVariant = Color(0xFFE6CDE0),
+    outline = Color(0xFFB596AE), error = Color(0xFFFFB4AB),
+)
+
 private val AppTypography = Typography(
     displayLarge = TextStyle(fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 40.sp),
     headlineLarge = TextStyle(fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 30.sp),
@@ -67,8 +86,13 @@ val LocalGlowGuide = staticCompositionLocalOf { true }
 
 @Composable
 fun TouchRecipeTheme(mode: ThemeMode = ThemeMode.SYSTEM, reducedMotion: Boolean = false, glowGuide: Boolean = true, content: @Composable () -> Unit) {
-    val dark = when (mode) { ThemeMode.SYSTEM -> isSystemInDarkTheme(); ThemeMode.DARK -> true; ThemeMode.LIGHT -> false }
+    val systemDark = isSystemInDarkTheme()
+    val scheme = when (mode) {
+        ThemeMode.SYSTEM -> if (systemDark) DarkColors else LightColors
+        ThemeMode.DARK -> DarkColors; ThemeMode.LIGHT -> LightColors
+        ThemeMode.GARDEN -> GardenColors; ThemeMode.HARVEST -> HarvestColors; ThemeMode.BERRY -> BerryColors
+    }
     CompositionLocalProvider(LocalReducedMotion provides reducedMotion, LocalGlowGuide provides glowGuide) {
-        MaterialTheme(colorScheme = if (dark) DarkColors else LightColors, typography = AppTypography, content = content)
+        MaterialTheme(colorScheme = scheme, typography = AppTypography, content = content)
     }
 }

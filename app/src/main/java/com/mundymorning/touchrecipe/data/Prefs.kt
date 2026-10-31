@@ -2,11 +2,13 @@ package com.mundymorning.touchrecipe.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.mundymorning.touchrecipe.core.timer.NamedTimer
+import com.mundymorning.touchrecipe.core.timer.NamedTimers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-enum class ThemeMode { SYSTEM, LIGHT, DARK }
+enum class ThemeMode { SYSTEM, LIGHT, DARK, GARDEN, HARVEST, BERRY }
 enum class MotionPref { SYSTEM, REDUCED }
 
 /** Small, privacy-conscious preference store (local only, included in backups, no identifiers). */
@@ -36,6 +38,11 @@ class Prefs(private val sp: SharedPreferences) {
     private val _vibrate = MutableStateFlow(sp.getBoolean("vibrate", true))
     val timerVibrate: StateFlow<Boolean> = _vibrate.asStateFlow()
     fun setTimerVibrate(v: Boolean) { sp.edit().putBoolean("vibrate", v).apply(); _vibrate.value = v }
+
+    /** The Timer & Tools stopwatches: persisted so they keep running (by wall-clock end time) when the app is closed. */
+    private val _timers = MutableStateFlow(NamedTimers.decode(sp.getString("kitchen_timers", null)))
+    val timers: StateFlow<List<NamedTimer>> = _timers.asStateFlow()
+    fun saveTimers(list: List<NamedTimer>) { sp.edit().putString("kitchen_timers", NamedTimers.encode(list)).apply(); _timers.value = list }
 
     var welcomeSeen: Boolean get() = sp.getBoolean("welcome_seen", false); set(v) { sp.edit().putBoolean("welcome_seen", v).apply() }
     var notifAsked: Boolean get() = sp.getBoolean("notif_asked", false); set(v) { sp.edit().putBoolean("notif_asked", v).apply() }

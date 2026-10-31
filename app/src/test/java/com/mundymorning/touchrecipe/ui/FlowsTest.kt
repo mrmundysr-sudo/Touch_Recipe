@@ -332,6 +332,12 @@ class FlowsTest {
         rule.tapArt("head_produce"); rule.waitTag("aisle:produce")
     }
 
+    @Test fun groceryAisleOpensFullList() {
+        start(); runBlocking { c.repo.addGroceryItem(c.selectedWeek.value, "Apples", "3", "produce"); c.repo.addGroceryItem(c.selectedWeek.value, "Basil", "", "produce") }
+        rule.tapArt("grocery"); rule.assertPage("Grocery List"); rule.waitTag("aisle-open:produce")
+        rule.onNodeWithTag("aisle-open:produce").performClick(); rule.waitTag("aisle-sheet-list"); rule.waitText("Apples"); rule.waitText("Basil")
+    }
+
     @Test fun settingsThemesAndCategoryManagement() {
         start(); rule.tapArt("drawer"); rule.tapArt("themes"); rule.assertPage("Themes")
         rule.onNodeWithTag("theme:DARK").performClick(); rule.waitForIdle(); assertEquals(ThemeMode.DARK, c.prefs.theme.value)
@@ -344,5 +350,7 @@ class FlowsTest {
         start(); rule.tapArt("drawer"); rule.tapArt("tools"); rule.assertPage("Timer & Tools")
         rule.onNodeWithText("Convert").performClick(); rule.waitTag("convert-result"); assertTrue(rule.textOf("convert-result").contains("236") || rule.textOf("convert-result").contains("237"))
         rule.onNodeWithText("Timer").performClick(); rule.waitTag("tool-timer")
+        rule.onNodeWithTag("timer-name").performTextInput("Biscuits"); rule.onNodeWithText("5 min").performClick(); rule.onNodeWithText("10 min").performClick(); rule.waitForIdle()
+        assertEquals(2, c.prefs.timers.value.size); assertEquals("Biscuits", c.prefs.timers.value[0].name); assertTrue(c.prefs.timers.value.all { it.endAtMs != null })
     }
 }

@@ -264,7 +264,8 @@ fun GroceryAddSheet(r: Recipe, servings: Int?, c: AppContainer, onDismiss: () ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BigButton("Add", { scope.launch {
                     val n = c.repo.addIngredientsToGroceries(week, r, servings ?: r.servings, if (onlyChecked) checked else null)
-                    result = if (n == 0) "Everything is already on the list." else "Added or updated $n items."
+                    c.selectedWeek.value = week   // so "Open list" (and the Grocery page) show the week these were added to
+                    result = if (n == 0) "Everything is already on the list for ${Planner.rangeLabel(week)}." else "Added or updated $n ${if (n == 1) "item" else "items"} on the list for ${Planner.rangeLabel(week)}."
                 } }, Modifier.weight(1f))
                 BigButton("Open list", onOpenList, Modifier.weight(1f), primary = false)
             }
