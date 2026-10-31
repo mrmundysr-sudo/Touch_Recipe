@@ -1,0 +1,111 @@
+# Touch Recipe: publish the APK of an already-green CI run as a DEV/TEST GitHub *prerelease*.
+# Owner-approved 2026-10-31 for Touch Recipe only (run 41197608204). Never a production release, never "latest",
+# never main. Tag prefix `devtest-` (same convention as the hub's autobuild/DEVTEST-DELIVERY.md).
+# It does NOT rebuild: it downloads the `touch-recipe-apks` artifact of the named run inside Actions (where the
+# artifact host is reachable), validates the real .apk, and attaches that file (not a ZIP) to the prerelease.
+# It runs no repository code (no checkout, only fixed gh/curl/aapt2 commands) and deletes nothing.
+name: DEV/TEST release from CI run
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Successful Android CI run whose debug APK to publish"
+        default: "41197608204"
+        required: true
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/devtest-release.yml"]
+
+permissions:
+  contents: write   # create the devtest- prerelease
+  actions: read     # download the run's artifact
+
+concurrency:
+  group: devtest-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: startsWith(github.ref, 'refs/heads/claude/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      RUN_ID: ${{ inputs.run_id || '41197608204' }}
+      EXPECTED_PACKAGE: com.mundymorning.touchrecipe
+    steps:
+      - name: Verify the source run (must be green, a claude/** push)
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]] || { echo "bad run id"; exit 1; }
+          gh api "repos/$REPO/actions/runs/$RUN_ID" > run.json
+          status=$(jq -r .status run.json); concl=$(jq -r .conclusion run.json)
+          branch=$(jq -r .head_branch run.json); sha=$(jq -r .head_sha run.json)
+          echo "run=$RUN_ID status=$status conclusion=$concl branch=$branch sha=$sha"
+          [ "$status" = completed ] && [ "$concl" = success ] || { echo "run is not green"; exit 1; }
+          [[ "$branch" == claude/* ]] || { echo "refusing: run is not from a claude/** branch"; exit 1; }
+          echo "SRC_SHA=$sha" >> "$GITHUB_ENV"; echo "SRC_BRANCH=$branch" >> "$GITHUB_ENV"; echo "SHA7=${sha:0:7}" >> "$GITHUB_ENV"
+      - name: Download the run's APK artifact (inside Actions)
+        run: |
+          set -euo pipefail
+          gh run download "$RUN_ID" --repo "$REPO" -n touch-recipe-apks -D dl
+          find dl -type f | sort
+          n=$(find dl -type f -name '*.apk' -path '*debug*' | wc -l)
+          [ "$n" = 1 ] || { echo "expected exactly one debug APK, found $n"; exit 1; }
+          cp "$(find dl -type f -name '*.apk' -path '*debug*')" "touch-recipe-debug-${SHA7}-DEVTEST.apk"
+      - name: Validate it is a real Android APK
+        run: |
+          set -euo pipefail
+          apk="touch-recipe-debug-${SHA7}-DEVTEST.apk"
+          bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          [ "$(head -c 2 "$apk")" = "PK" ] || { echo "not a zip container"; exit 1; }
+          unzip -tq "$apk"
+          unzip -l "$apk" | grep -q ' AndroidManifest.xml$'
+          unzip -l "$apk" | grep -q ' classes.dex$'
+          "$bt/aapt2" dump badging "$apk" > badging.txt
+          grep -q "^package: name='$EXPECTED_PACKAGE'" badging.txt || { echo "wrong package"; exit 1; }
+          grep -q '^launchable-activity' badging.txt || { echo "no launchable activity"; exit 1; }
+          "$bt/apksigner" verify --print-certs "$apk" | head -3
+          [ "$(stat -c%s "$apk")" -gt 1000000 ] || { echo "suspiciously small"; exit 1; }
+          sha256sum "$apk" | tee "$apk.sha256"
+          grep -E "^package:|sdkVersion|application-label:" badging.txt
+      - name: Publish the DEV/TEST prerelease
+        run: |
+          set -euo pipefail
+          apk="touch-recipe-debug-${SHA7}-DEVTEST.apk"
+          tag="devtest-recipe-${RUN_ID}-${SHA7}"
+          if gh release view "$tag" --repo "$REPO" >/dev/null 2>&1; then echo "release $tag already exists; leaving it untouched"; else
+          cat > notes.md <<EOF
+          **DEV/TEST BUILD. NOT A PRODUCTION RELEASE.**
+
+          - Source branch: \`$SRC_BRANCH\`
+          - Source commit: \`$SRC_SHA\`
+          - CI run: https://github.com/$REPO/actions/runs/$RUN_ID (green)
+          - Debug-signed APK, package \`$EXPECTED_PACKAGE\`. Not tested on a device.
+          - SHA-256: $(cut -d' ' -f1 "$apk.sha256")
+          - Installing over a differently signed debug build requires uninstalling first.
+          EOF
+          title="DEV/TEST BUILD (not a release): touch-recipe debug - $SRC_BRANCH @ $SHA7"
+          # The hub documents that --target may be refused when the branch tip has moved past the built commit; fall back to the current tip (the notes still name the true source commit).
+          gh release create "$tag" "$apk" "$apk.sha256" --repo "$REPO" --prerelease --latest=false --target "$SRC_SHA" --title "$title" --notes-file notes.md \
+          || { echo "::warning::target $SRC_SHA refused; tagging the current branch tip instead"; gh release create "$tag" "$apk" "$apk.sha256" --repo "$REPO" --prerelease --latest=false --target "$GITHUB_SHA" --title "$title" --notes-file notes.md; }
+          fi
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+      - name: Verify the published link downloads a valid APK
+        run: |
+          set -euo pipefail
+          apk="touch-recipe-debug-${SHA7}-DEVTEST.apk"
+          url="https://github.com/$REPO/releases/download/$TAG/$apk"
+          mkdir check && cd check
+          code=$(curl -sSL -o dl.apk -w '%{http_code} %{content_type} %{size_download}' "$url")
+          echo "GET $url -> $code"
+          [ "${code%% *}" = 200 ]
+          [ "$(head -c 2 dl.apk)" = "PK" ] && unzip -tq dl.apk
+          [ "$(sha256sum dl.apk | cut -d' ' -f1)" = "$(cut -d' ' -f1 ../$apk.sha256)" ] || { echo "SHA-256 mismatch"; exit 1; }
+          bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$bt/aapt2" dump badging dl.apk | grep "^package:"
+          "$bt/apksigner" verify dl.apk && echo "apksigner OK"
+          echo "DEV-APK-URL $url"
+          echo "### DEV/TEST APK" >> "$GITHUB_STEP_SUMMARY"; echo "$url" >> "$GITHUB_STEP_SUMMARY"
