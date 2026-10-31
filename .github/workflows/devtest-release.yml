@@ -34,7 +34,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
       RUN_ID: ${{ inputs.run_id || '41197608204' }}
-      EXPECTED_PACKAGE: com.mundymorning.touchrecipe
+      EXPECTED_PACKAGE: com.mundymorning.touchrecipe.debug
     steps:
       - name: Verify the source run (must be green, a claude/** push)
         run: |
