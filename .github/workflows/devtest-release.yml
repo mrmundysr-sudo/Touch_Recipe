@@ -33,7 +33,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
-      RUN_ID: ${{ inputs.run_id || '41197608204' }}
+      RUN_ID: ${{ inputs.run_id || '41234948643' }}
       EXPECTED_PACKAGE: com.mundymorning.touchrecipe.debug
     steps:
       - name: Verify the source run (must be green, a claude/** push)
@@ -93,6 +93,18 @@ jobs:
           || { echo "::warning::target $SRC_SHA refused; tagging the current branch tip instead"; gh release create "$tag" "$apk" "$apk.sha256" --repo "$REPO" --prerelease --latest=false --target "$GITHUB_SHA" --title "$title" --notes-file notes.md; }
           fi
           echo "TAG=$tag" >> "$GITHUB_ENV"
+      - name: Attach the CI review screenshots (PNG zip) to the same DEV/TEST prerelease
+        run: |
+          set -euo pipefail
+          tag="devtest-recipe-${RUN_ID}-${SHA7}"
+          gh run download "$RUN_ID" --repo "$REPO" -n test-reports -D tr || { echo "no test-reports artifact; skipping"; exit 0; }
+          mkdir -p shots && find tr -type f -name '*.png' -exec cp {} shots/ \;
+          n=$(ls shots | wc -l); echo "screenshots: $n"
+          [ "$n" -gt 0 ] || exit 0
+          (cd shots && zip -qr "../review-screenshots-${SHA7}.zip" .)
+          # add only; never overwrite or delete an existing asset
+          gh release view "$tag" --repo "$REPO" --json assets -q '.assets[].name' | grep -qx "review-screenshots-${SHA7}.zip" \
+            || gh release upload "$tag" "review-screenshots-${SHA7}.zip" --repo "$REPO"
       - name: Verify the published link downloads a valid APK
         run: |
           set -euo pipefail
