@@ -7,3 +7,7 @@ captures/
 .DS_Store
 *.jks
 *.keystore
+
+# iOS (Capacitor) shell: the Xcode project is generated in CI and never committed
+node_modules/
+ios/

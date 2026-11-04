@@ -1,0 +1,14 @@
+{
+  "appId": "com.mundymorning.touchrecipe",
+  "appName": "Touch Recipe",
+  "webDir": "www",
+  "backgroundColor": "#1F4D3A",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#1F4D3A",
+    "allowsLinkPreview": false
+  },
+  "plugins": {
+    "CapacitorHttp": { "enabled": true }
+  }
+}
