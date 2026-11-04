@@ -362,8 +362,9 @@ class FlowsTest {
 
     @Test fun groceryEmptyListExplainsAndLongListScrolls() {
         start(); rule.tapArt("grocery"); rule.assertPage("Grocery List"); rule.waitTag("grocery-empty")
-        runBlocking { for (i in 1..40) c.repo.addGroceryItem(c.selectedWeek.value, "Item number $i", "", if (i % 2 == 0) "pantry" else "produce") }
-        val last = runBlocking { c.db.grocery().all() }.first { it.name == "Item number 40" }
+        runBlocking { for (i in 1..40) c.repo.addGroceryItem(c.selectedWeek.value, "Pickle${'a' + i / 26}${'a' + i % 26}", "", if (i % 2 == 0) "pantry" else "produce") }
+        val last = runBlocking { c.db.grocery().all() }.first { it.name == "Pickle${'a' + 40 / 26}${'a' + 40 % 26}" }
+        assertTrue(runBlocking { c.db.grocery().all() }.size == 40)
         rule.waitTag("aisle-head:produce")
         rule.onNodeWithTag("grocery-list", useUnmergedTree = true).performScrollToNode(hasTestTag("grocery-row:${last.id}"))
         rule.waitTag("grocery-row:${last.id}")

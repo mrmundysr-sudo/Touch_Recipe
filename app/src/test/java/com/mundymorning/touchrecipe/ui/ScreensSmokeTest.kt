@@ -41,7 +41,7 @@ class ScreensSmokeTest {
         rule.tapArt("calendar"); rule.assertPage("Meal Planner"); rule.shot("07_planner")
         runBlocking { listOf("Roma tomatoes" to "produce", "Baby spinach" to "produce", "Lemons" to "produce", "Chicken thighs" to "meat", "Milk" to "dairy", "Eggs" to "dairy", "Olive oil" to "pantry", "Spaghetti" to "pantry", "Sourdough loaf" to "bakery")
             .forEach { (n, a) -> c.repo.addGroceryItem(c.selectedWeek.value, n, "", a) } }
-        rule.tapArt("grocery"); rule.assertPage("Grocery List"); rule.waitTag("aisle-head:bakery"); rule.shot("08_grocery")
+        rule.tapArt("grocery"); rule.assertPage("Grocery List"); rule.waitTag("aisle-head:dairy"); rule.shot("08_grocery")
         rule.tapArt("back"); rule.assertPage("Meal Planner"); rule.backChip(); rule.assertPage("Kitchen Hub")
         rule.tapArt("drawer"); rule.assertPage("Kitchen Junk Drawer"); rule.shot("09_drawer")
     }
