@@ -2,6 +2,7 @@
 @font-face { font-family: 'Source Sans 3'; src: url('../fonts/source_sans_3.ttf') format('truetype'); font-weight: 200 900; font-display: swap; }
 
 :root {
+  --vh: 100vh;
   --forest: #1F4D3A; --forest-deep: #143426; --cream: #F6EBD6; --cream-deep: #E9D8B7; --tomato: #C63D22; --tomato-bright: #E2572F;
   --brass: #B58A3C; --wood: #6B4423; --ink: #2A2118; --parchment: #F3EBDB; --paper: #FBF4E6;
   --bg: #F6EBD6; --on-bg: #2A2118; --surface: #FBF4E6; --on-surface: #2A2118; --surface-var: #E9D8B7; --on-surface-var: #50443A;
@@ -31,10 +32,10 @@ button { font-family: inherit; cursor: pointer; }
 /* ---------- illustrated page ---------- */
 .art-viewport { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l); }
 .art-stage {
-  --w: min(calc(100vw - var(--safe-l) - var(--safe-r)), calc((100dvh - var(--safe-t) - var(--safe-b)) * 0.449733));
+  --w: min(calc(100vw - var(--safe-l) - var(--safe-r)), calc((var(--vh) - var(--safe-t) - var(--safe-b)) * 0.449733));
   --u: calc(var(--w) / 841);
   position: relative; width: var(--w); height: calc(var(--w) * 1870 / 841); margin: 0 auto; overflow: hidden;
-  top: max(0px, calc((100dvh - var(--safe-t) - var(--safe-b) - var(--w) * 1870 / 841) / 2));
+  top: max(0px, calc((var(--vh) - var(--safe-t) - var(--safe-b) - var(--w) * 1870 / 841) / 2));
 }
 .art-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; }
 .art-glow, .art-tap, .art-content { position: absolute; inset: 0; }
@@ -87,9 +88,9 @@ html[data-reduced='1'] .glow.flash { animation-duration: 250ms; }
 .sheet-backdrop, .dialog-backdrop, .menu-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0); transition: background .18s; }
 .sheet-backdrop.in { background: rgba(0, 0, 0, .42); } .sheet-backdrop.out { background: rgba(0, 0, 0, 0); }
 .dialog-backdrop { background: rgba(0, 0, 0, .45); }
-.sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 92dvh; background: var(--surface); color: var(--on-surface); border-radius: 24px 24px 0 0; transform: translateY(100%); transition: transform .2s ease; display: flex; flex-direction: column; padding-bottom: var(--safe-b); max-width: 640px; margin: 0 auto; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: calc(var(--vh) * .92); background: var(--surface); color: var(--on-surface); border-radius: 24px 24px 0 0; transform: translateY(100%); transition: transform .2s ease; display: flex; flex-direction: column; padding-bottom: var(--safe-b); max-width: 640px; margin: 0 auto; }
 .sheet.in { transform: none; } .sheet.out { transform: translateY(100%); }
-.sheet.tall { height: 92dvh; }
+.sheet.tall { height: calc(var(--vh) * .92); }
 .sheet-grab { width: 36px; height: 5px; border-radius: 3px; background: var(--outline); opacity: .55; margin: 10px auto 6px; flex: none; padding: 10px 0; background-clip: content-box; }
 .sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 20px 20px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .sheet-col { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
@@ -99,7 +100,7 @@ html[data-reduced='1'] .glow.flash { animation-duration: 250ms; }
 .sheet-row { display: flex; gap: 8px; } .sheet-row > * { flex: 1; }
 .sheet h3 { font-size: calc(15px * var(--ts)); margin: 12px 0 6px; font-weight: 700; }
 .sheet p { margin: 4px 0; line-height: 1.4; }
-.dialog { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(88vw, 420px); max-height: 82dvh; overflow-y: auto; background: var(--surface); color: var(--on-surface); border-radius: 24px; padding: 22px 22px 12px; box-shadow: 0 10px 40px rgba(0, 0, 0, .4); }
+.dialog { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(88vw, 420px); max-height: calc(var(--vh) * .82); overflow-y: auto; background: var(--surface); color: var(--on-surface); border-radius: 24px; padding: 22px 22px 12px; box-shadow: 0 10px 40px rgba(0, 0, 0, .4); }
 .dialog-title { margin: 0 0 10px; font-family: var(--display); font-size: calc(22px * var(--ts)); font-weight: 600; }
 .dialog-text p { margin: 6px 0; line-height: 1.45; font-size: calc(16px * var(--ts)); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 4px; margin-top: 10px; }
@@ -163,3 +164,5 @@ hr.div { border: 0; border-top: 1px solid var(--outline); opacity: .4; margin: 1
 .indeterminate { height: 100%; width: 40%; background: var(--tomato); border-radius: 3px; animation: slide 1.2s ease-in-out infinite; }
 @keyframes slide { 0% { transform: translateX(-100%) } 100% { transform: translateX(300%) } }
 .big-btn.compact { min-height: 48px; padding: 0 16px; }
+
+@supports (height: 100dvh) { :root { --vh: 100dvh; } }

@@ -43,6 +43,7 @@ export async function boot({ backend = new IdbBackend(), storage = globalThis.lo
   applyTheme(prefs);
   prefs.subscribe(() => applyTheme(prefs));
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => applyTheme(prefs));
+  try { navigator.storage?.persist?.(); } catch { /* best effort: ask the OS not to evict recipes under storage pressure */ }
   const repo = await new Repository(backend).init();
   const photos = new PhotoStore(backend);
   const art = await new ArtLoader('art/').init();

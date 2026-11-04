@@ -8,13 +8,14 @@ import { Family } from '../engine/units.js';
 import { format as qFormat } from '../engine/quantity.js';
 import { addDays } from '../engine/planner.js';
 
+const clone = (v) => (typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v)));
 const emptyState = () => ({ recipes: {}, categories: [], meals: {}, grocery: [], aisles: [], cook: {}, version: 1 });
 const BUILTIN_AISLES = ['Produce', 'Meat & Seafood', 'Dairy & Eggs', 'Pantry', 'Bakery'];
 
 export class MemoryBackend {
   constructor(initial = null) { this.data = initial; }
-  async load() { return this.data ? structuredClone(this.data) : null; }
-  async save(state) { this.data = structuredClone(state); }
+  async load() { return this.data ? clone(this.data) : null; }
+  async save(state) { this.data = clone(state); }
 }
 
 export class Repository {
@@ -182,7 +183,7 @@ export class Repository {
   async wipeUserData() { this.state.recipes = {}; this.state.meals = {}; this.state.grocery = []; this.state.cook = {}; this._changed(); }
 
   // ---- whole-data operations used by backup / restore ----
-  snapshot() { return structuredClone(this.state); }
+  snapshot() { return clone(this.state); }
   async replaceAll(state) { this.state = { ...emptyState(), ...state }; await this.ensureSeeded(); this._changed(); }
 }
 
