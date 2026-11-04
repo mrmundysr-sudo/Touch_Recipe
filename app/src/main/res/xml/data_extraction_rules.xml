@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="database" path="touch_recipe.db" />
+        <include domain="file" path="photos/" />
+        <include domain="sharedpref" path="touch_recipe_prefs.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="database" path="touch_recipe.db" />
+        <include domain="file" path="photos/" />
+        <include domain="sharedpref" path="touch_recipe_prefs.xml" />
+    </device-transfer>
+</data-extraction-rules>

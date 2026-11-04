@@ -1,20 +1,22 @@
 # Touch Recipe
 
-A planning-first Android recipe organizer from Mundy Morning Studios. Product discovery and visual direction are underway; this repository does not yet contain an app implementation.
-
-## Start here
-1. Read [Claude's working rules](CLAUDE.md).
-2. Review [Product Vision](docs/PRODUCT_VISION.md), [Decision Log](docs/DECISIONS.md), and [Development Plan](docs/DEVELOPMENT_PLAN.md).
-3. Review the [Visual Asset Spec](docs/VISUAL_ASSET_SPEC.md) and [branch handoff](docs/BRANCH_STATUS.md).
-4. Verify live GitHub state before choosing a development base. Do not begin app implementation until the owner approves the settled scope and plan.
-
-## Current direction
-- Ambitious, feature-rich recipe organizer with dependable recipe capture and easy user correction as a central strength.
-- Modern editorial food presentation with custom illustrated, replaceable backgrounds and controls; rich food photography remains prominent.
-- Owner will prepare and map visual assets using Pictureshop and Touch Toolkit. First-load guidance briefly illuminates tappable controls.
+An illustrated, local-first Android recipe app from Mundy Morning Studios. Collect recipes from web links, the Android Share menu, photos, PDFs or pasted text; correct them in a quick review step; cook step by step with timers; plan the week and build one grocery list. Everything is stored on the phone.
 
 ## Status
-- Product discovery: in progress.
-- Visual direction: selected concept, awaiting refinement.
-- Implementation: not authorized.
-- Default branch: main. Planning work is kept on an isolated branch.
+- First production-release implementation: **built on branch `claude/blissful-rubin-d0ni9m`**, awaiting owner review. Not merged, not released.
+- See `docs/knowledge/reports/2026-10-30-first-production-release.md` for evidence, limitations and the owner approval list.
+
+## Start here
+1. [CLAUDE.md](CLAUDE.md) — working rules. 2. [Product Vision](docs/PRODUCT_VISION.md), [Decisions](docs/DECISIONS.md), [Development Plan](docs/DEVELOPMENT_PLAN.md).
+3. [Art wiring](docs/ART_WIRING.md) · [Architecture](docs/ARCHITECTURE.md) · [Testing](docs/TESTING.md) · [Backup format](docs/BACKUP_FORMAT.md) · [Play listing notes](docs/store/PLAY_LISTING.md).
+
+## Build and test
+```bash
+./gradlew :app:testDebugUnitTest          # 80+ unit and Robolectric UI tests (see docs/TESTING.md)
+./gradlew :app:assembleDebug              # app/build/outputs/apk/debug/
+./gradlew :app:assembleRelease            # R8-minified; unsigned unless TR_KEYSTORE* variables are set
+```
+Requires JDK 17 and the Android SDK (platform 35). Regenerate artwork assets with `python3 tools/build_assets.py <extracted package>` (needs Pillow and psd-tools); `python3 tools/mapping_sheet.py` draws the touch-target overlay sheets in `docs/art-map/`.
+
+## Layout
+`app/src/main/java/.../core` (pure Kotlin engines: model, quantity, importer, grocery, planner, categories, timer, backup) · `data` (Room, repository, fetch, OCR, backup, alarms) · `ui` (theme, art framework, components, screens) · `app/src/main/assets/art` (wired artwork + manifest) · `tools` (asset pipeline) · `docs`.
