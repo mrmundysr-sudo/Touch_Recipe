@@ -59,6 +59,7 @@ export async function boot({ backend = new IdbBackend(), storage = globalThis.lo
   ctx.nav = nav;
   window.__app = { ctx, nav };
   nav.go(Routes.SPLASH, {}, { root: true });
+  if (window.__TOUR__) setTimeout(() => import('./tour.js').then((m) => m.runTour({ ctx, nav })).catch((e) => console.error(e)), 2500);
   return { ctx, nav };
 }
 

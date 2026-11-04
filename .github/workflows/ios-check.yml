@@ -38,6 +38,8 @@ jobs:
           "$RUNNER_TEMP/venv/bin/pip" install pillow
           npx cap sync ios
           "$RUNNER_TEMP/venv/bin/python" tools/patch_ios.py
+      - name: CI-only - make the app tour every screen (flag exists only in this runner's generated copy)
+        run: sed -i '' 's#<head>#<head><script>window.__TOUR__=1</script>#' ios/App/App/public/index.html && grep -c __TOUR__ ios/App/App/public/index.html
       - name: Build for the iOS Simulator (unsigned)
         run: |
           cd ios/App
@@ -53,8 +55,22 @@ jobs:
           xcrun simctl install "$DEV" "$APP"
           xcrun simctl launch "$DEV" "$BUNDLE_ID"
           mkdir -p "$RUNNER_TEMP/shots"
-          sleep 6;  xcrun simctl io "$DEV" screenshot "$RUNNER_TEMP/shots/1-splash.png"
-          sleep 8;  xcrun simctl io "$DEV" screenshot "$RUNNER_TEMP/shots/2-hub.png"
+          sleep 5;  xcrun simctl io "$DEV" screenshot "$RUNNER_TEMP/shots/00-splash.png"
+          sleep 3
+          for i in $(seq 1 12); do
+            sleep 4.4
+            n=$(printf '%02d' $i)
+            xcrun simctl io "$DEV" screenshot "$RUNNER_TEMP/shots/tour-$n.png"
+          done
+      - name: Print downscaled screenshots into the log (so they can be reviewed without artifact access)
+        run: |
+          cd "$RUNNER_TEMP/shots"
+          for f in *.png; do
+            sips -Z 360 -s format jpeg -s formatOptions 50 "$f" --out "${f%.png}.jpg" >/dev/null
+            echo "SHOT-BEGIN $f"
+            base64 -i "${f%.png}.jpg" | fold -w 120
+            echo "SHOT-END $f"
+          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
