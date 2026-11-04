@@ -1,6 +1,6 @@
 # Touch Recipe
 
-An illustrated, local-first Android recipe app from Mundy Morning Studios. Collect recipes from web links, the Android Share menu, photos, PDFs or pasted text; correct them in a quick review step; cook step by step with timers; plan the week and build one grocery list. Everything is stored on the phone.
+An illustrated, local-first Android (and, on branch `claude/ios-testflight`, iOS via Capacitor — see `docs/IOS.md`) recipe app from Mundy Morning Studios. Collect recipes from web links, the Android Share menu, photos, PDFs or pasted text; correct them in a quick review step; cook step by step with timers; plan the week and build one grocery list. Everything is stored on the phone.
 
 ## Status
 - First production-release implementation: **built on branch `claude/blissful-rubin-d0ni9m`**, awaiting owner review. Not merged, not released.

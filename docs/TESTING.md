@@ -20,3 +20,6 @@ Opt-in live import check on a machine with internet: `./gradlew :app:testDebugUn
 - Screen-reader walkthrough (TalkBack), hardware keyboard focus order, real IME behaviour with the art scrolling.
 - Real-site import corpus (sandbox network was restricted; fixtures in `ImporterCorpusTest` stand in for common page shapes).
 - ANR/crash monitoring over a long session, low-end device performance.
+
+## iOS web shell (branch `claude/ios-testflight`)
+`npm test` runs the Node ports of the engine, importer, data/backup and art-sync tests; `node tools/e2e.cjs` drives the UI in a phone-size browser; `.github/workflows/ios-check.yml` builds and launches the generated Xcode project on a macOS runner (unsigned). Real-device checks (camera/Vision quality, notification delivery, TestFlight install) remain manual.
