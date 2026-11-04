@@ -78,3 +78,4 @@ Record confirmed choices separately from open proposals. Never rewrite history s
 | 2026-10-29 | Initial project decisions recorded. |
 | 2026-10-29 | Confirmed social capture, Android Share, quick review, camera/file inputs, unified import chooser and flexible category system. |
 | 2026-10-29 | Confirmed short category set and modular illustrated Add Category control. |
+| 2026-11-04 | Grocery List screen: owner supplied an open parchment background (one continuous list area; no per-category cards/badges/fields). It replaces `pages/page_09_grocery_list/clean.png` in `touch_recipe_visual_assets.zip`; `layers.psd` and `other_1.png` kept as reference of the earlier card layout. ZIP manifest.json/README.md updated. App code for this screen does not yet exist in this repo; category headings and items are to be drawn by the app over the open area. |
