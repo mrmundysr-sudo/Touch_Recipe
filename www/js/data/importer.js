@@ -11,8 +11,8 @@ export class ImportFailure extends Error {
 export class OcrUnavailable extends Error {}
 
 const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 TouchRecipe/1.0';
-const cap = () => globalThis.Capacitor;
-const nativeHttp = () => (cap()?.isNativePlatform?.() ? cap().Plugins?.CapacitorHttp : null);
+import { plugin, isNative } from './native.js';
+const nativeHttp = () => (isNative() ? plugin('CapacitorHttp') : null);
 
 const b64ToBlob = (b64, type = 'application/octet-stream') => { const bin = atob(b64); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new Blob([a], { type }); };
 export const blobToB64 = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
@@ -52,14 +52,14 @@ export class HttpPageFetcher {
 
 /** Apple Vision text recognition through the native bridge (see tools/patch_ios.py). */
 export class VisionOcr {
-  get available() { return !!cap()?.Plugins?.TouchRecipeOcr; }
+  get available() { return !!plugin('TouchRecipeOcr'); }
   async recognizeImage(blob) {
-    const p = cap()?.Plugins?.TouchRecipeOcr;
+    const p = plugin('TouchRecipeOcr');
     if (!p) throw new OcrUnavailable("Text recognition isn't available on this device.");
     try { return (await p.recognizeImage({ image: await blobToB64(blob) })).text || ''; } catch { throw new OcrUnavailable("Text recognition isn't available right now."); }
   }
   async recognizePdf(blob) {
-    const p = cap()?.Plugins?.TouchRecipeOcr;
+    const p = plugin('TouchRecipeOcr');
     if (!p) throw new OcrUnavailable("Text recognition isn't available on this device.");
     try { const r = await p.recognizePdf({ pdf: await blobToB64(blob), maxPages: 6 }); return { text: r.text || '', pages: r.pages || 0 }; } catch { throw new OcrUnavailable("That PDF could not be read."); }
   }

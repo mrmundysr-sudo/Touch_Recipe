@@ -37,6 +37,7 @@ function applyTheme(prefs) {
 }
 
 import { ImportService } from './data/importer.js';
+import { plugin } from './data/native.js';
 export async function boot({ backend = new IdbBackend(), storage = globalThis.localStorage } = {}) {
   const prefs = new Prefs(storage);
   applyTheme(prefs);
@@ -47,7 +48,7 @@ export async function boot({ backend = new IdbBackend(), storage = globalThis.lo
   const art = await new ArtLoader('art/').init();
   const weekState = { v: Planner.weekStart(Planner.today(), prefs.sundayStart ? 0 : 1), subs: new Set(), get value() { return this.v; }, set(x) { this.v = x; this.subs.forEach((f) => f()); }, subscribe(f) { this.subs.add(f); return () => this.subs.delete(f); } };
   const importer = new ImportService({ photos });
-  let appInfo = null; try { appInfo = await globalThis.Capacitor?.Plugins?.App?.getInfo?.(); } catch { /* browser */ }
+  let appInfo = null; try { appInfo = await plugin('App')?.getInfo?.(); } catch { /* browser */ }
   const ctx = { repo, prefs, photos, art, backend, importer, appInfo, week: weekState, importSession: { draft: null, photoFile: null, clear() { this.draft = null; this.photoFile = null; } }, pending: { share: null } };
   const root = document.getElementById('app');
   const host = h('div', { id: 'host', style: 'position:absolute;inset:0' });

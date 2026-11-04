@@ -2,6 +2,7 @@
 // a ZIP with data.json and photos/<file>.jpg; a bare data.json is also accepted.
 import { zip, unzip } from './zip.js';
 import { Recipe, Ingredient, Direction, GroceryItem } from '../engine/models.js';
+import { plugin, isNative } from './native.js';
 
 export const FORMAT = 'touch-recipe-backup', VERSION = 1;
 export class BackupException extends Error {}
@@ -80,9 +81,8 @@ export const toB64 = (bytes) => { let s = ''; const CH = 0x8000; for (let i = 0;
 /** Saves/shares a file: iOS share sheet (Save to Files, AirDrop, …) when native; a download in a plain browser. */
 export async function saveFile(name, bytesOrText, mime) {
   const bytes = typeof bytesOrText === 'string' ? te.encode(bytesOrText) : bytesOrText;
-  const cap = globalThis.Capacitor;
-  const fs = cap?.Plugins?.Filesystem, share = cap?.Plugins?.Share;
-  if (cap?.isNativePlatform?.() && fs && share) {
+  const fs = plugin('Filesystem'), share = plugin('Share');
+  if (isNative() && fs && share) {
     const r = await fs.writeFile({ path: name, data: toB64(bytes), directory: 'CACHE' });
     await share.share({ title: name, url: r.uri, dialogTitle: 'Save your backup' });
     return true;

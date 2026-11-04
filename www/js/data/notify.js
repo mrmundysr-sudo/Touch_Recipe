@@ -1,11 +1,10 @@
 // Port of data/TimerAlarm.kt. Timer alerts use Capacitor's Local Notifications plugin when the app runs natively;
 // in a plain browser everything degrades to a no-op, and the in-app "Time's up" dialog still works.
-const cap = () => globalThis.Capacitor;
-const plugin = (n) => cap()?.Plugins?.[n];
+import { plugin, isNative } from './native.js';
 const idFor = (key) => { let h = 0; for (const c of String(key)) h = (h * 31 + c.charCodeAt(0)) | 0; return Math.abs(h) % 2147483000 + 1; };
 
 export const notifier = {
-  native() { return !!(cap() && cap().isNativePlatform && cap().isNativePlatform()); },
+  native() { return isNative(); },
   async state() { try { return (await plugin('LocalNotifications').checkPermissions()).display; } catch { return 'unavailable'; } },
   /** True when we should explain notifications before asking (native, not decided yet). */
   async shouldExplain() { if (!this.native()) return false; const s = await this.state(); return s === 'prompt' || s === 'prompt-with-rationale'; },

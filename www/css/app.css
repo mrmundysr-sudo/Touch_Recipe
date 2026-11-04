@@ -42,7 +42,7 @@ button { font-family: inherit; cursor: pointer; }
 .art-tap { cursor: pointer; }
 .art-content { pointer-events: none; }
 .art-content button, .art-content input, .art-content textarea, .art-content select, .art-content a, .art-content .scroll-y, .art-content .ia { pointer-events: auto; }
-.art-target { position: absolute; background: transparent; border: 0; padding: 0; margin: 0; opacity: 0; }
+.art-target { position: absolute; background: transparent; border: 0; padding: 0; margin: 0; opacity: 0; pointer-events: none; }
 .art-target:focus-visible { opacity: 1; border-radius: 10px; }
 .glow { position: absolute; opacity: 0; pointer-events: none; }
 .glow-cut { background: #FFD27A; mix-blend-mode: plus-lighter; -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }

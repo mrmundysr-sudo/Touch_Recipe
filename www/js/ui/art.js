@@ -113,7 +113,7 @@ export function ArtPage(art, key, opts = {}) {
   const nodes = new Map();
   page.targets.forEach((t) => {
     const b = h('button', { class: 'art-target', type: 'button', 'data-art': t.id, 'data-testid': `art:${t.id}`, 'aria-label': state.describe(t) || t.label, title: t.hint,
-      onclick: (e) => { if (e.detail === 0) trigger(t.id); } });
+      onclick: (e) => { if (e.detail === 0 || e.pointerType === '') trigger(t.id); } });
     place(b, t.hit);
     nodes.set(t.id, b); stage.append(b);
   });
