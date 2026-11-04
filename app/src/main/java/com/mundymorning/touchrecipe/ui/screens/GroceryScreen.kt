@@ -41,9 +41,9 @@ import com.mundymorning.touchrecipe.core.model.GroceryItem
 import com.mundymorning.touchrecipe.core.planner.Planner
 import com.mundymorning.touchrecipe.ui.Routes
 import com.mundymorning.touchrecipe.ui.art.ArtScreen
-import com.mundymorning.touchrecipe.ui.art.NRect
 import com.mundymorning.touchrecipe.ui.components.*
 import com.mundymorning.touchrecipe.ui.theme.BodyFont
+import com.mundymorning.touchrecipe.ui.theme.DisplayFont
 import com.mundymorning.touchrecipe.ui.theme.Palette
 import kotlinx.coroutines.launch
 
@@ -64,14 +64,12 @@ fun GroceryScreen(c: AppContainer, nav: NavController) {
     var addSheet by remember { mutableStateOf(false) }
     var basketSheet by remember { mutableStateOf(false) }
     var rowSheet by remember { mutableStateOf<GroceryItem?>(null) }
-    var aisleSheet by remember { mutableStateOf<String?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
     val allAisles = DEFAULT_AISLES + customAisles
     val checkedCount = items.count { it.checked }
 
     ArtScreen("grocery", "Grocery List", describe = { t ->
-        if (t.id.startsWith("head_")) { val k = t.id.removePrefix("head_"); val list = items.filter { it.aisle == k }; "${aisleName(k)}: ${list.size} items, ${list.count { it.checked }} bought. ${if (k in collapsed) "Collapsed" else "Expanded"}" }
-        else if (t.id == "week") "Week range, ${Planner.rangeLabel(week)}" else null
+        if (t.id == "week") "Week range, ${Planner.rangeLabel(week)}" else null
     }, onTarget = { id ->
         when {
             id == "back" -> nav.goBackOr(Routes.HUB)
@@ -79,31 +77,15 @@ fun GroceryScreen(c: AppContainer, nav: NavController) {
             id == "basket" -> scope.launch { val n = c.repo.generateGroceries(week); basketSheet = true; snack.showSnackbar(if (n == 0) "No meals are planned this week, so nothing was added." else "Refreshed from $n planned ${if (n == 1) "meal" else "meals"}.") }
             id == "add" -> addSheet = true
             id == "clear" -> if (checkedCount == 0) scope.launch { snack.showSnackbar("Nothing is checked off yet.") } else confirmClear = true
-            id.startsWith("head_") -> id.removePrefix("head_").let { k -> if (k in collapsed) collapsed.remove(k) else collapsed.add(k) }
         }
     }) {
         Box(Modifier.region(page.target("week").box).padding(end = dp(40f), start = dp(8f)).clearAndSetSemantics { }, contentAlignment = Alignment.CenterStart) {
             FitText(Planner.rangeLabel(week), TextStyle(fontFamily = BodyFont, fontWeight = FontWeight.Bold, fontSize = sp(24f), color = Palette.Ink), modifier = Modifier.testTag("grocery-week"))
         }
-        page.cards.forEach { card ->
-            val list = items.filter { it.aisle == card.key }
-            // the art's cards only have room for a row or two, so every aisle gets a button that opens its whole list
-            Box(Modifier.region(NRect(card.head.x + card.head.w * 0.835f, card.head.y + 0.006f, card.head.w * 0.14f, 0.026f)).clip(RoundedCornerShape(50)).background(Palette.Forest.copy(alpha = 0.92f))
-                .clickable(onClickLabel = "Open the whole ${aisleName(card.key)} list") { aisleSheet = card.key }.semantics { contentDescription = "Open the whole ${aisleName(card.key)} list, ${list.size} items" }.testTag("aisle-open:${card.key}"), contentAlignment = Alignment.Center) {
-                Text("All ${list.size}", color = Palette.Cream, maxLines = 1, style = TextStyle(fontSize = sp(21f), fontWeight = FontWeight.Bold, lineHeight = sp(21f), lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both)))
-            }
-            val rowArea = NRect(54f / 841f, card.check.y - 10f / 1870f, 560f / 841f, (card.card.y + card.card.h) - card.check.y - 4f / 1870f)
-            if (card.key in collapsed) {
-                Box(Modifier.region(rowArea).padding(horizontal = dp(8f)), contentAlignment = Alignment.CenterStart) {
-                    Text("${list.size} items · ${list.count { it.checked }} bought. Tap the header to expand.", color = Palette.Ink, fontSize = sp(22f), fontWeight = FontWeight.SemiBold)
-                }
-            } else {
-                AisleRows(c, week, card.key, list, onOpen = { rowSheet = it }, modifier = Modifier.region(rowArea))
-            }
-        }
+        // one continuous open parchment panel: category headings in bold with their items beneath, scrolling inside the panel
+        GroceryList(c, week, items, allAisles, collapsed, onOpen = { rowSheet = it }, modifier = Modifier.region("list"))
     }
 
-    aisleSheet?.let { key -> AisleSheet(aisleName(key), items.filter { it.aisle == key }, onDismiss = { aisleSheet = null }, onToggle = { it2, v -> scope.launch { c.repo.updateGroceryItem(it2.copy(checked = v)) } }, onOpen = { aisleSheet = null; rowSheet = it }) }
     if (weekSheet) WeekSheet(week, sundayStart, { weekSheet = false }, { c.selectedWeek.value = it })
     rowSheet?.let { item -> ItemSheet(item, allAisles, items, onDismiss = { rowSheet = null }, onSave = { scope.launch { c.repo.updateGroceryItem(it.copy(edited = true)) }; rowSheet = null },
         onDelete = { scope.launch { c.repo.deleteGroceryItem(item.id); snack.undoable("Removed ${item.name}") { c.repo.restoreGroceryItems(listOf(item)) } }; rowSheet = null },
@@ -117,42 +99,59 @@ fun GroceryScreen(c: AppContainer, nav: NavController) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun AisleRows(c: AppContainer, week: java.time.LocalDate, aisle: String, list: List<GroceryItem>, onOpen: (GroceryItem) -> Unit, modifier: Modifier) {
+private fun GroceryList(c: AppContainer, week: java.time.LocalDate, all: List<GroceryItem>, aisles: List<String>, collapsed: MutableList<String>, onOpen: (GroceryItem) -> Unit, modifier: Modifier) {
     val scope = rememberCoroutineScope()
     val snack = LocalSnack.current
-    val text = TextStyle(fontFamily = BodyFont, fontSize = 16.sp, color = Palette.Ink)
-    LazyColumn(modifier.fadeBottom(18.dp).testTag("aisle:$aisle"), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        items(list, key = { it.id }) { item ->
-            var name by remember(item.id, item.name) { mutableStateOf(item.name) }
-            var qty by remember(item.id, item.quantityText) { mutableStateOf(item.quantityText) }
-            Row(
-                Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFFBF4E6).copy(alpha = 0.93f)).testTag("grocery-row:${item.id}")
-                    .combinedClickable(onLongClickLabel = "Row options", onLongClick = { onOpen(item) }, onClick = {})
-                    .semantics { customActions = listOf(CustomAccessibilityAction("Edit, move or delete") { onOpen(item); true }, CustomAccessibilityAction("Delete") { scope.launch { c.repo.deleteGroceryItem(item.id); snack.undoable("Removed ${item.name}") { c.repo.restoreGroceryItems(listOf(item)) } }; true }) },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(Modifier.size(44.dp).toggleable(item.checked, role = Role.Checkbox, onValueChange = { v -> scope.launch { c.repo.updateGroceryItem(item.copy(checked = v)) } }).semantics { contentDescription = "${item.name} purchased" }.testTag("grocery-check:${item.id}"), contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(24.dp).clip(RoundedCornerShape(6.dp)).border(2.dp, Palette.Forest, RoundedCornerShape(6.dp)).background(if (item.checked) Palette.Forest else Color.Transparent), contentAlignment = Alignment.Center) { if (item.checked) Text("✓", color = Palette.Cream, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
-                }
-                BasicTextField(name, { name = it }, Modifier.weight(1f).padding(end = 4.dp).onFocusLost { if (name.isNotBlank() && name != item.name) scope.launch { c.repo.updateGroceryItem(item.copy(name = name.trim(), edited = true)) } else name = item.name }.semantics { contentDescription = "Item name" },
-                    textStyle = text.copy(textDecoration = if (item.checked) TextDecoration.LineThrough else null), singleLine = true, cursorBrush = SolidColor(Palette.Tomato),
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Next))
-                Box(Modifier.width(66.dp).clip(RoundedCornerShape(6.dp)).background(Palette.CreamDeep.copy(alpha = 0.55f)).padding(horizontal = 5.dp, vertical = 6.dp)) {
-                    BasicTextField(qty, { qty = it }, Modifier.fillMaxWidth().onFocusLost { if (qty != item.quantityText) scope.launch { c.repo.updateGroceryItem(item.copy(quantityText = qty.trim(), edited = true)) } }.semantics { contentDescription = "Quantity and unit" },
-                        textStyle = text.copy(fontSize = 14.sp), singleLine = true, cursorBrush = SolidColor(Palette.Tomato), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        decorationBox = { inner -> if (qty.isEmpty()) Text("qty", style = text.copy(fontSize = 14.sp), color = Palette.Ink.copy(alpha = 0.4f)); inner() })
-                }
-                Box(Modifier.size(width = 36.dp, height = 44.dp).clickable(onClickLabel = "Row options for ${item.name}", role = Role.Button) { onOpen(item) }.semantics { contentDescription = "Row options for ${item.name}" }, contentAlignment = Alignment.Center) { Text("⋮", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Palette.Ink) }
-            }
+    val text = TextStyle(fontFamily = BodyFont, fontSize = 17.sp, color = Palette.Ink)
+    // known categories first (in their usual order), then any other category that has items; empty categories are not shown
+    val groups = (aisles + all.map { it.aisle }).distinct().map { k -> k to all.filter { it.aisle == k } }.filter { it.second.isNotEmpty() }
+    LazyColumn(modifier.padding(horizontal = 6.dp).fadeBottom(18.dp).testTag("grocery-list"), contentPadding = PaddingValues(bottom = 28.dp)) {
+        if (groups.isEmpty()) item(key = "empty") {
+            Text("Nothing on your list yet. Tap Add Item below, add ingredients from a recipe, or plan meals and tap the basket.", Modifier.padding(horizontal = 10.dp, vertical = 16.dp).testTag("grocery-empty"), style = text.copy(fontSize = 18.sp), color = Palette.Ink.copy(alpha = 0.75f))
         }
-        // the category's placeholder row: always available for a quick add
-        item(key = "placeholder") {
-            var v by remember(list.size) { mutableStateOf("") }
-            Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFFBF4E6).copy(alpha = 0.6f)).padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                BasicTextField(v, { v = it }, Modifier.fillMaxWidth().testTag("placeholder:$aisle").semantics { contentDescription = "Add an item to ${aisleName(aisle)}" }, textStyle = text, singleLine = true, cursorBrush = SolidColor(Palette.Tomato),
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { if (v.isNotBlank()) { val n = v; v = ""; scope.launch { c.repo.addGroceryItem(week, n, "", aisle) } } }),
-                    decorationBox = { inner -> if (v.isEmpty()) Text("Add an item…", style = text, color = Palette.Ink.copy(alpha = 0.45f)); inner() })
+        groups.forEach { (aisle, list) ->
+            val open = aisle !in collapsed
+            item(key = "head:$aisle") {
+                Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(8.dp))
+                        .clickable(onClickLabel = if (open) "Collapse ${aisleName(aisle)}" else "Expand ${aisleName(aisle)}", role = Role.Button) { if (open) collapsed.add(aisle) else collapsed.remove(aisle) }
+                        .semantics { contentDescription = "${aisleName(aisle)}: ${list.size} ${if (list.size == 1) "item" else "items"}, ${list.count { it.checked }} bought. ${if (open) "Expanded" else "Collapsed"}" }
+                        .testTag("aisle-head:$aisle").padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(aisleName(aisle), Modifier.weight(1f), style = TextStyle(fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 25.sp, color = Palette.Forest))
+                        Text("${list.count { it.checked }}/${list.size}", style = text.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold), color = Palette.Ink.copy(alpha = 0.7f))
+                        Text(if (open) "  ▾" else "  ▸", style = text.copy(fontSize = 18.sp), color = Palette.Forest)
+                    }
+                    Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp).height(1.5.dp).background(Palette.Forest.copy(alpha = 0.45f)))
+                }
+            }
+            if (!open) {
+                item(key = "summary:$aisle") {
+                    Text("${list.size} items · ${list.count { it.checked }} bought. Tap the heading to expand.", Modifier.padding(horizontal = 10.dp, vertical = 10.dp).testTag("aisle-summary:$aisle"), style = text.copy(fontSize = 15.sp), color = Palette.Ink.copy(alpha = 0.8f))
+                }
+            } else {
+                items(list, key = { it.id }) { item ->
+                    var name by remember(item.id, item.name) { mutableStateOf(item.name) }
+                    var qty by remember(item.id, item.quantityText) { mutableStateOf(item.quantityText) }
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("grocery-row:${item.id}")
+                            .combinedClickable(onLongClickLabel = "Row options", onLongClick = { onOpen(item) }, onClick = {})
+                            .semantics { customActions = listOf(CustomAccessibilityAction("Edit, move or delete") { onOpen(item); true }, CustomAccessibilityAction("Delete") { scope.launch { c.repo.deleteGroceryItem(item.id); snack.undoable("Removed ${item.name}") { c.repo.restoreGroceryItems(listOf(item)) } }; true }) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.size(48.dp).toggleable(item.checked, role = Role.Checkbox, onValueChange = { v -> scope.launch { c.repo.updateGroceryItem(item.copy(checked = v)) } }).semantics { contentDescription = "${item.name} purchased" }.testTag("grocery-check:${item.id}"), contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(24.dp).clip(RoundedCornerShape(6.dp)).border(2.dp, Palette.Forest, RoundedCornerShape(6.dp)).background(if (item.checked) Palette.Forest else Color.Transparent), contentAlignment = Alignment.Center) { if (item.checked) Text("✓", color = Palette.Cream, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+                        }
+                        BasicTextField(name, { name = it }, Modifier.weight(1f).padding(end = 6.dp).onFocusLost { if (name.isNotBlank() && name != item.name) scope.launch { c.repo.updateGroceryItem(item.copy(name = name.trim(), edited = true)) } else name = item.name }.semantics { contentDescription = "Item name" },
+                            textStyle = text.copy(textDecoration = if (item.checked) TextDecoration.LineThrough else null), singleLine = true, cursorBrush = SolidColor(Palette.Tomato),
+                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Next))
+                        Box(Modifier.width(78.dp).clip(RoundedCornerShape(6.dp)).background(Palette.CreamDeep.copy(alpha = 0.55f)).padding(horizontal = 6.dp, vertical = 7.dp)) {
+                            BasicTextField(qty, { qty = it }, Modifier.fillMaxWidth().onFocusLost { if (qty != item.quantityText) scope.launch { c.repo.updateGroceryItem(item.copy(quantityText = qty.trim(), edited = true)) } }.semantics { contentDescription = "Quantity and unit" },
+                                textStyle = text.copy(fontSize = 15.sp), singleLine = true, cursorBrush = SolidColor(Palette.Tomato), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                decorationBox = { inner -> if (qty.isEmpty()) Text("qty", style = text.copy(fontSize = 15.sp), color = Palette.Ink.copy(alpha = 0.4f)); inner() })
+                        }
+                        Box(Modifier.size(width = 40.dp, height = 48.dp).clickable(onClickLabel = "Row options for ${item.name}", role = Role.Button) { onOpen(item) }.semantics { contentDescription = "Row options for ${item.name}" }, contentAlignment = Alignment.Center) { Text("⋮", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Palette.Ink) }
+                    }
+                }
             }
         }
     }
@@ -161,31 +160,6 @@ private fun AisleRows(c: AppContainer, week: java.time.LocalDate, aisle: String,
 private fun Modifier.onFocusLost(block: () -> Unit): Modifier = composed {
     var had by remember { mutableStateOf(false) }
     onFocusChanged { if (it.isFocused) had = true else if (had) { had = false; block() } }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AisleSheet(title: String, list: List<GroceryItem>, onDismiss: () -> Unit, onToggle: (GroceryItem, Boolean) -> Unit, onOpen: (GroceryItem) -> Unit) {
-    ModalBottomSheet(onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.fillMaxHeight(0.9f).padding(horizontal = 20.dp)) {
-            Text(title, style = MaterialTheme.typography.headlineSmall)
-            Text("${list.size} ${if (list.size == 1) "item" else "items"} · ${list.count { it.checked }} bought", style = MaterialTheme.typography.bodySmall)
-            if (list.isEmpty()) Text("Nothing here yet. Add items from a recipe, the meal planner, or the Add Item button.", Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodyMedium)
-            LazyColumn(Modifier.weight(1f).testTag("aisle-sheet-list")) {
-                items(list, key = { it.id }) { it2 ->
-                    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).toggleable(it2.checked, role = Role.Checkbox, onValueChange = { v -> onToggle(it2, v) }), verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(it2.checked, null)
-                        Column(Modifier.weight(1f).padding(start = 8.dp)) {
-                            Text(it2.name, style = MaterialTheme.typography.titleMedium, textDecoration = if (it2.checked) TextDecoration.LineThrough else null)
-                            if (it2.quantityText.isNotEmpty()) Text(it2.quantityText, style = MaterialTheme.typography.bodySmall)
-                        }
-                        TextButton({ onOpen(it2) }) { Text("Edit") }
-                    }
-                }
-            }
-            BigButton("Done", onDismiss, Modifier.fillMaxWidth().padding(vertical = 12.dp), primary = false)
-        }
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)

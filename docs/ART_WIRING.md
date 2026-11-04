@@ -1,6 +1,6 @@
 # Art wiring: how the supplied visual package drives the app
 
-Source of truth: `touch_recipe_visual_assets.zip` (reassemble with `cat .touch-uploads/*/* > touch_recipe_visual_assets.zip`; sha256 `d215b378…f9481` is checked in `touch_recipe_visual_assets.zip.touchmanifest`).
+Source of truth: `touch_recipe_visual_assets.zip` (reassemble with `cat .touch-uploads/*/* > touch_recipe_visual_assets.zip`; sha256 in the `.touchmanifest` (currently `04b9d405…`) is checked in `touch_recipe_visual_assets.zip.touchmanifest`).
 
 ## Pipeline
 ```
@@ -26,12 +26,13 @@ One tap layer per page resolves a tap: (1) the top-most cutout whose pixel is op
 | Import Recipe | page_06 + 7 layers | back, URL, paste/type, scan, PDF/file, share, continue | sheets for each method, progress/error/result |
 | Import Review | page_07 + 6 layers | back, photo, add ingredient/direction, add category, details, save, section headers | title, source, rows, category chips, warning badges |
 | Meal Planner | page_08 + 3 layers | week selector, cat calendar, basket, 7 meal cards, 7 option buttons | day, date, photo, title, cook time, servings |
-| Grocery List | page_09 + 5 layers | back, week, basket, add, clear, 5 category headers | rows (checkbox, name, quantity, options), placeholder rows |
+| Grocery List | page_09 + 5 layers (open parchment `clean.png`) | back, week, basket, add, clear | one scrolling `list` window over the open parchment: bold category headings (tap to collapse) with their rows (checkbox, name, quantity, options) beneath; empty-state text |
 | Junk Drawer | page_10 + 8 layers | gear, category cards, notebook, swatches, help card, chef timer, printer card, back (the drawer itself is **not** a target) | none |
 
 Utility pages behind the drawer objects (Settings, Category Management, Backup, Themes, Help, Timer & Tools, Print & Share) have no supplied art; they are plain code pages using the app theme.
 
 ## Known art caveats
 - Collection/Planner/Grocery rows are 44 dp minimum for touch, so a card shows about 2–4 rows before scrolling; full editors are one tap away.
-- Collapsing a grocery category cannot reflow fixed art, so it replaces the rows with a one-line summary.
+- Grocery List has no per-category cards: headings and rows are drawn in the single `list` region (x 36, y 448, 770×1248 of 841×1870) and the list scrolls inside it. Collapsing a category replaces its rows with a one-line summary. Empty categories are not drawn.
+- The Grocery List `clean.png` was derived from an owner-supplied phone screenshot (bars cropped, week text patched out); swap in a native export when available and rerun `build_assets.py`.
 - No density variants exist; WebP sources are 841 px wide and look soft on large tablets.

@@ -99,22 +99,6 @@ def main():
             for i, row in enumerate(days):
                 entry["targets"].append({"id": f"day{i}", "label": f"Meal card {i + 1}", "hint": "Opens the meal", "glow": True, "box": row["card"], "hit": row["card"]})
                 entry["targets"].append({"id": f"act{i}", "label": f"Meal options {i + 1}", "hint": "Assign, replace or remove the meal", "glow": True, "box": row["action"], "hit": row["action"]})
-        if "cards" in page:
-            cards = []
-            for c in page["cards"]:
-                cards.append({
-                    "key": c["key"],
-                    "card": norm(layers[c["card"]].bbox),
-                    "head": norm(layers[c["head"]].bbox),
-                    "check": norm(layers[c["check"]].bbox),
-                    "qty": norm(layers[c["qty"]].bbox),
-                })
-            entry["cards"] = cards
-            names = {"produce": "Produce", "meat": "Meat and Seafood", "dairy": "Dairy and Eggs", "pantry": "Pantry", "bakery": "Bakery"}
-            for c in cards:
-                x, y, w, h = c["card"]
-                head = [x, y, w, round(84 / ART_H, 5)]
-                entry["targets"].append({"id": f"head_{c['key']}", "label": f"{names[c['key']]} category", "hint": "Expands or collapses this category", "glow": True, "box": head, "hit": norm(pad_box((round(x * ART_W), round(y * ART_H), round((x + w) * ART_W), round((y + head[3]) * ART_H)), 12))})
         manifest["pages"][key] = entry
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1))
     print("wrote", out / "manifest.json")

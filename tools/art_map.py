@@ -136,15 +136,11 @@ PAGES = {
             dict(id="add", layer=24, label="Add Item", hint="Adds a grocery item", pad=20),
             dict(id="clear", layer=25, label="Clear Checked", hint="Removes purchased items", pad=18),
         ],
-        # Category cards: card layer, header+first-row layer, checkbox layer, quantity layer
-        cards=[
-            dict(key="produce", card=19, head=4, check=9, qty=14),
-            dict(key="meat", card=20, head=5, check=10, qty=15),
-            dict(key="dairy", card=21, head=6, check=11, qty=16),
-            dict(key="pantry", card=22, head=7, check=12, qty=17),
-            dict(key="bakery", card=23, head=8, check=13, qty=18),
-        ],
-        regions=dict()),
+        # Open parchment layout: one continuous list window inside the panel (panel x 12-831, y 424-1719).
+        # The app draws bold category headings with their items beneath; no per-category cards.
+        regions=dict(
+            list=(36, 448, 770, 1248),
+        )),
 
     "drawer": dict(
         psd_id="page_10", folder="page_10_kitchen_junk_drawer", bg="#2F4A36",

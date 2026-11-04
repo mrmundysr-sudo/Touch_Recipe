@@ -17,11 +17,10 @@ data class NRect(val x: Float, val y: Float, val w: Float, val h: Float) {
 
 data class ArtTarget(val id: String, val label: String, val hint: String, val layer: String?, val box: NRect, val hit: NRect, val glow: Boolean)
 data class DayRegions(val label: NRect, val date: NRect, val title: NRect, val cook: NRect, val servings: NRect, val photo: NRect, val card: NRect, val action: NRect)
-data class GroceryCard(val key: String, val card: NRect, val head: NRect, val check: NRect, val qty: NRect)
 
 data class ArtPageData(
     val key: String, val clean: String, val bg: Long,
-    val targets: List<ArtTarget>, val regions: Map<String, NRect>, val days: List<DayRegions>, val cards: List<GroceryCard>,
+    val targets: List<ArtTarget>, val regions: Map<String, NRect>, val days: List<DayRegions>,
 ) {
     fun region(name: String) = regions[name] ?: error("Missing art region '$name' on page '$key'")
     fun target(id: String) = targets.first { it.id == id }
@@ -49,10 +48,6 @@ class ArtManifest(val aspect: Float, val pages: Map<String, ArtPageData>) {
                     days = o["days"]?.jsonArray?.map { d ->
                         val m = d.jsonObject
                         DayRegions(rect(m["label"]!!), rect(m["date"]!!), rect(m["title"]!!), rect(m["cook"]!!), rect(m["servings"]!!), rect(m["photo"]!!), rect(m["card"]!!), rect(m["action"]!!))
-                    }.orEmpty(),
-                    cards = o["cards"]?.jsonArray?.map { c ->
-                        val m = c.jsonObject
-                        GroceryCard(m["key"]!!.jsonPrimitive.content, rect(m["card"]!!), rect(m["head"]!!), rect(m["check"]!!), rect(m["qty"]!!))
                     }.orEmpty(),
                 )
             }

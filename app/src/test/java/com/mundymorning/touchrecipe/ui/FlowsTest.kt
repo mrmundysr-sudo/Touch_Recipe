@@ -327,9 +327,12 @@ class FlowsTest {
 
     @Test fun groceryCollapseHidesRows() {
         start(); runBlocking { c.repo.addGroceryItem(c.selectedWeek.value, "Apples", "3", "produce") }
-        rule.tapArt("grocery"); rule.assertPage("Grocery List"); rule.waitTag("aisle:produce")
-        rule.tapArt("head_produce"); rule.waitText("Tap the header to expand.", substring = true)
-        rule.tapArt("head_produce"); rule.waitTag("aisle:produce")
+        rule.tapArt("grocery"); rule.assertPage("Grocery List"); rule.waitTag("aisle-head:produce")
+        val apples = runBlocking { c.db.grocery().all() }.first { it.name == "Apples" }
+        rule.waitTag("grocery-row:${apples.id}")
+        rule.onNodeWithTag("aisle-head:produce", useUnmergedTree = true).performClick(); rule.waitTag("aisle-summary:produce")
+        rule.waitUntil(20000) { rule.onAllNodesWithTag("grocery-row:${apples.id}", useUnmergedTree = true).fetchSemanticsNodes().isEmpty() }
+        rule.onNodeWithTag("aisle-head:produce", useUnmergedTree = true).performClick(); rule.waitTag("grocery-row:${apples.id}")
     }
 
     @Test fun addFromRecipeThenOpenListShowsTheItems() {
@@ -339,14 +342,33 @@ class FlowsTest {
         rule.onNodeWithText("Open list").performClick(); rule.assertPage("Grocery List")
         val total = runBlocking { c.db.grocery().all() }.size
         assertTrue(total >= 4)
-        // the page must actually show them: at least one aisle button reports a non-zero count
-        rule.waitUntil(20000) { listOf("produce", "meat", "dairy", "pantry", "bakery").any { a -> rule.onAllNodesWithTag("aisle-open:$a").fetchSemanticsNodes().firstOrNull()?.config?.getOrNull(SemanticsProperties.ContentDescription)?.any { d -> !d.contains(", 0 items") } == true } }
+        // the page must actually show them: at least one category heading appears in the open list
+        rule.waitUntil(20000) { listOf("produce", "meat", "dairy", "pantry", "bakery").any { a -> rule.onAllNodesWithTag("aisle-head:$a", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() } }
     }
 
-    @Test fun groceryAisleOpensFullList() {
-        start(); runBlocking { c.repo.addGroceryItem(c.selectedWeek.value, "Apples", "3", "produce"); c.repo.addGroceryItem(c.selectedWeek.value, "Basil", "", "produce") }
-        rule.tapArt("grocery"); rule.assertPage("Grocery List"); rule.waitTag("aisle-open:produce")
-        rule.onNodeWithTag("aisle-open:produce").performClick(); rule.waitTag("aisle-sheet-list"); rule.waitText("Apples"); rule.waitText("Basil")
+    @Test fun groceryOpenListGroupsItemsUnderCategoryHeadings() {
+        start(); runBlocking { c.repo.addGroceryItem(c.selectedWeek.value, "Apples", "3", "produce"); c.repo.addGroceryItem(c.selectedWeek.value, "Milk", "1 l", "dairy"); c.repo.addGroceryItem(c.selectedWeek.value, "Basil", "", "produce") }
+        rule.tapArt("grocery"); rule.assertPage("Grocery List"); rule.waitTag("grocery-list"); rule.waitTag("aisle-head:produce"); rule.waitTag("aisle-head:dairy")
+        val all = runBlocking { c.db.grocery().all() }
+        all.forEach { rule.waitTag("grocery-row:${it.id}") }
+        // empty categories are not drawn, and the old per-category cards controls are gone
+        assertTrue(rule.onAllNodesWithTag("aisle-head:meat", useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
+        assertTrue(rule.onAllNodesWithTag("aisle-open:produce", useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
+        assertTrue(rule.onAllNodesWithText("Add an item…", useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
+        // the heading reports its counts for screen readers
+        val d = rule.onNodeWithTag("aisle-head:produce", useUnmergedTree = true).fetchSemanticsNode().config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString()
+        assertTrue(d.orEmpty(), d.orEmpty().startsWith("Produce: 2 items, 0 bought"))
+    }
+
+    @Test fun groceryEmptyListExplainsAndLongListScrolls() {
+        start(); rule.tapArt("grocery"); rule.assertPage("Grocery List"); rule.waitTag("grocery-empty")
+        runBlocking { for (i in 1..40) c.repo.addGroceryItem(c.selectedWeek.value, "Item number $i", "", if (i % 2 == 0) "pantry" else "produce") }
+        val last = runBlocking { c.db.grocery().all() }.first { it.name == "Item number 40" }
+        rule.waitTag("aisle-head:produce")
+        rule.onNodeWithTag("grocery-list", useUnmergedTree = true).performScrollToNode(hasTestTag("grocery-row:${last.id}"))
+        rule.waitTag("grocery-row:${last.id}")
+        // the bottom controls stay available while the list is long
+        rule.waitTag("art:add"); rule.waitTag("art:clear")
     }
 
     @Test fun settingsThemesAndCategoryManagement() {
