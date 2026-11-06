@@ -22,7 +22,7 @@ One tap layer per page resolves a tap: (1) the top-most cutout whose pixel is op
 | Kitchen Hub | page_02 + 7 layers | stove→Cook Mode/active recipe, calendar→Planner, fridge card→Import, magnifier→Search, grocery bag→Grocery, drawer→Junk Drawer, Rolodex→Collection | none |
 | Recipe Collection | page_03 + 2 layers | search tab, New Recipe tab, 5 category tabs (All, Favorites, top 2 categories, “⋯” filters) | recipe cards on a parchment panel, search field, sort/filter |
 | Recipe Detail | page_04 + 4 layers | back, heart, Cook Mode panel, Add to Grocery panel, photo, servings −/+, section headers | photo, title/categories/notes/source, times, servings, ingredient rows (checkboxes), numbered directions |
-| Cook Mode | page_05 + 5 layers | back, clock, Start Timer, Previous, Next | step chip, step text, progress, step list, live clock face, state label over the timer button |
+| Cook Mode | page_05 + 3 layers (back, Previous, Next; one tall parchment panel) | back, Previous, Next | step chip, step number/text, a timer button only when the step has a timer, progress bar, and the recipe's ingredients (tick boxes shared with Recipe Detail, amounts scaled to the servings chosen there) |
 | Import Recipe | page_06 + 7 layers | back, URL, paste/type, scan, PDF/file, share, continue | sheets for each method, progress/error/result |
 | Import Review | page_07 + 6 layers | back, photo, add ingredient/direction, add category, details, save, section headers | title, source, rows, category chips, warning badges |
 | Meal Planner | page_08 + 3 layers | week selector, cat calendar, basket, 7 meal cards, 7 option buttons | day, date, photo, title, cook time, servings |

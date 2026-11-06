@@ -545,44 +545,6 @@
      ]
     },
     {
-     "id": "clock",
-     "label": "Timer clock",
-     "hint": "Shows the countdown",
-     "glow": true,
-     "layer": "art/cook/cutout_1.webp",
-     "box": [
-      0.17479,
-      0.73209,
-      0.15458,
-      0.07219
-     ],
-     "hit": [
-      0.1629,
-      0.72674,
-      0.17836,
-      0.08289
-     ]
-    },
-    {
-     "id": "start",
-     "label": "Start timer",
-     "hint": "Starts, pauses or resets the timer",
-     "glow": true,
-     "layer": "art/cook/cutout_2.webp",
-     "box": [
-      0.43163,
-      0.73529,
-      0.49465,
-      0.06791
-     ],
-     "hit": [
-      0.42212,
-      0.73102,
-      0.51367,
-      0.07647
-     ]
-    },
-    {
      "id": "prev",
      "label": "Previous step",
      "hint": "Goes to the previous step",
@@ -635,16 +597,10 @@
      0.31979
     ],
     "bottom": [
-     0.08323,
-     0.48128,
-     0.83472,
-     0.20321
-    ],
-    "clockface": [
-     0.18787,
-     0.73797,
-     0.12842,
-     0.06096
+     0.06659,
+     0.48396,
+     0.86801,
+     0.32995
     ]
    }
   },

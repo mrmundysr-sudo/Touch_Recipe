@@ -36,7 +36,7 @@ class FlowsTest {
 
     /** First timer start explains notifications before asking (privacy: permission at the moment of use). */
     private fun startTimer() {
-        rule.tapArt("start")
+        rule.clickTag("timer-button")
         rule.waitUntil(20000) { rule.onAllNodesWithText("Timer alerts", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() || rule.textOf("timer-label") == "Pause timer" }
         if (rule.onAllNodesWithText("Timer alerts", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) rule.onNodeWithText("Not now").performClick()
         rule.waitUntil(20000) { rule.textOf("timer-label") == "Pause timer" }
@@ -258,7 +258,7 @@ class FlowsTest {
         rule.tapArt("cook"); rule.waitTag("step-number"); assertEquals("1", rule.textOf("step-number")); assertEquals("09:00", rule.textOf("clock-face"))
         startTimer()
         clock.now += 60_000; rule.mainClock.advanceTimeBy(600); rule.waitUntil(20000) { rule.textOf("clock-face") == "08:00" }
-        rule.tapArt("start"); rule.waitUntil(20000) { rule.textOf("timer-label") == "Resume timer" }
+        rule.clickTag("timer-button"); rule.waitUntil(20000) { rule.textOf("timer-label") == "Resume timer" }
         clock.now += 120_000; rule.mainClock.advanceTimeBy(600); assertEquals("paused time does not elapse", "08:00", rule.textOf("clock-face"))
         rule.tapArt("next"); rule.waitUntil(20000) { rule.textOf("step-number") == "2" }
         rule.onNodeWithText("(timer from step 1)", substring = true).assertExists()   // a started timer is never silently reset
@@ -271,10 +271,20 @@ class FlowsTest {
         assertEquals(2, s.stepIndex); assertEquals(setOf(0, 1), s.completed)
     }
 
+    @Test fun cookModeListsIngredientsNotStepsAndKeepsChosenServings() {
+        start(); rule.tapArt("rolodex"); rule.waitTag("recipe-card:r1"); rule.clickTag("recipe-card:r1"); rule.assertPage("Spaghetti al Pomodoro")
+        rule.tapArt("serv_inc"); rule.tapArt("serv_inc")   // 4 -> 6 servings on the recipe page
+        rule.tapArt("cook"); rule.waitTag("cook-ingredients"); rule.waitTag("cook-ing:i1")
+        rule.onNodeWithText("1 1/2 lb spaghetti", useUnmergedTree = true).assertExists()   // amounts follow the servings chosen on the recipe
+        rule.onNodeWithTag("step-list").assertDoesNotExist()                                // the steps are no longer repeated in the lower panel
+        rule.clickTag("cook-ing:i1")
+        rule.waitUntil(20000) { runBlocking { c.repo.getRecipe("r1") }!!.ingredients.first { it.id == "i1" }.checked }   // ticks are shared with the recipe page
+    }
+
     @Test fun cookModeWithoutTimerAndFinish() {
         start(false); runBlocking { c.repo.saveRecipe(Recipe(id = "n", title = "No Timer", directions = listOf(Direction("a", "Stir."), Direction("b", "Serve.")))) }
         rule.tapArt("stove"); rule.waitText("No Timer"); rule.onNodeWithText("No Timer").performClick(); rule.waitTag("step-number")
-        assertEquals("--:--", rule.textOf("clock-face")); assertEquals("Set timer", rule.textOf("timer-label"))
+        rule.onNodeWithTag("timer-add").assertExists(); rule.onNodeWithTag("timer-button").assertDoesNotExist(); rule.onNodeWithTag("clock-face").assertDoesNotExist()   // no timer on a step that doesn't need one
         rule.tapArt("next"); rule.waitUntil(20000) { rule.textOf("step-number") == "2" }
         rule.tapArt("next"); rule.waitText("All steps done"); rule.onNodeWithText("Finish").performClick(); rule.assertPage("Kitchen Hub")
         assertTrue(runBlocking { c.repo.cookSession("n") }!!.finished)

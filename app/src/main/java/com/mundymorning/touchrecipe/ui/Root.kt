@@ -40,7 +40,7 @@ object Routes {
     const val SPLASH = "splash"; const val HUB = "hub"
     const val COLLECTION = "collection?search={search}"; fun collection(search: Boolean = false) = "collection?search=$search"
     const val DETAIL = "detail/{id}"; fun detail(id: String) = "detail/$id"
-    const val COOK = "cook/{id}"; fun cook(id: String) = "cook/$id"
+    const val COOK = "cook/{id}?servings={servings}"; fun cook(id: String, servings: Int? = null) = "cook/$id?servings=${servings ?: -1}"
     const val IMPORT = "import"
     const val REVIEW = "review?edit={edit}"; fun review(editId: String? = null) = "review?edit=${editId ?: ""}"
     const val PLANNER = "planner"; const val GROCERY = "grocery"; const val DRAWER = "drawer"
@@ -93,7 +93,7 @@ fun TouchRecipeRoot(c: AppContainer, activity: Activity? = null) {
                     composable(Routes.HUB) { HubScreen(c, nav) }
                     composable(Routes.COLLECTION, listOf(navArgument("search") { type = NavType.BoolType; defaultValue = false })) { CollectionScreen(c, nav, it.arguments?.getBoolean("search") ?: false) }
                     composable(Routes.DETAIL, listOf(navArgument("id") { type = NavType.StringType })) { DetailScreen(c, nav, it.arguments!!.getString("id")!!) }
-                    composable(Routes.COOK, listOf(navArgument("id") { type = NavType.StringType })) { CookScreen(c, nav, it.arguments!!.getString("id")!!) }
+                    composable(Routes.COOK, listOf(navArgument("id") { type = NavType.StringType }, navArgument("servings") { type = NavType.IntType; defaultValue = -1 })) { CookScreen(c, nav, it.arguments!!.getString("id")!!, it.arguments?.getInt("servings")?.takeIf { n -> n > 0 }) }
                     composable(Routes.IMPORT) { ImportScreen(c, nav) }
                     composable(Routes.REVIEW, listOf(navArgument("edit") { type = NavType.StringType; defaultValue = "" })) { ReviewScreen(c, nav, it.arguments?.getString("edit").orEmpty().ifEmpty { null }) }
                     composable(Routes.PLANNER) { PlannerScreen(c, nav) }
