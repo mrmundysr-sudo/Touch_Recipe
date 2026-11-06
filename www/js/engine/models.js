@@ -1,16 +1,19 @@
 // Port of core/model/Models.kt. Plain data: factories fill the same defaults as the Kotlin data classes.
 export const newId = () => (globalThis.crypto && crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 
-export const Ingredient = (o) => ({ id: newId(), text: '', header: false, checked: false, ...o });
-export const Direction = (o) => ({ id: newId(), text: '', timerSeconds: null, header: false, image: null, ...o });
+// An explicit `undefined` must never override a default (that once replaced a new recipe's id and made saved recipes overwrite each other).
+const def = (o = {}) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+
+export const Ingredient = (o) => ({ id: newId(), text: '', header: false, checked: false, ...def(o) });
+export const Direction = (o) => ({ id: newId(), text: '', timerSeconds: null, header: false, image: null, ...def(o) });
 export const Recipe = (o = {}) => ({
   id: newId(), title: '', description: '', notes: '', photo: null, sourceUrl: null, sourceName: null, cuisine: null,
   prepMinutes: null, cookMinutes: null, totalMinutes: null, servings: null, ingredients: [], directions: [], categoryIds: [],
-  favorite: false, rawSource: null, createdAt: 0, updatedAt: 0, ...o,
+  favorite: false, rawSource: null, createdAt: 0, updatedAt: 0, ...def(o),
 });
 export const GroceryItem = (o) => ({
   id: newId(), weekStart: '', name: '', quantityText: '', aisle: 'pantry', checked: false, sortIndex: 0, key: '',
-  generated: false, edited: false, sources: [], ...o,
+  generated: false, edited: false, sources: [], ...def(o),
 });
 
 export const effectiveTotal = (r) => r.totalMinutes ?? ((r.prepMinutes != null || r.cookMinutes != null) ? (r.prepMinutes ?? 0) + (r.cookMinutes ?? 0) : null);

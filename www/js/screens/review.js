@@ -44,7 +44,7 @@ export function reviewScreen(params, ctx, nav) {
     const url = isUrl ? src : (s.sourceUrl && s.sourceUrl.trim() && src && !isUrl && !s.sourceUrl.toLowerCase().includes(src.toLowerCase()) ? s.sourceUrl : null);
     let name = null;
     if (isUrl) { try { name = new URL(src).host.replace(/^www\./, '') || null; } catch { name = null; } } else name = src || null;
-    return Recipe({ id: s.editingId ?? undefined, title: s.title.trim(), description: s.description.trim(), notes: s.notes.trim(), photo: s.photo,
+    return Recipe({ ...(s.editingId ? { id: s.editingId } : {}), title: s.title.trim(), description: s.description.trim(), notes: s.notes.trim(), photo: s.photo,
       sourceUrl: url ?? (isUrl ? src : s.sourceUrl), sourceName: name, cuisine: s.cuisine.trim() || null,
       prepMinutes: intOrNull(s.prep), cookMinutes: intOrNull(s.cook), totalMinutes: intOrNull(s.total), servings: intOrNull(s.servings),
       ingredients: s.ingredients.filter((i) => i.text.trim()).map((i) => Ingredient({ id: i.id, text: i.text.trim(), header: i.header })),

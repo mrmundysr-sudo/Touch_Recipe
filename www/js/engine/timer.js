@@ -22,7 +22,7 @@ export function formatMs(ms) {
 }
 
 export const MAX_TIMERS = 10;
-export const NamedTimer = (o) => ({ id: newId(), name: '', totalMs: 0, remainingMs: o.totalMs ?? 0, endAtMs: null, ...o });
+export const NamedTimer = (o) => ({ id: newId(), name: '', totalMs: 0, remainingMs: o.totalMs ?? 0, endAtMs: null, ...Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) });
 export const namedTimerClock = (n) => CookTimer(n.totalMs, n.remainingMs, n.endAtMs);
 export const withClock = (n, t) => ({ ...n, totalMs: t.totalMs, remainingMs: t.remainingMs, endAtMs: t.endAtMs });
 export const isDone = (n, now) => n.endAtMs != null && remaining(namedTimerClock(n), now) === 0;

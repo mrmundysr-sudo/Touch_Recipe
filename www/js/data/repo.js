@@ -25,8 +25,25 @@ export class Repository {
   async init() {
     const loaded = await this.backend.load();
     if (loaded) this.state = { ...emptyState(), ...loaded };
+    if (this.repairIds()) this._changed();
     await this.ensureSeeded();
     return this;
+  }
+  /** Repairs recipes saved without a proper id by an earlier build (stored under the key "undefined"): they get a real id, and the meal plan
+   *  entries and cooking progress that pointed at them follow. Returns true when anything changed. */
+  repairIds() {
+    const st = this.state; let changed = false, fixedId = null;
+    for (const [key, r] of Object.entries(st.recipes)) {
+      if (!r || (r.id && r.id === key)) continue;
+      const id = r.id && r.id !== 'undefined' ? r.id : newId();
+      delete st.recipes[key]; st.recipes[id] = { ...r, id }; changed = true;
+      if (key === 'undefined' || !r.id) fixedId = id;
+    }
+    if (fixedId) {
+      for (const m of Object.values(st.meals)) if (!m.recipeId || m.recipeId === 'undefined') m.recipeId = fixedId;
+      for (const [k, c] of Object.entries(st.cook)) if (k === 'undefined' || !c.recipeId) { delete st.cook[k]; st.cook[fixedId] = { ...c, recipeId: fixedId }; }
+    }
+    return changed;
   }
   subscribe(fn) { this.subs.add(fn); return () => this.subs.delete(fn); }
   _changed() {

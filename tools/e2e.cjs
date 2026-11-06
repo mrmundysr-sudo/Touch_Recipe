@@ -77,6 +77,11 @@ const assert = require('assert');
   await page.fill('[data-testid=title-field]', ''); await tap('save'); assert.ok((await page.locator('.snack').innerText()).includes('title')); ok('save blocked without a title');
   await page.fill('[data-testid=title-field]', "Grandma's Pancakes"); await tap('save'); await page.waitForTimeout(900);
   assert.equal(await route(), 'detail'); assert.ok(await page.evaluate(() => window.__app.ctx.repo.recipes().some((r) => r.title === "Grandma's Pancakes"))); ok('save -> detail, recipe stored');
+  // Regression: saved recipes always carry an id (blank Edit details / overwritten imports)
+  assert.ok(await page.evaluate(() => Object.entries(window.__app.ctx.repo.state.recipes).every(([k, r]) => r.id && r.id === k && k !== 'undefined'))); ok('every stored recipe has an id matching its key');
+  await page.evaluate(() => window.__app.nav.go('review', { edit: window.__app.ctx.repo.recipes().find((r) => r.title === "Grandma's Pancakes").id })); await page.waitForTimeout(600);
+  assert.equal(await page.inputValue('[data-testid=title-field]'), "Grandma's Pancakes"); assert.equal(await page.locator('[data-testid^="ing-rows:row:"]').count(), 2); ok('Edit details opens populated');
+  await page.evaluate(() => window.__app.nav.back()); await page.waitForTimeout(600);
   // Detail: scaling servings + cook
   const id = await page.evaluate(() => window.__app.ctx.repo.recipes().find((r) => r.title === "Grandma's Pancakes").id);
   await tap('serv_inc'); await tap('serv_inc'); assert.equal((await page.locator('[data-testid=servings-value]').innerText()).trim(), '6'); ok('servings stepper 4 -> 6');

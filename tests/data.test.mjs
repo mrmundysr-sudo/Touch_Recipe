@@ -144,3 +144,25 @@ test('prefs: defaults, round trip and glow plays', () => {
   assert.equal(p.glowPlays('hub'), 0); p.markGlowPlayed('hub'); p.markGlowPlayed('hub'); assert.equal(p.glowPlays('hub'), 2); p.resetGlow(); assert.equal(p.glowPlays('hub'), 0);
   p.saveTimers([{ id: 't', name: 'a', totalMs: 1, remainingMs: 1, endAtMs: null }]); assert.equal(new Prefs(p.sp).timers.length, 1);
 });
+
+// ---- regression: saved recipes must always get their own id (an `id: undefined` once made every new import overwrite the previous one) ----
+test('models: an explicit undefined never overrides a default', async () => {
+  const { Recipe: R, Ingredient: I, Direction: D, GroceryItem: G } = await import('../www/js/engine/models.js');
+  const r = R({ id: undefined, title: 'T', photo: undefined, servings: undefined }); assert.ok(r.id && r.id !== 'undefined'); assert.equal(r.photo, null); assert.equal(r.servings, null);
+  assert.ok(I({ id: undefined, text: 'x' }).id); assert.ok(D({ id: undefined, text: 'x' }).id); assert.ok(G({ id: undefined, name: 'x' }).id);
+  assert.notEqual(R({ id: undefined }).id, R({ id: undefined }).id);
+});
+test('repo: two new recipes are two recipes', async () => {
+  const r = await mk(); const { Recipe: R } = await import('../www/js/engine/models.js');
+  const a = await r.saveRecipe(R({ id: undefined, title: 'First' })); const b = await r.saveRecipe(R({ id: undefined, title: 'Second' }));
+  assert.notEqual(a.id, b.id); assert.equal(r.recipeCount(), 2); assert.deepEqual(r.recipes().map((x) => x.title).sort(), ['First', 'Second']);
+});
+test('repo: a recipe stored under the key "undefined" is repaired with its meals and cook progress', async () => {
+  const bad = { recipes: { undefined: { title: 'Southern Fried Chicken', ingredients: [], directions: [], categoryIds: [], createdAt: 1, updatedAt: 1 } },
+    meals: { '2026-11-03': { date: '2026-11-03', servings: 4 } }, cook: { undefined: { stepIndex: 1, completed: [0], timer: { totalMs: 0, remainingMs: 0, endAtMs: null }, timerStep: 0, finished: false, updatedAt: 5 } }, categories: [], grocery: [], aisles: [] };
+  const r = await new Repository(new MemoryBackend(bad), () => 10).init();
+  const [rec] = r.recipes(); assert.equal(r.recipeCount(), 1); assert.ok(rec.id && rec.id !== 'undefined'); assert.equal(rec.title, 'Southern Fried Chicken');
+  assert.equal(r.recipe(rec.id).title, 'Southern Fried Chicken'); assert.equal(r.recipe('undefined'), null);
+  assert.equal(r.meals('2026-11-02', '2026-11-08')[0].recipeId, rec.id); assert.equal(r.cookSession(rec.id).stepIndex, 1); assert.equal(r.cookSession('undefined'), null);
+  await r.flush(); const again = await new Repository(r.backend).init(); assert.equal(again.recipes()[0].id, rec.id);
+});
