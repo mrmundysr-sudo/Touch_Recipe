@@ -12,12 +12,51 @@ object TextRecipeParser {
     private val qtyStart = Regex("""^\s*(?:\d|[¼½¾⅓⅔⅛⅜⅝⅞]|a\s+(?:pinch|dash|handful|few)|one\s|two\s|three\s|half\s)""", RegexOption.IGNORE_CASE)
     private val unitWord = Regex("""\b(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|grams?|g|kg|ml|l|cloves?|cans?|pinch|dash|slices?|sticks?|packages?|bunch|sprigs?)\b""", RegexOption.IGNORE_CASE)
 
+    // ---- browser print / PDF furniture that must never become part of a recipe ----
+    data class CleanedText(val text: String, val sourceUrl: String?)
+    private val furniture = setOf("learn more", "print", "print recipe", "save", "save recipe", "share", "pin", "pin it", "jump to recipe", "advertisement", "skip to content", "menu")
+    private val urlOnly = Regex("""^(?:https?://|www\.)\S+$""", RegexOption.IGNORE_CASE)
+    private val anyUrl = Regex("""https?://\S+""")
+    private val stamp = Regex("""^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}[,\s]+\d{1,2}[: ]\d{2}(?:\s*[AaPp]\.?[Mm]\.?)?$""")
+    private val pageNo = Regex("""^page\s+\d+\s*(?:of|/)\s*\d+$""", RegexOption.IGNORE_CASE)
+    private val loneMark = Regex("""^[^\p{L}\p{N}]{1,3}$""")
+    private val inlineFooter = Regex("""\s*(?:https?://\S+\s+)?\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}[,\s]+\d{1,2}[: ]\d{2}(?:\s*[AaPp][Mm])?\b""")
+    private val inlineUrlFragment = Regex("""\s*https?://\S*#\S*""")
+    private val difficultyRe = Regex("""^di.{0,3}cult\w*\s*[:\-]\s*(\S.*)$""", RegexOption.IGNORE_CASE)
+    private val bylineRe = Regex("""^by\s+(\S[^:]{1,40})$""", RegexOption.IGNORE_CASE)
+
+    /** Removes page furniture (footers, stamps, page numbers, bare web addresses, lone punctuation, UI words) and reports the first page address. */
+    fun cleanPageText(raw: String): CleanedText {
+        var sourceUrl: String? = null
+        val out = mutableListOf<String>()
+        for (line0 in raw.replace("\r", "").split("\n")) {
+            var line = line0.trim()
+            if (line.isEmpty()) { out += ""; continue }
+            val first = anyUrl.find(line)?.value
+            line = line.replace(inlineFooter, " ").replace(inlineUrlFragment, " ").trim()
+            if (urlOnly.matches(line)) { if (sourceUrl == null) sourceUrl = line.substringBefore('#').trimEnd('.', ',', ')'); continue }
+            if (line.isEmpty()) { if (first != null && sourceUrl == null) sourceUrl = first.substringBefore('#').trimEnd('.', ',', ')'); continue }
+            if (stamp.matches(line) || pageNo.matches(line) || loneMark.matches(line) || line.lowercase() in furniture) continue
+            out += line
+        }
+        return CleanedText(out.joinToString("\n"), sourceUrl)
+    }
+
+    /** True when a PDF text layer looks damaged by web-font ligatures ("Di!iculty", an unmatched quote inside a word). */
+    fun looksGarbled(text: String): Boolean {
+        if (Regex("""[A-Za-z][!#%*][a-z]""").containsMatchIn(text) || text.contains('\uFFFD')) return true
+        return text.lines().any { l -> l.count { it == '"' } % 2 == 1 && l.none { it == '\u201C' || it == '\u201D' } }
+    }
+
     fun parse(raw: String, method: ImportMethod = ImportMethod.TEXT, sourceUrl: String? = null): ImportDraft {
         val warnings = mutableListOf<ImportWarning>()
-        val lines = raw.replace("\r", "").replace(' ', ' ').lines().map { it.trim() }
+        val cleaned = cleanPageText(raw.replace('\u00a0', ' '))
+        val pageUrl = sourceUrl ?: cleaned.sourceUrl
+        val extras = mutableListOf<String>(); var author: String? = null
+        val lines = cleaned.text.lines().map { it.trim() }
         val nonEmpty = lines.filter { it.isNotEmpty() }
         if (nonEmpty.isEmpty()) {
-            return ImportDraft(Recipe(sourceUrl = sourceUrl, rawSource = raw), method, Confidence.LOW,
+            return ImportDraft(Recipe(sourceUrl = pageUrl, rawSource = raw), method, Confidence.LOW,
                 listOf(ImportWarning("recipe", "No text was found to build a recipe from.", Severity.ERROR)))
         }
 
@@ -29,6 +68,12 @@ object TextRecipeParser {
 
         for (line in lines) {
             if (line.isEmpty()) continue
+            if (current == "pre") {
+                val dm = difficultyRe.find(line)
+                if (dm != null && line.length < 60) { extras += "Difficulty: ${dm.groupValues[1].trim()}"; continue }
+                val bm = bylineRe.find(line)
+                if (bm != null && sections.getValue("pre").size <= 2 && line.none { it.isDigit() }) { author = bm.groupValues[1].trim(); continue }
+            }
             val mm = meta.find(line)
             if (mm != null && mm.groupValues[2].isNotBlank() && line.length < 70) {
                 val key = mm.groupValues[1].lowercase(); val v = mm.groupValues[2]
@@ -70,9 +115,10 @@ object TextRecipeParser {
             val isHeader = t.endsWith(":") || (t.length < 40 && t == t.uppercase() && t.any { it.isLetter() } && !qtyStart.containsMatchIn(t))
             ingredients += Ingredient(text = if (isHeader) t.trimEnd(':').trim() else t, header = isHeader)
         }
-        val directions = mergeWrapped(sections.getValue("dir").map { stepNum.replace(bullet.replace(it, ""), "").trim() }.filter { it.isNotEmpty() })
+        val directions = mergeWrapped(sections.getValue("dir").map { l -> Pair(stepNum.replace(bullet.replace(l, ""), "").trim(), bullet.containsMatchIn(l) || stepNum.containsMatchIn(l)) }.filter { it.first.isNotEmpty() })
             .map { Direction(text = it, timerSeconds = Durations.timerSeconds(it)) }
-        val notes = sections.getValue("note").joinToString("\n") { bullet.replace(it, "").trim() }
+        val host = pageUrl?.let { runCatching { java.net.URI(it).host?.removePrefix("www.") }.getOrNull() }
+        val notes = (listOfNotNull(author?.takeIf { pageUrl != null }?.let { "By $it" }) + extras + sections.getValue("note").map { bullet.replace(it, "").trim() }).joinToString("\n")
         val intro = sections.getValue("pre").drop(1).joinToString(" ").trim()
 
         if (title.isEmpty()) warnings += ImportWarning("title", "We couldn't tell what this recipe is called. Please add a title.")
@@ -85,7 +131,7 @@ object TextRecipeParser {
             else -> Confidence.LOW
         }
         val recipe = Recipe(
-            title = title, description = intro, notes = notes, sourceUrl = sourceUrl,
+            title = title, description = intro, notes = notes, sourceUrl = pageUrl, sourceName = host ?: author,
             prepMinutes = prep, cookMinutes = cook, totalMinutes = total, servings = servings,
             ingredients = ingredients, directions = directions, rawSource = raw,
         )
@@ -106,14 +152,18 @@ object TextRecipeParser {
 
     private fun endsLikeSentence(t: String) = t.endsWith(".") && t.split(' ').size > 8
 
-    /** OCR often breaks sentences across lines: join a line into the previous one when it clearly continues it. */
-    private fun mergeWrapped(lines: List<String>): List<String> {
+    private val terminal = Regex("""[.!?:;]$""")
+    private val continuation = Regex("""^[a-z(\[,;)]""")
+
+    /** Joins wrapped lines into steps. A line continues the previous one when that one has no sentence ending and it starts like a
+     *  continuation (lowercase, an opening bracket or a comma); lines that carried their own bullet or number always start a new step. */
+    private fun mergeWrapped(items: List<Pair<String, Boolean>>): List<String> {
         val out = mutableListOf<String>()
-        for (l in lines) {
+        for ((text, mark) in items) {
             val prev = out.lastOrNull()
-            if (prev != null && !prev.last().let { it == '.' || it == '!' || it == '?' || it == ':' || it == ')' } && l.first().isLowerCase()) {
-                out[out.lastIndex] = if (prev.endsWith("-")) prev.dropLast(1) + l else "$prev $l"
-            } else out += l
+            if (!mark && prev != null && !terminal.containsMatchIn(prev) && continuation.containsMatchIn(text))
+                out[out.lastIndex] = if (prev.endsWith("-") && text.first().isLowerCase()) prev.dropLast(1) + text else "$prev $text"
+            else out += text
         }
         return out
     }
