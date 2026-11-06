@@ -11,6 +11,39 @@ const qtyStart = /^\s*(?:\d|[¼½¾⅓⅔⅛⅜⅝⅞]|a\s+(?:pinch|dash|handful
 const unitWord = /\b(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|grams?|g|kg|ml|l|cloves?|cans?|pinch|dash|slices?|sticks?|packages?|bunch|sprigs?)\b/i;
 const metaRe = /^\W*(prep(?:aration)?(?: time)?|cook(?:ing)?(?: time)?|total(?: time)?|ready in|serv(?:es|ings?)|yield|makes)\s*[:\-]?\s*(.*)$/i;
 
+// Browser print/PDF furniture that must never become part of a recipe.
+const FURNITURE = new Set(['learn more', 'print', 'print recipe', 'save', 'save recipe', 'share', 'pin', 'pin it', 'jump to recipe', 'advertisement', 'skip to content', 'menu']);
+const URL_ONLY = /^(?:https?:\/\/|www\.)\S+$/i;
+const STAMP = /^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}[,\s]+\d{1,2}[: ]\d{2}(?:\s*[AaPp]\.?[Mm]\.?)?$/;
+const PAGE_NO = /^page\s+\d+\s*(?:of|\/)\s*\d+$/i;
+const LONE_MARK = /^[^\p{L}\p{N}]{1,3}$/u;
+const INLINE_FOOTER = /\s*(?:https?:\/\/\S+\s+)?\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}[,\s]+\d{1,2}[: ]\d{2}(?:\s*[AaPp][Mm])?\b/g;
+const INLINE_URL_FRAGMENT = /\s*https?:\/\/\S*#\S*/g;
+
+/** Removes page furniture (footers, stamps, page numbers, bare web addresses, lone punctuation, UI words). Returns the cleaned text and the first page address found. */
+export function cleanPageText(raw) {
+  let sourceUrl = null;
+  const out = [];
+  for (const line0 of raw.replace(/\r/g, '').split('\n')) {
+    let line = line0.trim();
+    if (!line) { out.push(''); continue; }
+    const first = /https?:\/\/\S+/.exec(line);
+    line = line.replace(INLINE_FOOTER, ' ').replace(INLINE_URL_FRAGMENT, ' ').trim();
+    if (URL_ONLY.test(line)) { if (!sourceUrl) sourceUrl = line.replace(/#.*$/, '').replace(/[.,)]+$/, ''); continue; }
+    if (!line) { if (first && !sourceUrl) sourceUrl = first[0].replace(/#.*$/, '').replace(/[.,)]+$/, ''); continue; }
+    if (STAMP.test(line) || PAGE_NO.test(line) || LONE_MARK.test(line) || FURNITURE.has(line.toLowerCase())) continue;
+    out.push(line);
+  }
+  return { text: out.join('\n'), sourceUrl };
+}
+
+/** True when a PDF text layer looks damaged by web-font ligatures (e.g. "Di!iculty", an unmatched quote inside a word): read the page by OCR instead. */
+export function looksGarbled(text) {
+  if (/[A-Za-z][!#%*][a-z]/.test(text) || /\uFFFD/.test(text)) return true;
+  for (const line of text.split('\n')) { const q = (line.match(/"/g) || []).length; if (q % 2 === 1 && !/[“”]/.test(line)) return true; }
+  return false;
+}
+
 const trimSet = (s, chars) => { let a = 0, b = s.length; while (a < b && chars.includes(s[a])) a++; while (b > a && chars.includes(s[b - 1])) b--; return s.slice(a, b); };
 const isLetter = (c) => /\p{L}/u.test(c);
 const firstInt = (s) => { const m = /\d+/.exec(s); return m ? parseInt(m[0], 10) : null; };
@@ -26,20 +59,25 @@ export function looksLikeIngredient(line) {
 }
 const endsLikeSentence = (t) => t.endsWith('.') && t.split(' ').length > 8;
 
-function mergeWrapped(lines) {
+/** Joins wrapped lines into steps. A line continues the previous one when that one has no sentence ending and it starts like a continuation
+ *  (lowercase, an opening bracket or a comma); lines that carried their own bullet or number always start a new step. */
+function mergeWrapped(items) {
   const out = [];
-  for (const l of lines) {
+  for (const { text, mark } of items) {
     const prev = out[out.length - 1];
-    if (prev !== undefined && !'.!?:)'.includes(prev[prev.length - 1]) && l[0] === l[0].toLowerCase() && l[0] !== l[0].toUpperCase()) {
-      out[out.length - 1] = prev.endsWith('-') ? prev.slice(0, -1) + l : `${prev} ${l}`;
-    } else out.push(l);
+    const open = prev !== undefined && !/[.!?:;]$/.test(prev);
+    if (!mark && open && /^[a-z(\[,;)]/.test(text)) out[out.length - 1] = prev.endsWith('-') && /^[a-z]/.test(text) ? prev.slice(0, -1) + text : `${prev} ${text}`;
+    else out.push(text);
   }
   return out;
 }
 
 export function parse(raw, method = ImportMethod.TEXT, sourceUrl = null) {
   const warnings = [];
-  const lines = raw.replace(/\r/g, '').replace(/ /g, ' ').split('\n').map((l) => l.trim());
+  const cleaned = cleanPageText(raw.replace(/\u00a0/g, ' '));
+  sourceUrl = sourceUrl ?? cleaned.sourceUrl;
+  const lines = cleaned.text.split('\n').map((l) => l.trim());
+  const extras = []; let author = null;
   if (!lines.some((l) => l)) {
     return { recipe: Recipe({ sourceUrl, rawSource: raw }), method, confidence: Confidence.LOW, warnings: [warn('recipe', 'No text was found to build a recipe from.', Severity.ERROR)], imageCandidates: [] };
   }
@@ -49,6 +87,12 @@ export function parse(raw, method = ImportMethod.TEXT, sourceUrl = null) {
 
   for (const line of lines) {
     if (!line) continue;
+    if (current === 'pre') {
+      const diff = /^di.{0,3}cult\w*\s*[:\-]\s*(\S.*)$/i.exec(line);
+      if (diff && line.length < 60) { extras.push(`Difficulty: ${diff[1].trim()}`); continue; }
+      const by = /^by\s+(\S[^:]{1,40})$/i.exec(line);
+      if (by && sections.pre.length <= 2 && !/\d/.test(line)) { author = by[1].trim(); continue; }
+    }
     const mm = metaRe.exec(line);
     if (mm && mm[2].trim() && line.length < 70) {
       const key = mm[1].toLowerCase(), v = mm[2];
@@ -85,9 +129,10 @@ export function parse(raw, method = ImportMethod.TEXT, sourceUrl = null) {
     const isHeader = t.endsWith(':') || (t.length < 40 && t === t.toUpperCase() && [...t].some(isLetter) && !qtyStart.test(t));
     ingredients.push(Ingredient({ text: isHeader ? trimSet(t, [':']).trim() : t, header: isHeader }));
   }
-  const directions = mergeWrapped(sections.dir.map((l) => l.replace(bullet, '').replace(stepNum, '').trim()).filter(Boolean))
+  const directions = mergeWrapped(sections.dir.map((l) => ({ text: l.replace(bullet, '').replace(stepNum, '').trim(), mark: bullet.test(l) || stepNum.test(l) })).filter((x) => x.text))
     .map((t) => Direction({ text: t, timerSeconds: timerSeconds(t) }));
-  const notes = sections.note.map((l) => l.replace(bullet, '').trim()).join('\n');
+  let host = null; if (sourceUrl) { try { host = new URL(sourceUrl).host.replace(/^www\./, '') || null; } catch { host = null; } }
+  const notes = [...(author && sourceUrl ? [`By ${author}`] : []), ...extras, ...sections.note.map((l) => l.replace(bullet, '').trim())].join('\n');
   const intro = sections.pre.slice(1).join(' ').trim();
 
   if (!title) warnings.push(warn('title', "We couldn't tell what this recipe is called. Please add a title."));
@@ -96,6 +141,6 @@ export function parse(raw, method = ImportMethod.TEXT, sourceUrl = null) {
   warnings.push(warn('recipe', method === ImportMethod.OCR ? 'Text was read from a photo or file and may contain mistakes. Please check quantities and steps.' : 'Recipe text was interpreted automatically. Please check each field.', Severity.INFO));
 
   const confidence = title && ingredients.length && directions.length && (sawIngHeader || sawDirHeader) && method !== ImportMethod.OCR ? Confidence.MEDIUM : Confidence.LOW;
-  const recipe = Recipe({ title, description: intro, notes, sourceUrl, prepMinutes: prep, cookMinutes: cook, totalMinutes: total, servings, ingredients, directions, rawSource: raw });
+  const recipe = Recipe({ title, description: intro, notes, sourceUrl, sourceName: host ?? author, prepMinutes: prep, cookMinutes: cook, totalMinutes: total, servings, ingredients, directions, rawSource: raw });
   return { recipe, method, confidence, warnings, imageCandidates: [] };
 }

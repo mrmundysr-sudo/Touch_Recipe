@@ -58,10 +58,11 @@ export class VisionOcr {
     if (!p) throw new OcrUnavailable("Text recognition isn't available on this device.");
     try { return (await p.recognizeImage({ image: await blobToB64(blob) })).text || ''; } catch { throw new OcrUnavailable("Text recognition isn't available right now."); }
   }
-  async recognizePdf(blob) {
+  /** forceOcr: skip the PDF's text layer and read the rendered pages instead (the layer can be damaged by web-font ligatures). */
+  async recognizePdf(blob, { forceOcr = false } = {}) {
     const p = plugin('TouchRecipeOcr');
     if (!p) throw new OcrUnavailable("Text recognition isn't available on this device.");
-    try { const r = await p.recognizePdf({ pdf: await blobToB64(blob), maxPages: 6 }); return { text: r.text || '', pages: r.pages || 0 }; } catch { throw new OcrUnavailable("That PDF could not be read."); }
+    try { const r = await p.recognizePdf({ pdf: await blobToB64(blob), maxPages: 6, forceOcr }); return { text: r.text || '', pages: r.pages || 0 }; } catch { throw new OcrUnavailable("That PDF could not be read."); }
   }
 }
 
@@ -159,9 +160,19 @@ export class ImportService {
   async fromPdf(file, onStatus) {
     onStatus('Opening the PDF…');
     let r;
-    try { onStatus('Reading the PDF…'); r = await this.ocr.recognizePdf(file); } catch (e) { throw new ImportFailure((e.message || 'That PDF could not be opened.') + ' You can still use Paste or Type Recipe.', { retryable: true }); }
+    try { onStatus('Reading the PDF…'); r = await this.ocr.recognizePdf(file); r = await this.preferCleanText(file, r, onStatus); } catch (e) { throw new ImportFailure((e.message || 'That PDF could not be opened.') + ' You can still use Paste or Type Recipe.', { retryable: true }); }
     const d = this.ocrDraft(r.text);
     return r.pages >= 6 ? { ...d, warnings: [...d.warnings, warn('recipe', 'Only the first 6 pages were read.', Severity.INFO)] } : d;
+  }
+  /** A PDF made by a browser can carry a damaged text layer ("Southern \"ied Chicken", "Di!iculty"): if so, read the pages by OCR and use that when it is as complete. */
+  async preferCleanText(file, r, onStatus) {
+    if (!Text.looksGarbled(r.text)) return r;
+    try {
+      onStatus('Checking the text against the page picture…');
+      const o = await this.ocr.recognizePdf(file, { forceOcr: true });
+      if (o.text.trim().length >= r.text.trim().length * 0.6) return o;
+    } catch { /* keep the text layer */ }
+    return r;
   }
   async fromFile(f, onStatus) {
     const mime = f.mime || f.file.type || ''; const name = (f.file.name || '').toLowerCase();

@@ -111,12 +111,13 @@ public class TouchRecipeOcrPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         let maxPages = call.getInt("maxPages") ?? 6
+        let forceOcr = call.getBool("forceOcr") ?? false
         DispatchQueue.global(qos: .userInitiated).async {
             let count = min(doc.pageCount, maxPages)
             var parts: [String] = []
             for i in 0..<count {
                 guard let page = doc.page(at: i) else { continue }
-                var text = (page.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                var text = forceOcr ? "" : (page.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                 if text.count < 40 {
                     // a scanned page has no text layer: render it and recognise the picture
                     let box = page.bounds(for: .mediaBox)

@@ -2,7 +2,7 @@
 // It only reads what the user's own request returned; it does not bypass access controls.
 // `parseHtml(html) -> Document` is injected (DOMParser in the app, linkedom in tests).
 import { Recipe, Ingredient, Direction, Confidence, ImportMethod, Severity, warn } from './models.js';
-import { toMinutes, timerSeconds } from './durations.js';
+import { toMinutes, timerSeconds, looseMinutes } from './durations.js';
 
 let parseHtml = (html) => new DOMParser().parseFromString(html, 'text/html');
 export const setHtmlParser = (fn) => { parseHtml = fn; };
@@ -53,10 +53,28 @@ export function failed(url, msg) {
 }
 
 // ---------- JSON-LD ----------
-function parseLenient(raw) {
-  try { return JSON.parse(raw); } catch { /* fall through */ }
-  const fixed = raw.replace(/[\u0000-\u001F]/g, ' ').replace(/,\s*([}\]])/g, '$1');
-  try { return JSON.parse(fixed); } catch { return null; }
+const fixJson = (t) => t.replace(/[\u0000-\u001F]/g, ' ').replace(/,\s*([}\]])/g, '$1');
+/** Splits text into its top-level {...} / [...] values (string-aware) so concatenated or junk-wrapped JSON can still be read. */
+function topLevelValues(t) {
+  const out = []; let depth = 0, start = -1, inStr = false, esc = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
+    if (c === '"') { if (depth > 0) inStr = true; continue; }
+    if (c === '{' || c === '[') { if (depth === 0) start = i; depth++; }
+    else if ((c === '}' || c === ']') && depth > 0) { depth--; if (depth === 0 && start >= 0) { out.push(t.slice(start, i + 1)); start = -1; } }
+  }
+  return out;
+}
+/** Reads every JSON value in a ld+json block, tolerating a BOM, comments/CDATA wrappers, `var x =` prefixes, trailing semicolons and commas,
+ *  raw control characters, and several objects in one block. */
+export function parseLenientAll(raw) {
+  let s = raw.replace(/^\uFEFF/, '').replace(/^\s*<!--/, '').replace(/-->\s*$/, '').replace('//<![CDATA[', '').replace('//]]>', '').trim();
+  s = s.replace(/^(?:(?:var|let|const)\s+\w+\s*=|window\.[\w.]+\s*=)\s*/, '').replace(/[;\s]+$/, '');
+  for (const cand of [s, fixJson(s)]) { try { return [JSON.parse(cand)]; } catch { /* try the next repair */ } }
+  const out = [];
+  for (const chunk of topLevelValues(s)) { for (const cand of [chunk, fixJson(chunk)]) { try { out.push(JSON.parse(cand)); break; } catch { /* next */ } } }
+  return out;
 }
 
 function collectRecipes(e, out) {
@@ -71,10 +89,7 @@ function collectRecipes(e, out) {
 export function jsonLdRecipes(doc) {
   const out = [];
   for (const el of doc.querySelectorAll('script[type*="ld+json"]')) {
-    let raw = (el.textContent || '').trim();
-    raw = raw.replace(/^<!--/, '').replace(/-->$/, '').replace('//<![CDATA[', '').replace('//]]>', '').trim();
-    const parsed = parseLenient(raw);
-    if (parsed != null) collectRecipes(parsed, out);
+    for (const parsed of parseLenientAll(el.textContent || '')) collectRecipes(parsed, out);
   }
   return out;
 }
@@ -142,7 +157,8 @@ function fromJsonLd(r, doc, pageUrl) {
   const og = attr(doc.querySelector('meta[property="og:image"]'), 'content');
   const imgs = [...new Set([...images(r.image, pageUrl), ...(og ? [absolute(og, pageUrl)] : [])].filter(Boolean))];
   const servings = servingsFrom(r.recipeYield);
-  const description = clean(str(r.description));
+  const metaDesc = clean(attr(doc.querySelector('meta[property="og:description"]'), 'content') || attr(doc.querySelector('meta[name="description"]'), 'content'));
+  const description = clean(str(r.description)) || metaDesc;
   const notes = clean(str(r.recipeNotes ?? r.notes));
 
   if (!ingredients.length) warnings.push(warn('ingredients', "The page's recipe data had no ingredients. Please add them."));
@@ -193,6 +209,24 @@ const ingredientSelectors = ['.wprm-recipe-ingredient', '.tasty-recipes-ingredie
 const directionSelectors = ['.wprm-recipe-instruction-text', '.tasty-recipes-instructions li', '.mv-create-instructions li', '.recipe-directions li', '.recipe-instructions li',
   '[class*=instructions] li', '[class*=directions] li', '[id*=instructions] li', '[class*=method] li', '[class*=steps] li', '[class*=instruction] p'];
 
+const LABEL_RE = /^\W*(prep(?:aration)?(?: time)?|cook(?:ing)?(?: time)?|total(?: time)?|ready in|serv(?:es|ings?)|yield|makes)\s*[:\-]?\s*(.*)$/i;
+/** Visible "Servings: 10", "Prep time: 10 minutes" ... labels (used when a page has no recipe data block). */
+export function labeledMeta(doc) {
+  const out = { prep: null, cook: null, total: null, servings: null };
+  for (const el of doc.querySelectorAll('li, p, div, span, td, dd, dt, strong, b, h4, h5, h6')) {
+    const t = elText(el);
+    if (t.length < 5 || t.length > 60) continue;
+    const m = LABEL_RE.exec(t);
+    if (!m || !/\d/.test(m[2])) continue;
+    const key = m[1].toLowerCase(), v = m[2];
+    if (key.startsWith('prep')) out.prep ??= looseMinutes(v);
+    else if (key.startsWith('cook')) out.cook ??= looseMinutes(v);
+    else if (key.startsWith('total') || key.startsWith('ready')) out.total ??= looseMinutes(v);
+    else out.servings ??= num(v);
+  }
+  return out;
+}
+
 function heuristic(doc, pageUrl) {
   const ogTitle = attr(doc.querySelector('meta[property="og:title"]'), 'content');
   const h1 = doc.querySelector('h1');
@@ -227,8 +261,10 @@ function heuristic(doc, pageUrl) {
   const og = attr(doc.querySelector('meta[property="og:image"]'), 'content');
   const img = og ? absolute(og, pageUrl) : null;
   const desc = clean(attr(doc.querySelector('meta[property="og:description"]'), 'content') || attr(doc.querySelector('meta[name="description"]'), 'content'));
+  const lm = labeledMeta(doc);
   const recipe = Recipe({
     title, description: desc, sourceUrl: pageUrl, sourceName: pageUrl ? hostOf(pageUrl) : null,
+    prepMinutes: lm.prep, cookMinutes: lm.cook, totalMinutes: lm.total, servings: lm.servings,
     ingredients: ingredients.map((t) => Ingredient({ text: t })), directions: steps.map((t) => Direction({ text: t, timerSeconds: timerSeconds(t) })),
   });
   const w = [warn('recipe', 'This page has no standard recipe data, so we guessed from its layout. Please check every field.', Severity.WARNING)];
@@ -240,7 +276,8 @@ function heuristic(doc, pageUrl) {
 function mergeMissing(base, fill) {
   const b = base.recipe, f = fill.recipe;
   const r = { ...b, title: blank(b.title) ? f.title : b.title, description: blank(b.description) ? f.description : b.description,
-    ingredients: b.ingredients.length ? b.ingredients : f.ingredients, directions: b.directions.length ? b.directions : f.directions };
+    ingredients: b.ingredients.length ? b.ingredients : f.ingredients, directions: b.directions.length ? b.directions : f.directions,
+    prepMinutes: b.prepMinutes ?? f.prepMinutes, cookMinutes: b.cookMinutes ?? f.cookMinutes, totalMinutes: b.totalMinutes ?? f.totalMinutes, servings: b.servings ?? f.servings };
   const filled = (!b.ingredients.length && f.ingredients.length) || (!b.directions.length && f.directions.length);
   const warnings = base.warnings.filter((w) => !((w.field === 'ingredients' && r.ingredients.length) || (w.field === 'directions' && r.directions.length)))
     .concat(filled ? [warn('recipe', 'Some parts were guessed from the page layout. Please check them.', Severity.WARNING)] : []);
