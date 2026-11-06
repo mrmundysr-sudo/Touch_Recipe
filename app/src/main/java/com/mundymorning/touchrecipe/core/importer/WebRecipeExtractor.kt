@@ -49,19 +49,35 @@ object WebRecipeExtractor {
     fun jsonLdRecipes(doc: Document): List<JsonObject> {
         val out = mutableListOf<JsonObject>()
         for (el in doc.select("script[type*=ld+json]")) {
-            val raw = el.data().ifBlank { el.html() }.trim()
-                .removePrefix("<!--").removeSuffix("-->").replace("//<![CDATA[", "").replace("//]]>", "").trim()
-            val parsed = parseLenient(raw) ?: continue
-            collectRecipes(parsed, out)
+            for (parsed in parseLenientAll(el.data().ifBlank { el.html() })) collectRecipes(parsed, out)
         }
         return out
     }
 
-    private fun parseLenient(raw: String): JsonElement? {
-        runCatching { return json.parseToJsonElement(raw) }
-        // common breakage: raw newlines/tabs inside strings, trailing commas
-        val fixed = raw.replace(Regex("""[\u0000-\u001F]"""), " ").replace(Regex(""",\s*([}\]])"""), "$1")
-        return runCatching { json.parseToJsonElement(fixed) }.getOrNull()
+    private fun fixJson(t: String) = t.replace(Regex("""[\u0000-\u001F]"""), " ").replace(Regex(""",\s*([}\]])"""), "$1")
+
+    /** Splits text into its top-level {...} / [...] values (string-aware) so concatenated or junk-wrapped JSON can still be read. */
+    private fun topLevelValues(t: String): List<String> {
+        val out = mutableListOf<String>(); var depth = 0; var start = -1; var inStr = false; var esc = false
+        for (i in t.indices) {
+            val c = t[i]
+            if (inStr) { if (esc) esc = false else if (c == '\\') esc = true else if (c == '"') inStr = false; continue }
+            if (c == '"') { if (depth > 0) inStr = true; continue }
+            if (c == '{' || c == '[') { if (depth == 0) start = i; depth++ }
+            else if ((c == '}' || c == ']') && depth > 0) { depth--; if (depth == 0 && start >= 0) { out += t.substring(start, i + 1); start = -1 } }
+        }
+        return out
+    }
+
+    /** Reads every JSON value in a ld+json block, tolerating a BOM, comment/CDATA wrappers, `var x =` prefixes, trailing semicolons and commas,
+     *  raw control characters, and several objects in one block. */
+    fun parseLenientAll(raw: String): List<JsonElement> {
+        var s = raw.removePrefix("\uFEFF").trim().removePrefix("<!--").removeSuffix("-->").replace("//<![CDATA[", "").replace("//]]>", "").trim()
+        s = s.replace(Regex("""^(?:(?:var|let|const)\s+\w+\s*=|window\.[\w.]+\s*=)\s*"""), "").trimEnd { it == ';' || it.isWhitespace() }
+        for (cand in listOf(s, fixJson(s))) { val v = runCatching { json.parseToJsonElement(cand) }.getOrNull(); if (v != null) return listOf(v) }
+        val out = mutableListOf<JsonElement>()
+        for (chunk in topLevelValues(s)) for (cand in listOf(chunk, fixJson(chunk))) { val v = runCatching { json.parseToJsonElement(cand) }.getOrNull(); if (v != null) { out += v; break } }
+        return out
     }
 
     private fun collectRecipes(e: JsonElement, out: MutableList<JsonObject>) {
@@ -170,7 +186,8 @@ object WebRecipeExtractor {
         val prep = Durations.toMinutes(r["prepTime"].str()); val cook = Durations.toMinutes(r["cookTime"].str()); val total = Durations.toMinutes(r["totalTime"].str())
         val imgs = (images(r["image"], pageUrl) + listOfNotNull(doc.selectFirst("meta[property=og:image]")?.attr("content")?.let { absolute(it, pageUrl) })).distinct()
         val servings = servingsFrom(r["recipeYield"])
-        val description = clean(r["description"].str())
+        val metaDesc = clean(doc.selectFirst("meta[property=og:description]")?.attr("content") ?: doc.selectFirst("meta[name=description]")?.attr("content"))
+        val description = clean(r["description"].str()).ifEmpty { metaDesc }
         val notes = clean((r["recipeNotes"] ?: r["notes"]).str())
 
         if (ingredients.isEmpty()) warnings += ImportWarning("ingredients", "The page's recipe data had no ingredients. Please add them.")
@@ -231,6 +248,29 @@ object WebRecipeExtractor {
         "[class*=instructions] li", "[class*=directions] li", "[id*=instructions] li", "[class*=method] li", "[class*=steps] li", "[class*=instruction] p",
     )
 
+    private val labelRe = Regex("""^\W*(prep(?:aration)?(?: time)?|cook(?:ing)?(?: time)?|total(?: time)?|ready in|serv(?:es|ings?)|yield|makes)\s*[:\-]?\s*(.*)$""", RegexOption.IGNORE_CASE)
+    class Labeled { var prep: Int? = null; var cook: Int? = null; var total: Int? = null; var servings: Int? = null }
+
+    /** Visible "Servings: 10", "Prep time: 10 minutes" ... labels (used when a page has no recipe data block). */
+    fun labeledMeta(doc: Document): Labeled {
+        val out = Labeled()
+        for (el in doc.select("li, p, div, span, td, dd, dt, strong, b, h4, h5, h6")) {
+            val t = el.text().trim()
+            if (t.length < 5 || t.length > 60) continue
+            val m = labelRe.find(t) ?: continue
+            val v = m.groupValues[2]
+            if (v.none { it.isDigit() }) continue
+            val key = m.groupValues[1].lowercase()
+            when {
+                key.startsWith("prep") -> if (out.prep == null) out.prep = Durations.looseMinutes(v)
+                key.startsWith("cook") -> if (out.cook == null) out.cook = Durations.looseMinutes(v)
+                key.startsWith("total") || key.startsWith("ready") -> if (out.total == null) out.total = Durations.looseMinutes(v)
+                else -> if (out.servings == null) out.servings = Regex("""\d+""").find(v)?.value?.toIntOrNull()?.takeIf { it > 0 }
+            }
+        }
+        return out
+    }
+
     private fun heuristic(doc: Document, pageUrl: String?): ImportDraft {
         val title = clean(doc.selectFirst("meta[property=og:title]")?.attr("content") ?: doc.selectFirst("h1")?.text() ?: doc.title())
             .replace(Regex("""\s*[|\-–—]\s*[^|\-–—]{0,40}$"""), "").trim()
@@ -264,9 +304,11 @@ object WebRecipeExtractor {
         }
         val img = doc.selectFirst("meta[property=og:image]")?.attr("content")?.let { absolute(it, pageUrl) }
         val desc = clean(doc.selectFirst("meta[property=og:description]")?.attr("content") ?: doc.selectFirst("meta[name=description]")?.attr("content"))
+        val lm = labeledMeta(doc)
         val recipe = Recipe(
             title = title, description = desc, sourceUrl = pageUrl,
             sourceName = pageUrl?.let { runCatching { URI(it).host?.removePrefix("www.") }.getOrNull() },
+            prepMinutes = lm.prep, cookMinutes = lm.cook, totalMinutes = lm.total, servings = lm.servings,
             ingredients = ingredients.map { Ingredient(text = it) }, directions = steps.map { Direction(text = it, timerSeconds = Durations.timerSeconds(it)) },
         )
         val w = mutableListOf(ImportWarning("recipe", "This page has no standard recipe data, so we guessed from its layout. Please check every field.", Severity.WARNING))
@@ -280,6 +322,7 @@ object WebRecipeExtractor {
         val r = b.copy(
             title = b.title.ifBlank { f.title }, description = b.description.ifBlank { f.description },
             ingredients = b.ingredients.ifEmpty { f.ingredients }, directions = b.directions.ifEmpty { f.directions },
+            prepMinutes = b.prepMinutes ?: f.prepMinutes, cookMinutes = b.cookMinutes ?: f.cookMinutes, totalMinutes = b.totalMinutes ?: f.totalMinutes, servings = b.servings ?: f.servings,
         )
         val filled = (b.ingredients.isEmpty() && f.ingredients.isNotEmpty()) || (b.directions.isEmpty() && f.directions.isNotEmpty())
         val warnings = base.warnings.filterNot { (it.field == "ingredients" && r.ingredients.isNotEmpty()) || (it.field == "directions" && r.directions.isNotEmpty()) } +
