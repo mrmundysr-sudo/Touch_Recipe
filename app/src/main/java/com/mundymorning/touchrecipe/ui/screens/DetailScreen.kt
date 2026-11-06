@@ -100,7 +100,7 @@ fun DetailScreen(c: AppContainer, nav: NavController, id: String) {
         when (t) {
             "back" -> nav.goBackOr(Routes.collection())
             "favorite" -> vm.toggleFavorite()
-            "cook" -> if (r.directions.none { !it.header }) scope.launch { snack.showSnackbar("Add directions first, then Cook Mode can guide you.") } else nav.navigate(Routes.cook(r.id))
+            "cook" -> if (r.directions.none { !it.header }) scope.launch { snack.showSnackbar("Add directions first, then Cook Mode can guide you.") } else nav.navigate(Routes.cook(r.id, servings))
             "grocery" -> if (r.ingredients.none { !it.header }) scope.launch { snack.showSnackbar("This recipe has no ingredients yet.") } else groceryPicker = true
             "photo" -> photoMenu = true
             "ingredients_head" -> ingEditor = true

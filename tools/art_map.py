@@ -70,16 +70,14 @@ PAGES = {
         psd_id="page_05", folder="page_05_cook_mode", bg="#F2E6D0",
         targets=[
             dict(id="back", layer=4, label="Back", hint="Returns to the recipe", pad=26),
-            dict(id="clock", layer=1, label="Timer clock", hint="Shows the countdown", pad=10),
-            dict(id="start", layer=2, label="Start timer", hint="Starts, pauses or resets the timer", pad=8),
             dict(id="prev", layer=3, label="Previous step", hint="Goes to the previous step", pad=8),
             dict(id="next", layer=5, label="Next step", hint="Completes this step and goes on", pad=8),
         ],
+        # No clock / Start Timer art any more: the timer is a code-drawn button on the step card, shown only when needed.
         regions=dict(
             stepchip=(300, 192, 244, 56),
             top=(70, 262, 702, 598),
-            bottom=(70, 900, 702, 380),
-            clockface=(158, 1380, 108, 114),
+            bottom=(56, 905, 730, 617),   # one tall parchment panel (y 880-1540): the recipe's ingredients
         )),
 
     "import": dict(
