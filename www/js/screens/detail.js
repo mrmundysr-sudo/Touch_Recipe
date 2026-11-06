@@ -26,7 +26,7 @@ export function detailScreen(params, ctx, nav) {
     switch (t) {
       case 'back': nav.backOr(Routes.COLLECTION); break;
       case 'favorite': ctx.repo.setFavorite(r.id, !r.favorite); break;
-      case 'cook': if (!r.directions.some((d) => !d.header)) say('Add directions first, then Cook Mode can guide you.'); else nav.go(Routes.COOK, { id: r.id }); break;
+      case 'cook': if (!r.directions.some((d) => !d.header)) say('Add directions first, then Cook Mode can guide you.'); else nav.go(Routes.COOK, { id: r.id, servings: st.servings }); break;
       case 'grocery': if (!r.ingredients.some((i) => !i.header)) say('This recipe has no ingredients yet.'); else groceryAddSheet(ctx, r, st.servings, () => nav.go(Routes.GROCERY)); break;
       case 'photo': photoMenu(r); break;
       case 'ingredients_head': ingEditor(r); break;

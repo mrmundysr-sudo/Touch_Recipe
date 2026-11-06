@@ -3,6 +3,7 @@ import { h, mount } from '../ui/dom.js';
 import { ArtPage, place, dp, sp } from '../ui/art.js';
 import { Routes } from '../ui/nav.js';
 import { dialog, photoImg } from '../ui/widgets.js';
+import * as Q from '../engine/quantity.js';
 import * as T from '../engine/timer.js';
 import { notifier, keepAwake } from '../data/notify.js';
 
@@ -42,15 +43,17 @@ export function cookScreen(params, ctx, nav) {
     scheduleAlarm(vm.startPause());
   };
 
+  const pressTimer = () => {
+    if (!ui) return;
+    if (T.timerConfigured(ui.timer) && !T.timerRunning(ui.timer) && T.remaining(ui.timer, clock()) === 0 && ui.timer.remainingMs === 0) { vm.reset(); scheduleAlarm(vm.startPause()); } else toggleTimer();
+  };
+
   const art = ArtPage(ctx.art, 'cook', { title: 'Cook Mode', prefs: ctx.prefs, onTarget: (t) => {
     if (!ui) { if (t === 'back') nav.backOr(Routes.HUB); return; }
-    const rem = T.remaining(ui.timer, clock());
     switch (t) {
       case 'back': nav.backOr(Routes.DETAIL, { id }); break;
       case 'prev': vm.prev(); break;
       case 'next': if (vm.next()) dialog({ title: 'All steps done', text: 'Nice cooking! Finish this session, or stay and review the steps.', confirm: 'Finish', cancel: 'Keep reviewing', onConfirm: () => { vm.finish(); notifier.cancel(id); nav.backOr(Routes.DETAIL, { id }); } }); break;
-      case 'start': if (T.timerConfigured(ui.timer) && !T.timerRunning(ui.timer) && rem === 0 && ui.timer.remainingMs === 0) { vm.reset(); scheduleAlarm(vm.startPause()); } else toggleTimer(); break;
-      case 'clock': durationDialog(); break;
     }
   } });
   const { content, page } = art;
@@ -68,8 +71,35 @@ export function cookScreen(params, ctx, nav) {
     dlg = dialog({ title: 'Step timer', content: content2, confirm: 'Set', onConfirm: () => { const total = (parseInt(min.value, 10) || 0) * 60 + (parseInt(sec.value, 10) || 0); vm.setDuration(total > 0 ? total : null); notifier.cancel(id); } });
   }
 
+  let ingScroll = 0;
+  const ingBox = h('div');
+  function drawIngredients() {
+    if (!ui) return;
+    const u = ui;
+    const old = ingBox.querySelector('[data-testid=cook-ingredients]'); if (old) ingScroll = old.scrollTop;
+    const ingredients = ctx.repo.recipe(id)?.ingredients ?? u.recipe.ingredients;
+    const factor = Q.factor(u.recipe.servings, params.servings);
+    const step = u.steps[Math.min(Math.max(u.index, 0), u.steps.length - 1)];
+    const list = h('div', { class: 'scroll-y fade-bottom ia', 'data-testid': 'cook-ingredients', style: 'flex:1;min-height:0' },
+      !ingredients.length ? h('div', { style: `padding-top:8px;font-size:${sp(24)};opacity:.7` }, 'This recipe has no ingredients listed.') : null,
+      ingredients.map((ing) => {
+        if (ing.header) return h('div', { role: 'heading', 'aria-level': '3', style: `padding-top:8px;font-weight:700;color:var(--forest);font-size:${sp(26)}` }, ing.text);
+        const shown = Q.scale(ing.text, factor);
+        const toggle = () => ctx.repo.updateIngredients(id, (l) => l.map((x) => (x.id === ing.id ? { ...x, checked: !x.checked } : x)));
+        return h('div', { role: 'checkbox', tabindex: '0', 'aria-checked': String(ing.checked), 'aria-label': shown, 'data-testid': `cook-ing:${ing.id}`, class: 'row-line', style: 'min-height:48px;cursor:pointer',
+          onclick: toggle, onkeydown: (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); } } },
+          h('div', { style: `width:26px;height:26px;flex:none;border-radius:6px;border:2px solid var(--forest);background:${ing.checked ? 'var(--forest)' : 'transparent'};color:var(--cream);display:flex;align-items:center;justify-content:center;font-weight:700` }, ing.checked ? '✓' : ''),
+          h('div', { style: `font-size:${sp(25)};line-height:${sp(30)};${ing.checked ? 'text-decoration:line-through' : ''}` }, shown));
+      }));
+    mount(ingBox, h('div', { style: 'height:100%;display:flex;flex-direction:column' },
+      h('div', { role: 'heading', 'aria-level': '2', style: `font-family:var(--display);font-weight:700;font-size:${sp(34)};color:var(--forest)` }, 'Ingredients'),
+      step.image ? photoImg(ctx.photos, step.image, { alt: `Photo for step ${u.index + 1}`, cls: 'step-photo' }) : null, list));
+    list.scrollTop = ingScroll;
+  }
+
   function render() {
     mount(dyn);
+    live.clock = live.label = null;
     if (missing) {
       const m = h('div', { style: 'display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:24px;color:var(--ink)' },
         h('div', { style: `font-family:var(--display);font-size:${sp(44)};font-weight:700` }, 'Nothing to cook yet'),
@@ -77,53 +107,43 @@ export function cookScreen(params, ctx, nav) {
       place(m, page.region('top')); dyn.append(m); return;
     }
     if (!ui) return;
-    const now = clock();
     const u = ui, step = u.steps[Math.min(Math.max(u.index, 0), u.steps.length - 1)];
-    const rem = T.remaining(u.timer, now);
     art.stage.parentElement.setAttribute('aria-label', `Cook Mode: ${u.recipe.title}`);
     const chip = place(h('div', { role: 'text', 'aria-label': `Step ${u.index + 1} of ${u.steps.length}`, style: 'display:flex;align-items:center;justify-content:center;pointer-events:none' }), page.region('stepchip'));
     chip.append(h('div', { class: 'fit', style: `font-weight:700;font-size:${sp(26)};color:var(--ink);text-align:center` }, `Step ${u.index + 1} of ${u.steps.length}`));
-    const timerText = live.timerText = h('div', { style: `font-weight:700;font-size:${sp(32)};color:var(--forest)` });
-    const top = place(h('div', { style: `padding:${dp(70)} ${dp(22)};display:flex;flex-direction:column;color:var(--ink);overflow:hidden` },
+    // the timer appears only when the step has one (or the cook adds one)
+    let timerRow;
+    if (T.timerConfigured(u.timer)) {
+      live.label = h('span', { 'data-testid': 'timer-label', style: `font-family:var(--display);font-weight:600;font-size:${sp(30)}` });
+      live.clock = h('span', { 'data-testid': 'clock-face', style: `margin-left:${dp(16)};font-weight:700;font-size:${sp(36)};font-variant-numeric:tabular-nums` });
+      timerRow = h('div', null,
+        h('div', { class: 'row-line', style: 'gap:0;flex-wrap:wrap' },
+          h('button', { type: 'button', 'data-testid': 'timer-button', style: `min-height:48px;border:0;border-radius:${dp(18)};background:#CF4A27;color:#FFF4E0;padding:${dp(8)} ${dp(22)};cursor:pointer`, onclick: pressTimer }, live.label),
+          live.clock,
+          h('button', { class: 'text-btn', type: 'button', 'data-testid': 'timer-change', style: `color:var(--forest);font-size:${sp(22)}`, onclick: durationDialog }, 'Change')),
+        u.timerStep !== u.index ? h('div', { style: `color:var(--forest);font-weight:600;font-size:${sp(22)}` }, `(timer from step ${u.timerStep + 1})`) : null);
+    } else timerRow = h('button', { class: 'text-btn', type: 'button', 'data-testid': 'timer-add', style: `color:var(--forest);font-weight:600;font-size:${sp(24)};padding:0`, onclick: durationDialog }, '⏱ Add a timer');
+    const progress = u.completed.size / u.steps.length;
+    const top = place(h('div', { style: `padding:${dp(100)} ${dp(22)} ${dp(16)};display:flex;flex-direction:column;color:var(--ink);overflow:hidden` },
       h('div', { style: `font-weight:600;font-size:${sp(24)};color:var(--forest);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden` }, u.recipe.title.trim() || 'Recipe'),
-      h('div', { class: 'row-line', style: 'gap:0' }, h('div', { 'data-testid': 'step-number', style: `font-family:var(--display);font-weight:700;font-size:${sp(96)};color:var(--tomato);line-height:1.1` }, String(u.index + 1)),
+      h('div', { class: 'row-line', style: 'gap:0' }, h('div', { 'data-testid': 'step-number', style: `font-family:var(--display);font-weight:700;font-size:${sp(80)};color:var(--tomato);line-height:1.1` }, String(u.index + 1)),
         u.completed.has(u.index) ? h('div', { 'data-testid': 'step-done', style: `margin-left:8px;color:var(--forest);font-weight:700;font-size:${sp(28)}` }, '✓ done') : null),
       h('div', { class: 'scroll-y ia', 'data-testid': 'step-text', style: `font-size:${sp(38)};line-height:${sp(50)};flex:0 1 auto;min-height:0` }, step.text),
-      h('div', { style: `height:${dp(8)}` }), timerText), page.region('top'));
-    const progress = u.completed.size / u.steps.length;
-    const list = u.steps[u.index]?.image
-      ? photoImg(ctx.photos, step.image, { alt: `Photo for step ${u.index + 1}`, cls: 'step-photo' })
-      : h('div', { class: 'scroll-y fade-bottom ia', 'data-testid': 'step-list', style: 'flex:1;min-height:0' }, u.steps.map((d, i) => {
-        const done = u.completed.has(i);
-        return h('div', { class: 'row-line', role: 'button', tabindex: '0', 'aria-label': `Go to step ${i + 1}. ${done ? 'Completed' : i === u.index ? 'Current' : 'Not done'}. ${d.text}`, style: 'min-height:48px;cursor:pointer;gap:10px',
-          onclick: () => vm.jump(i), onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); vm.jump(i); } } },
-          h('div', { style: `width:28px;height:28px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;background:${done ? 'var(--forest)' : 'transparent'};color:${done ? 'var(--cream)' : 'var(--ink)'};border:2px solid ${i === u.index ? 'var(--tomato)' : 'var(--forest)'}` }, done ? '✓' : String(i + 1)),
-          h('div', { style: `flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:${sp(24)};font-weight:${i === u.index ? 700 : 400}` }, d.text));
-      }));
-    const bottom = place(h('div', { style: `padding:${dp(36)} ${dp(22)} ${dp(76)};display:flex;flex-direction:column;color:var(--ink);overflow:hidden` },
-      h('div', { role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.round(progress * 100)), 'aria-label': `${u.completed.size} of ${u.steps.length} steps completed`, 'data-testid': 'cook-progress', style: 'height:10px;border-radius:5px;background:var(--cream-deep);overflow:hidden;flex:none' },
-        h('div', { style: `height:100%;width:${progress * 100}%;background:var(--tomato)` })),
-      h('div', { style: `padding:4px 0;font-weight:600;font-size:${sp(24)}` }, `${u.completed.size} of ${u.steps.length} steps done`), list), page.region('bottom'));
-    const face = place(h('div', { 'aria-hidden': 'true', style: 'border-radius:50%;background:#FBF3E0;display:flex;align-items:center;justify-content:center;pointer-events:none;overflow:hidden' }), page.region('clockface'));
-    live.clock = h('div', { 'data-testid': 'clock-face', style: `font-weight:700;font-size:${sp(30)};color:var(--ink);text-align:center;padding:0 ${dp(8)};white-space:nowrap` });
-    face.append(live.clock);
-    const sb = page.target('start').box;
-    const lbl = place(h('div', { 'aria-hidden': 'true', style: `border-radius:${dp(18)};background:#CF4A27;display:flex;align-items:center;justify-content:center;pointer-events:none` }), { x: sb.x + sb.w * 0.2, y: sb.y + sb.h * 0.2, w: sb.w * 0.6, h: sb.h * 0.6 });
-    live.label = h('div', { 'data-testid': 'timer-label', style: `font-family:var(--display);font-weight:600;font-size:${sp(40)};color:#FFF4E0;text-align:center;white-space:nowrap;padding:0 ${dp(6)}` });
-    lbl.append(live.label);
-    dyn.append(chip, top, bottom, face, lbl);
-    tick();
-    // keep the active row in view
-    const row = bottom.querySelectorAll('[data-testid=step-list] [role=button]')[u.index]; row?.scrollIntoView?.({ block: 'nearest' });
+      h('div', { style: `height:${dp(8)}` }), timerRow,
+      h('div', { role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.round(progress * 100)), 'aria-label': `${u.completed.size} of ${u.steps.length} steps completed`, 'data-testid': 'cook-progress',
+        style: `margin-top:${dp(6)};height:8px;border-radius:4px;background:var(--cream-deep);overflow:hidden;flex:none` }, h('div', { style: `height:100%;width:${progress * 100}%;background:var(--tomato)` }))), page.region('top'));
+    const bottom = place(h('div', { style: `padding:${dp(10)} ${dp(18)};color:var(--ink);overflow:hidden` }, ingBox), page.region('bottom'));
+    dyn.append(chip, top, bottom);
+    drawIngredients(); tick();
   }
 
   function tick() {
-    if (!ui || !live.clock) return;
+    if (!ui) return;
     const now = clock(), u = ui, rem = T.remaining(u.timer, now);
-    const shown = T.timerConfigured(u.timer) ? T.formatMs(u.timer.endAtMs != null || u.timer.remainingMs > 0 ? rem : u.timer.totalMs) : '--:--';
-    live.clock.textContent = shown;
-    live.timerText.textContent = !T.timerConfigured(u.timer) ? 'No timer for this step' : `⏱ ${shown}` + (u.timerStep !== u.index ? `  (timer from step ${u.timerStep + 1})` : '');
-    live.label.textContent = !T.timerConfigured(u.timer) ? 'Set timer' : T.timerRunning(u.timer) ? 'Pause timer' : rem === 0 && u.timer.remainingMs === 0 ? 'Restart timer' : u.timer.remainingMs > 0 && u.timer.remainingMs < u.timer.totalMs ? 'Resume timer' : 'Start timer';
+    if (live.clock) {
+      live.clock.textContent = T.formatMs(u.timer.endAtMs != null || u.timer.remainingMs > 0 ? rem : u.timer.totalMs);
+      live.label.textContent = T.timerRunning(u.timer) ? 'Pause timer' : rem === 0 && u.timer.remainingMs === 0 ? 'Restart timer' : u.timer.remainingMs > 0 && u.timer.remainingMs < u.timer.totalMs ? 'Resume timer' : 'Start timer';
+    }
     if (T.timerRunning(u.timer) && rem === 0 && !timeUpShown) {
       timeUpShown = true; vm.timerFinished(); notifier.cancel(id);
       if (ctx.prefs.timerVibrate) notifier.buzz();
@@ -144,6 +164,7 @@ export function cookScreen(params, ctx, nav) {
   })();
   ticker = setInterval(() => { if (alive) tick(); }, 250);
   stopAwake = ctx.prefs.keepAwake ? keepAwake(true) : null;
-  art.destroy = () => { alive = false; clearInterval(ticker); stopAwake && stopAwake(); };
+  const unRepo = ctx.repo.subscribe(() => { if (alive && art.el.isConnected && ui) drawIngredients(); });
+  art.destroy = () => { alive = false; clearInterval(ticker); stopAwake && stopAwake(); unRepo(); };
   return art;
 }
