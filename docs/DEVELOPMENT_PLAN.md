@@ -1,6 +1,6 @@
 # Touch Recipe — Development Plan
 
-> Status: Planning only. Do not implement until the owner approves the scoped plan.
+> Status: Phase 1–2 and the Phase 3 planner/grocery work are implemented for the first release (see DEC-013..DEC-019 and the 2026-10-30 work report). Owner review, device testing and release approval are still pending.
 
 ## Source of truth and working rules
 - GitHub is authoritative. Verify repository, branches, commits, PRs and Actions before each assignment.
@@ -63,8 +63,8 @@
 - Known limitations and manual checks are documented; verified APK attached when implementation is authorized.
 
 ## Approval
-- **Development authorized:** No.
-- **Approved scope / date:** Pending.
+- **Development authorized:** Yes, for the first-release scope in the 2026-10-30 assignment (DEC-013). Merge, publish and release remain unauthorized.
+- **Approved scope / date:** Assignment of 2026-10-30; owner confirmation of the resulting build pending.
 
 ## Persistent knowledge and component reuse
 - Review `docs/knowledge/` before authorized assignments; create a dated work report after substantial work.

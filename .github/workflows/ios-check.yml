@@ -1,0 +1,79 @@
+# Touch Recipe (iOS): unsigned build check. It proves the Capacitor project generates, patches, compiles for the iOS
+# Simulator, launches and renders, and runs the JavaScript tests. It uses NO secrets and NO signing and never uploads
+# anything. TestFlight delivery uses the studio's existing portfolio launcher (see docs/IOS.md); this is not a release path.
+name: iOS build check
+
+on:
+  push:
+    branches: ['claude/ios-**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-check-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUNDLE_ID: com.mundymorning.touchrecipe
+
+jobs:
+  check:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+      - name: Install, test, generate and patch the iOS project (same steps as the portfolio launcher)
+        run: |
+          npm install
+          npm test
+          npx cap add ios
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install pillow
+          npx cap sync ios
+          "$RUNNER_TEMP/venv/bin/python" tools/patch_ios.py
+      - name: CI-only - make the app tour every screen (flag exists only in this runner's generated copy)
+        run: sed -i '' 's#<head>#<head><script>window.__TOUR__=1</script>#' ios/App/App/public/index.html && grep -c __TOUR__ ios/App/App/public/index.html
+      - name: Build for the iOS Simulator (unsigned)
+        run: |
+          cd ios/App
+          DEV=$(xcrun simctl list devices available | grep -E "iPhone [0-9]+" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          echo "DEV=$DEV" >> "$GITHUB_ENV"
+          xcrun simctl boot "$DEV" || true
+          xcodebuild build -workspace App.xcworkspace -scheme App -configuration Debug \
+            -destination "id=$DEV" -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO \
+            MARKETING_VERSION=1.0 CURRENT_PROJECT_VERSION=${{ github.run_number }} TARGETED_DEVICE_FAMILY=1
+      - name: Launch and capture screenshots
+        run: |
+          APP=$(find "$RUNNER_TEMP/dd" -name "App.app" -path "*Debug-iphonesimulator*" | head -1)
+          xcrun simctl install "$DEV" "$APP"
+          xcrun simctl launch "$DEV" "$BUNDLE_ID"
+          mkdir -p "$RUNNER_TEMP/shots"
+          sleep 5;  xcrun simctl io "$DEV" screenshot "$RUNNER_TEMP/shots/00-splash.png"
+          sleep 3
+          for i in $(seq 1 12); do
+            sleep 4.4
+            n=$(printf '%02d' $i)
+            xcrun simctl io "$DEV" screenshot "$RUNNER_TEMP/shots/tour-$n.png"
+          done
+      - name: Print downscaled screenshots into the log (so they can be reviewed without artifact access)
+        run: |
+          cd "$RUNNER_TEMP/shots"
+          for f in *.png; do
+            sips -Z 360 -s format jpeg -s formatOptions 50 "$f" --out "${f%.png}.jpg" >/dev/null
+            echo "SHOT-BEGIN $f"
+            base64 -i "${f%.png}.jpg" | fold -w 120
+            echo "SHOT-END $f"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-simulator-screenshots
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore

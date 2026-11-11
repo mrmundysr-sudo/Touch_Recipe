@@ -6,11 +6,12 @@
 - Repository: `mrmundysr-sudo/Touch_Recipe` (private).
 - Default branch: `main`; initial repository is docs-only.
 - Product planning branch: `planning/touch-recipe-product-discovery`.
-- App source branch: Not established; no app implementation found at planning start.
-- Latest verified APK / successful workflow: None recorded.
+- Android source branch (current): `claude/gallant-knuth-8dfywe` (open-parchment Grocery List; includes `claude/relaxed-faraday-ijecx2` @ `ea5f0e2`). Earlier Android line: `claude/blissful-rubin-d0ni9m`. Never merged to `main`.
+- iOS source branch: `claude/ios-testflight` (Capacitor app at the repo root, started from `claude/gallant-knuth-8dfywe` @ `0d496a5`; see `docs/IOS.md`). Never merged.
+- Latest verified APK / successful workflow: see the work report; local debug and release builds succeeded in the build sandbox; CI results are recorded there once run.
 - Open PRs: Check live GitHub.
 - Current task: Product discovery, feature scope, import feasibility, visual flow and asset mapping plan.
-- Last reviewed: 2026-10-29.
+- Last reviewed: 2026-10-30.
 - Base commit: verified from live repository at task start; refresh before implementation.
 
 ## Startup requirements
