@@ -66,7 +66,7 @@ object PageScan {
         return sb.toString().replace('\u00a0', ' ').replace(Regex("""\s+"""), " ").replace(Regex(""" ([,.;:)])"""), "$1").replace("( ", "(").trim()
     }
     private fun norm(s: String) = s.replace(' ', ' ').replace(Regex("""\s+"""), " ").trim()
-    private val bulletRe = Regex("""^[\s•·●○▪■□◦☐▢✓✔*+>–—-]+(?=\S)""")
+    private val bulletRe = Regex("""^[^\p{L}\p{Nd}(\[¼½¾⅓⅔⅛⅜⅝⅞]+(?=\S)""")
     private val stepNumRe = Regex("""^\s*(?:step\s*)?\d{1,2}\s*[.):]\s+(?=\S)|^\s*step\s*\d{1,2}\s*[.):\-–—]?\s*""", RegexOption.IGNORE_CASE)
     private fun cleanIng(s: String) = norm(s).replace(bulletRe, "").trim()
     private fun cleanStep(s: String) = norm(s).replace(bulletRe, "").replace(stepNumRe, "").trim()
@@ -170,7 +170,7 @@ object PageScan {
             if (el.tagName() in setOf("li", "a", "span", "label", "input", "p", "h1", "h2", "h3", "h4", "h5", "h6", "body", "html", "main", "article")) continue
             if (ingredientRoot != null && (el === ingredientRoot || ingredientRoot.parents().contains(el))) continue
             val len = el.text().length
-            if (len < 40 || (bodyLen > 0 && len > bodyLen * 0.7)) continue
+            if (len < 40 || (bodyLen > 3000 && len > bodyLen * 0.7)) continue
             val lines = listLines(el, ::cleanStep, paragraphs = true)
             val items = lines.filter { !it.header }.map { it.text }
             if (items.isEmpty() || items.size > 80) continue

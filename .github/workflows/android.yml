@@ -4,7 +4,7 @@ name: Android CI
 # and never touches signing material (release is built unsigned unless the owner adds repository secrets).
 on:
   push:
-    branches: ['claude/**', 'planning/**']
+    branches: ['claude/**', 'planning/**', 'ccr-**']
   pull_request:
   workflow_dispatch:
 
@@ -21,8 +21,22 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
       - uses: gradle/actions/setup-gradle@v4
-      - name: Unit + Robolectric UI tests
+      - name: Fetch the real-page benchmark corpus (recipe-scrapers test data, MIT, pinned commit; not stored in this repository)
+        run: |
+          set -euo pipefail
+          git init -q "$RUNNER_TEMP/recipe-scrapers" && cd "$RUNNER_TEMP/recipe-scrapers"
+          git remote add origin https://github.com/hhursev/recipe-scrapers.git
+          git fetch -q --depth 1 origin 00b529730a619da361facc7d0b94f0dd26bd517f
+          git checkout -q FETCH_HEAD && git log -1 --format='corpus commit %H %ci'
+          echo "TR_CORPUS_DIR=$RUNNER_TEMP/recipe-scrapers/tests/test_data" >> "$GITHUB_ENV"
+        continue-on-error: true
+      - name: Unit + Robolectric UI tests (includes the real-page importer benchmark when the corpus was fetched)
         run: ./gradlew :app:testDebugUnitTest --stacktrace
+      - name: Show the importer benchmark line
+        if: always()
+        run: |
+          line=$(grep -rhao "REAL-PAGE BENCHMARK[^]]*" app/build/test-results/testDebugUnitTest | head -1 || true)
+          if [ -n "$line" ]; then echo "$line" | tee -a "$GITHUB_STEP_SUMMARY"; else echo "::warning::The real-page importer benchmark did not run (corpus not fetched)."; fi
       - name: Upload test reports and review screenshots
         if: always()
         uses: actions/upload-artifact@v4

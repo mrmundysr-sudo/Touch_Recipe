@@ -15,7 +15,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = (System.getenv("TR_VERSION_CODE") ?: "1").toInt()
-        versionName = "1.0.0"
+        versionName = "1.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ksp { arg("room.schemaLocation", "$projectDir/schemas") }
     }
@@ -91,6 +91,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.jsoup)
     implementation(libs.mlkit.text.recognition)
+    // Reads the text a PDF already contains (Apache-2.0). Used before any OCR.
+    implementation(libs.pdfbox.android)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

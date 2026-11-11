@@ -2,7 +2,11 @@ package com.mundymorning.touchrecipe.data
 
 import android.content.Context
 import android.net.Uri
+import com.mundymorning.touchrecipe.core.importer.LayoutReader
+import com.mundymorning.touchrecipe.core.importer.TextLine
 import com.mundymorning.touchrecipe.core.importer.TextRecipeParser
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.mundymorning.touchrecipe.core.importer.WebRecipeExtractor
 import com.mundymorning.touchrecipe.core.model.*
 import kotlinx.serialization.json.Json
@@ -113,30 +117,84 @@ class ImportService(
     }
 
     suspend fun fromImages(uris: List<Uri>, onStatus: (String) -> Unit): ImportDraft {
-        val parts = mutableListOf<String>()
+        val lines = mutableListOf<TextLine>()
         uris.forEachIndexed { i, u ->
             onStatus("Reading text from the photo${if (uris.size > 1) " ${i + 1} of ${uris.size}" else ""}…")
             val bmp = ImageLoader.decode(context, u) ?: throw ImportFailure("That image could not be opened.")
-            parts += try { ocr.recognize(bmp) } catch (e: OcrUnavailable) { throw ImportFailure((e.message ?: "Text recognition failed.") + " You can still use Paste or Type Recipe.", retryable = true) }
+            lines += try { ocr.recognizeLines(bmp, i) } catch (e: OcrUnavailable) { throw ImportFailure((e.message ?: "Text recognition failed.") + " You can still use Paste or Type Recipe.", retryable = true) }
         }
-        return ocrDraft(parts.joinToString("\n\n"))
+        return ocrDraft(lines)
     }
 
+    /**
+     * A PDF is read from its own text wherever it has any: exact characters, no recognition errors. Pages that are
+     * only pictures (scans), or whose text layer is damaged, are recognised on-device instead. Both kinds can be mixed
+     * in one document, and the reading order is rebuilt from where the text sits on each page.
+     */
     suspend fun fromPdf(uri: Uri, onStatus: (String) -> Unit): ImportDraft {
         onStatus("Opening the PDF…")
-        val pages = try { PdfPages.render(context, uri) } catch (e: Exception) { throw ImportFailure("That PDF could not be opened. It may be damaged or password protected.") }
-        if (pages.isEmpty()) throw ImportFailure("That PDF has no pages we can read.")
-        val parts = pages.mapIndexed { i, b ->
-            onStatus("Reading page ${i + 1} of ${pages.size}…")
-            try { ocr.recognize(b) } catch (e: OcrUnavailable) { throw ImportFailure((e.message ?: "Text recognition failed.") + " You can still use Paste or Type Recipe.", retryable = true) }
-        }
-        val d = ocrDraft(parts.joinToString("\n\n"))
-        return if (pages.size >= PdfPages.MAX_PAGES) d.copy(warnings = d.warnings + ImportWarning("recipe", "Only the first ${PdfPages.MAX_PAGES} pages were read.", Severity.INFO)) else d
+        val file = PdfPages.copyToCache(context, uri) ?: throw ImportFailure("That PDF could not be opened.")
+        try {
+            val layer = withContext(Dispatchers.IO) { readTextLayer(file) }
+            val pageCount = layer?.pages?.size ?: PdfPages.pageCount(file)
+            if (pageCount == 0) throw ImportFailure(if (layer?.locked == true) "That PDF is password protected, so it can't be read. Open it in a PDF app and use Print or Share to make an unlocked copy, or use Paste or Type Recipe."
+                else "That PDF could not be opened. It may be damaged or password protected.")
+            val lines = mutableListOf<TextLine>()
+            val notes = mutableListOf<ImportWarning>()
+            var ocrPages = 0; var skipped = 0
+            val readable = minOf(pageCount, PdfPages.MAX_PAGES)
+            for (i in 0 until readable) {
+                val words = layer?.pages?.getOrNull(i).orEmpty()
+                val text = words.joinToString(" ") { it.text }
+                val usable = text.count { it.isLetterOrDigit() } >= 30 && !TextRecipeParser.looksGarbled(text)
+                if (usable) { lines += words; continue }
+                // a picture-only page, or a text layer damaged by web-font ligatures
+                if (ocrPages >= PdfPages.MAX_OCR_PAGES) { skipped++; if (words.isNotEmpty()) lines += words; continue }
+                onStatus("Reading page ${i + 1} of $readable…")
+                val bmp = PdfPages.renderPage(file, i)
+                val recognised = if (bmp == null) emptyList() else try { ocr.recognizeLines(bmp, i) } catch (e: OcrUnavailable) {
+                    if (words.isEmpty() && lines.isEmpty() && i == readable - 1) throw ImportFailure((e.message ?: "Text recognition failed.") + " You can still use Paste or Type Recipe.", retryable = true)
+                    emptyList()
+                }
+                ocrPages++
+                val recognisedChars = recognised.sumOf { it.text.length }
+                // keep the damaged layer when recognition found clearly less than it holds
+                if (words.isNotEmpty() && recognisedChars < text.length * 0.8) {
+                    lines += words
+                    notes += ImportWarning("recipe", "Page ${i + 1} of the PDF has damaged text (some letters may be wrong or missing). Please check it against the original.")
+                } else lines += recognised
+            }
+            if (lines.isEmpty()) throw ImportFailure("No text could be found in that PDF. If it is a scan, try a sharper copy, or use Paste or Type Recipe.", retryable = true)
+            if (pageCount > readable) notes += ImportWarning("recipe", "This PDF has $pageCount pages; only the first $readable were read. The rest was not imported.")
+            if (skipped > 0) notes += ImportWarning("recipe", "$skipped scanned page${if (skipped == 1) " was" else "s were"} not read (only ${PdfPages.MAX_OCR_PAGES} scanned pages are read per import).")
+            val draft = if (ocrPages > 0) ocrDraft(lines, layer?.title) else TextRecipeParser.parse(LayoutReader.read(lines), ImportMethod.TEXT, titleHint = layer?.title)
+            return draft.copy(warnings = draft.warnings + notes)
+        } finally { file.delete() }
     }
 
-    private fun ocrDraft(text: String): ImportDraft {
+    private class TextLayer(val pages: List<List<TextLine>>, val title: String?, val locked: Boolean)
+
+    /** The PDF's own text, page by page. Null when the document cannot be parsed; the pages can then still be rendered and recognised. */
+    private fun readTextLayer(file: java.io.File): TextLayer? = try {
+        com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(context.applicationContext)
+        com.tom_roush.pdfbox.pdmodel.PDDocument.load(file, com.tom_roush.pdfbox.io.MemoryUsageSetting.setupMixed(24L * 1024 * 1024)).use { doc ->
+            if (doc.isEncrypted) runCatching { doc.setAllSecurityToBeRemoved(true) }
+            val n = minOf(doc.numberOfPages, PdfPages.MAX_PAGES)
+            val pages = (0 until n).map { i -> runCatching { PdfTextLayer.page(doc, i) }.getOrDefault(emptyList()) } + List(doc.numberOfPages - n) { emptyList() }
+            val title = runCatching { doc.documentInformation?.title }.getOrNull()?.takeIf { it.isNotBlank() && !it.endsWith(".pdf", true) && !it.startsWith("Microsoft Word", true) }?.let { TextRecipeParser.pageTitle(it) }
+            TextLayer(pages, title, false)
+        }
+    } catch (e: com.tom_roush.pdfbox.pdmodel.encryption.InvalidPasswordException) { TextLayer(emptyList(), null, true)
+    } catch (e: Throwable) { null }
+
+    private fun ocrDraft(lines: List<TextLine>, titleHint: String? = null): ImportDraft {
+        val text = LayoutReader.read(lines)
         if (text.isBlank()) throw ImportFailure("No text could be found. Try a sharper, well-lit photo, or use Paste or Type Recipe.", retryable = true)
-        return TextRecipeParser.parse(text, ImportMethod.OCR)
+        val d = TextRecipeParser.parse(text, ImportMethod.OCR, titleHint = titleHint)
+        // lines the recogniser itself was unsure of are named, so they are checked rather than trusted
+        val unsure = lines.filter { (it.confidence ?: 1f) < 0.5f && it.text.trim().length >= 3 }.map { it.text.trim() }.distinct()
+        return if (unsure.isEmpty()) d else d.copy(warnings = d.warnings + ImportWarning("recipe",
+            "${unsure.size} line${if (unsure.size == 1) " was" else "s were"} hard to read and may be wrong: ${unsure.take(4).joinToString("; ")}${if (unsure.size > 4) "…" else ""}"))
     }
 
     suspend fun fromFile(f: ImportInput.File, onStatus: (String) -> Unit): ImportDraft {

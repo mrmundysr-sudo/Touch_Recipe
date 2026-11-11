@@ -71,6 +71,15 @@ class ImportViewModel(private val c: AppContainer) : ViewModel() {
     fun cancel() { job?.cancel(); ui.value = ImportUi.Idle }
     fun dismiss() { if (ui.value !is ImportUi.Done) ui.value = ImportUi.Idle }
     fun discard() { c.importSession.clear(); ui.value = ImportUi.Idle }
+
+    /** Source lines that could not be placed go into the recipe's notes on the way to Review, so nothing found is ever lost. */
+    fun keepUnplaced() {
+        val d = c.importSession.draft.value ?: return
+        if (d.unplaced.isEmpty()) return
+        val block = "From the original (not placed automatically):\n" + d.unplaced.joinToString("\n") { "• $it" }
+        val updated = d.copy(recipe = d.recipe.copy(notes = listOf(d.recipe.notes, block).filter { it.isNotBlank() }.joinToString("\n\n")), unplaced = emptyList())
+        c.importSession.draft.value = updated; ui.value = ImportUi.Done(updated)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -104,7 +113,7 @@ fun ImportScreen(c: AppContainer, nav: NavController) {
             "scan" -> scanSheet = true
             "file" -> filePicker.launch(arrayOf("application/pdf", "image/*", "text/plain", "text/html"))
             "share" -> shareHelp = true
-            "continue" -> if (c.importSession.draft.value != null) nav.navigate(Routes.review()) else scope.launch { snack.showSnackbar("Add a recipe first: paste a link, type or paste text, scan, or choose a file.") }
+            "continue" -> if (c.importSession.draft.value != null) { vm.keepUnplaced(); nav.navigate(Routes.review()) } else scope.launch { snack.showSnackbar("Add a recipe first: paste a link, type or paste text, scan, or choose a file.") }
         }
     })
 
@@ -129,7 +138,7 @@ fun ImportScreen(c: AppContainer, nav: NavController) {
     }
     if (resultOpen && ui !is ImportUi.Idle) ResultSheet(ui, onCancel = { vm.cancel(); resultOpen = false }, onRetry = vm::retry,
         onClose = { resultOpen = false; vm.dismiss() }, onPasteInstead = { resultOpen = false; vm.dismiss(); textSheet = true },
-        onContinue = { resultOpen = false; nav.navigate(Routes.review()) }, onDiscard = { resultOpen = false; vm.discard() })
+        onContinue = { resultOpen = false; vm.keepUnplaced(); nav.navigate(Routes.review()) }, onDiscard = { resultOpen = false; vm.discard() })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -192,7 +201,9 @@ private fun ResultSheet(ui: ImportUi, onCancel: () -> Unit, onRetry: () -> Unit,
                 }
                 is ImportUi.Done -> {
                     val d = ui.draft; val r = d.recipe
-                    Text(if (d.confidence == Confidence.HIGH) "We found a recipe" else "We found some of a recipe", style = MaterialTheme.typography.headlineSmall)
+                    val findings = d.warnings.filter { it.severity != Severity.INFO }
+                    val missing = findings.any { it.field == "ingredients" || it.field == "directions" || it.field == "title" } || d.unplaced.isNotEmpty()
+                    Text(if (missing) "This import may be incomplete" else if (d.confidence == Confidence.HIGH) "We found a recipe" else "We found some of a recipe", Modifier.testTag("result-headline"), style = MaterialTheme.typography.headlineSmall)
                     Text(r.title.ifBlank { "Untitled recipe" }, style = MaterialTheme.typography.titleLarge)
                     Text("${r.ingredients.count { !it.header }} ingredients · ${r.directions.count { !it.header }} directions" + (r.servings?.let { " · serves $it" } ?: ""))
                     Text(when (d.confidence) {
@@ -200,7 +211,17 @@ private fun ResultSheet(ui: ImportUi, onCancel: () -> Unit, onRetry: () -> Unit,
                         Confidence.MEDIUM -> "Some parts were interpreted automatically. Please check the details before saving."
                         Confidence.LOW -> "This was guessed from text or layout, so mistakes are likely. Please check carefully; everything can be edited."
                     }, style = MaterialTheme.typography.bodyMedium)
-                    d.warnings.filter { it.severity != Severity.INFO }.forEach { Text("⚠ ${it.message}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                    if (findings.isNotEmpty()) Text("Please check:", style = MaterialTheme.typography.titleSmall)
+                    findings.forEach { Text("⚠ ${it.message}", Modifier.testTag("result-finding"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error) }
+                    if (d.unplaced.isNotEmpty()) {
+                        Text("Found in the original but not placed (${d.unplaced.size}):", style = MaterialTheme.typography.titleSmall)
+                        Column(Modifier.testTag("result-unplaced")) {
+                            d.unplaced.take(12).forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
+                            if (d.unplaced.size > 12) Text("…and ${d.unplaced.size - 12} more", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text("These lines will be added to the recipe's notes so nothing is lost. You can move or delete them on the next screen.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    d.warnings.filter { it.severity == Severity.INFO && (it.field == "ingredients" || it.field == "directions") }.forEach { Text(it.message, style = MaterialTheme.typography.bodySmall) }
                     BigButton("Continue to Review", onContinue, Modifier.fillMaxWidth().testTag("result-continue"))
                     TextButton(onDiscard, Modifier.fillMaxWidth()) { Text("Discard this import") }
                 }

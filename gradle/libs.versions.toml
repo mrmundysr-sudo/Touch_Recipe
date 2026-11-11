@@ -11,12 +11,14 @@ coroutines = "1.9.0"
 serialization = "1.7.3"
 jsoup = "1.18.3"
 mlkit = "16.0.1"
+pdfbox = "2.0.27.0"
 coreKtx = "1.15.0"
 robolectric = "4.14.1"
 junit = "4.13.2"
 testExt = "1.2.1"
 
 [libraries]
+pdfbox-android = { module = "com.tom-roush:pdfbox-android", version.ref = "pdfbox" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 compose-ui = { module = "androidx.compose.ui:ui" }
 compose-ui-graphics = { module = "androidx.compose.ui:ui-graphics" }

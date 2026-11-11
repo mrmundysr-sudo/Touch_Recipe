@@ -23,3 +23,15 @@ Opt-in live import check on a machine with internet: `./gradlew :app:testDebugUn
 
 ## iOS web shell (branch `claude/ios-testflight`)
 `npm test` runs the Node ports of the engine, importer, data/backup and art-sync tests; `node tools/e2e.cjs` drives the UI in a phone-size browser; `.github/workflows/ios-check.yml` builds and launches the generated Xcode project on a macOS runner (unsigned). Real-device checks (camera/Vision quality, notification delivery, TestFlight install) remain manual.
+
+## Importer benchmark and regression tests (2026-11)
+| What | Where | Runs |
+|---|---|---|
+| One test per failure found in the import audit (partial data blocks, missing amounts, empty data, run-together lists, plain blog pages, multi-part recipes, page furniture, numbering gaps, cut-off steps, heading variants, two-column and table layouts, running headers and footers) | `core/ImportRepairTest.kt` (27 tests, synthetic pages) | every test run |
+| Real-page benchmark: about 1,100 saved pages from about 650 sites (recipe-scrapers corpus, MIT, pinned commit `00b5297`) scored against maintained expected results, with floors that fail the build on regression | `core/RealPageBenchmarkTest.kt` | CI (corpus cloned at run time into `TR_CORPUS_DIR`); skipped when the variable is not set |
+| PDF import through the Android service with PdfBox-Android: single column, two columns, amount/name table, 3 pages with browser header and footer, picture-only page | `data/DataTest.kt`, fixtures in `src/test/resources/fixtures/pdf` (generated for the tests, original content) | every test run |
+| Two-column photo read column by column; low-confidence lines named; unplaced lines carried into notes | `data/DataTest.kt` | every test run |
+
+Run the benchmark locally: clone `https://github.com/hhursev/recipe-scrapers`, check out the pinned commit, then `TR_CORPUS_DIR=/path/to/recipe-scrapers/tests/test_data ./gradlew :app:testDebugUnitTest --tests '*RealPageBenchmarkTest'`. The result line starts with `REAL-PAGE BENCHMARK`.
+
+Measured 2026-11-11 (same pages, same scoring, before -> after): complete imports 83.6% -> 90.6%; major loss 12.6% -> 5.4%; major loss with no warning 3.5% -> 0.7%; pages with no ingredients 6.2% -> 1.4%; pages with no directions 7.4% -> 1.2%. These are saved pages: fetching live sites, real PDFs from the owner, camera recognition and handwriting are not covered and still need device testing.

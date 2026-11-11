@@ -117,8 +117,10 @@ object LayoutReader {
     /** True when the two sides are cells of the same rows (amount | ingredient) rather than independent columns. */
     private fun isTable(left: List<TextLine>, right: List<TextLine>, h: Float): Boolean {
         val paired = left.count { l -> right.any { abs(it.midY - l.midY) < h * 0.45f } }
-        val shortSide = min(left.map { it.text.length }.average(), right.map { it.text.length }.average())
-        return paired >= left.size * 0.7 && paired >= right.size * 0.6 && shortSide <= 14
+        val l = left.map { it.text.length }.average(); val r = right.map { it.text.length }.average()
+        val longer = if (l >= r) left else right
+        // cells are short on both sides and are not sentences; a list beside running text is two columns, not a table
+        return paired >= left.size * 0.7 && paired >= right.size * 0.6 && min(l, r) <= 14 && kotlin.math.max(l, r) <= 30 && longer.count { it.text.trimEnd().endsWith(".") } < longer.size * 0.3
     }
 
     private fun rowsInOrder(lines: List<TextLine>, h: Float): List<TextLine> {

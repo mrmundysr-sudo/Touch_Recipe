@@ -141,4 +141,71 @@ class DataTest {
         assertNotNull(c.importer.fetchPhoto(listOf("https://img/missing.jpg", "https://img/1.jpg")))
         assertNull(c.importer.fetchPhoto(listOf("https://img/missing.jpg")))
     }
+
+    // ---- 2026-11 importer repair: PDFs are read from their own text; recognition is only for pages that are pictures ----
+    private fun pdf(name: String) = javaClass.getResourceAsStream("/fixtures/pdf/$name")!!.use { it.readBytes() }
+
+    @Test fun digitalPdfIsReadFromItsOwnTextInEveryLayout() = blocking {
+        val c = testContainer(ctx, ocr = FakeOcr("WRONG TEXT FROM RECOGNITION"))
+        for (name in listOf("recipe-single.pdf", "recipe-twocol.pdf", "recipe-table.pdf")) {
+            val d = c.importer.import(ImportInput.Pdf(fileUri(ctx, name, pdf(name)))); val r = d.recipe
+            assertEquals(name, ImportMethod.TEXT, d.method)
+            assertEquals(name, "Brown Sugar Chocolate Chip Cookies", r.title)
+            assertEquals("$name ingredients: ${r.ingredients.map { it.text }}", 12, r.ingredients.count { !it.header })
+            assertEquals("$name directions: ${r.directions.map { it.text }}", 8, r.directions.count { !it.header })
+            assertEquals(name, "2 1/2 cups all-purpose flour", r.ingredients.first().text)
+            assertTrue("$name: a wrapped or two-cell line is one ingredient", r.ingredients.any { it.text == "1 cup (2 sticks) unsalted butter, softened" })
+            assertTrue(name, r.directions.last().text.startsWith("Cool on the sheets for 5 minutes"))
+            assertEquals(name, 36, r.servings); assertEquals(name, 20, r.prepMinutes); assertEquals(name, 11, r.cookMinutes)
+            assertFalse("$name: recognition must not be used when the PDF has text", (r.rawSource.orEmpty() + r.title).contains("WRONG"))
+            assertTrue("$name: nothing important is flagged on a clean PDF: ${d.warnings}", d.warnings.none { it.severity != Severity.INFO && (it.field == "ingredients" || it.field == "directions") })
+        }
+    }
+
+    @Test fun longPdfKeepsEveryPageAndDropsBrowserHeadersAndFooters() = blocking {
+        val c = testContainer(ctx)
+        val d = c.importer.import(ImportInput.Pdf(fileUri(ctx, "recipe-long.pdf", pdf("recipe-long.pdf")))); val r = d.recipe
+        assertEquals("Brown Sugar Chocolate Chip Cookies", r.title)
+        assertEquals(12, r.ingredients.count { !it.header }); assertEquals(listOf("For the dough", "For finishing"), r.ingredients.filter { it.header }.map { it.text })
+        assertEquals("all 24 steps across 3 pages: ${r.directions.map { it.text.take(30) }}", 24, r.directions.count { !it.header })
+        assertTrue(r.directions.none { it.text.contains("Page ") || it.text.contains("example-kitchen") })
+        assertEquals("https://www.example-kitchen.test/recipes/brown-sugar-cookies/", r.sourceUrl)
+    }
+
+    @Test fun scannedPdfGoesToRecognitionAndNeverReturnsAnEmptyRecipeQuietly() = blocking {
+        val c = testContainer(ctx, ocr = FakeOcr("Pancakes\nIngredients\n1 cup flour\n1 egg\nDirections\nMix and fry for 3 minutes."))
+        try {
+            val d = c.importer.import(ImportInput.Pdf(fileUri(ctx, "recipe-scanned.pdf", pdf("recipe-scanned.pdf"))))
+            assertEquals(ImportMethod.OCR, d.method); assertEquals("Pancakes", d.recipe.title); assertEquals(2, d.recipe.ingredients.size)
+        } catch (e: ImportFailure) {
+            // the JVM test environment may be unable to render PDF pages; the failure must then say so plainly
+            assertTrue(e.userMessage, e.userMessage.contains("No text could be found") || e.userMessage.contains("could not be opened"))
+        }
+    }
+
+    @Test fun twoColumnPhotoIsReadColumnByColumn() = blocking {
+        val left = listOf("Ingredients", "2 cups flour", "1 tsp salt", "3 large eggs", "1 cup whole milk", "2 tbsp butter")
+        val right = listOf("Directions", "Whisk the flour and the salt in a bowl.", "Beat in the eggs and then the milk.", "Rest the batter for half an hour.", "Fry in butter until golden.", "Serve at once with lemon.")
+        val ocr = object : OcrEngine {
+            override suspend fun recognize(bitmap: android.graphics.Bitmap) = ""
+            override suspend fun recognizeLines(bitmap: android.graphics.Bitmap, page: Int): List<com.mundymorning.touchrecipe.core.importer.TextLine> {
+                fun col(x: Float, lines: List<String>) = lines.mapIndexed { i, t -> com.mundymorning.touchrecipe.core.importer.TextLine(t, x, 100f + i * 16f, x + t.length * 6f, 111f + i * 16f, page, if (t.startsWith("3 large")) 0.3f else 0.95f) }
+                // the recogniser returns blocks in an arbitrary order: right column first
+                return col(300f, right) + col(40f, left) + com.mundymorning.touchrecipe.core.importer.TextLine("Pancakes", 40f, 40f, 200f, 60f, page, 0.99f)
+            }
+        }
+        val c = AppContainer(ctx, db = AppDatabase.inMemory(ctx), ocr = ocr)
+        val d = c.importer.import(ImportInput.Image(fileUri(ctx, "two-col.jpg", jpegBytes())))
+        assertEquals("Pancakes", d.recipe.title); assertEquals(left.drop(1), d.recipe.ingredients.map { it.text }); assertEquals(5, d.recipe.directions.size)
+        assertTrue("a line the recogniser was unsure of is named: ${d.warnings}", d.warnings.any { it.message.contains("hard to read") && it.message.contains("3 large eggs") })
+    }
+
+    @Test fun unplacedSourceLinesAreKeptInTheNotesOnTheWayToReview() = blocking {
+        val c = testContainer(ctx)
+        c.importSession.draft.value = ImportDraft(Recipe(title = "T", notes = "Family favourite."), ImportMethod.JSON_LD, Confidence.MEDIUM, unplaced = listOf("1 cup whole milk", "2 tbsp butter"))
+        val vm = com.mundymorning.touchrecipe.ui.screens.ImportViewModel(c); vm.keepUnplaced()
+        val r = c.importSession.draft.value!!
+        assertTrue(r.recipe.notes.startsWith("Family favourite.")); assertTrue(r.recipe.notes.contains("• 1 cup whole milk")); assertTrue(r.recipe.notes.contains("• 2 tbsp butter"))
+        assertTrue(r.unplaced.isEmpty())
+    }
 }

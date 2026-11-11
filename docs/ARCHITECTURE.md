@@ -7,6 +7,7 @@ Single Gradle module (`app`), package `com.mundymorning.touchrecipe`. Packages a
 | Recipe data model | `core/model/Models.kt` (serializable) | kotlinx.serialization |
 | Quantity parsing / safe scaling | `core/quantity/Quantity.kt` | none |
 | Import / extraction pipeline | `core/importer/` (`WebRecipeExtractor`: JSON-LD → microdata → HTML heuristics; `TextRecipeParser`: paste/OCR/captions; `Durations`) + `data/ImportService.kt` (URL, share, image/PDF/file orchestration), `data/Fetcher.kt`, `data/Ocr.kt` | jsoup, ML Kit (data layer only) |
+| Import repair layer (2026-11) | `core/importer/PageScan.kt` (reads the visible page), `Reconcile.kt` (data block vs page), `ImportValidator.kt` (completeness findings), `LayoutReader.kt` (reading order from positioned text), `data/PdfTextLayer.kt` (PDF text with positions) | jsoup; PdfBox-Android (Apache-2.0, data layer only) |
 | Dynamic editable rows | `ui/components/Components.kt` (`EditableRows`, `RowsEditorSheet`) | Compose |
 | Category manager | `core/categories/`, `data/Repository.kt`, `ui/screens/CategoryParts.kt` | Room |
 | Grocery engine | `core/grocery/` (`GroceryEngine`, `GroceryMerge`, `Units`) | `core/quantity` |

@@ -10,7 +10,7 @@ object TextRecipeParser {
     private val dirHeader = Regex("""^\W*(directions?|instructions?|method|preparation|steps?|procedure|how to make( it)?)\W*""" + headTail + """\W*$""", RegexOption.IGNORE_CASE)
     private val noteHeader = Regex("""^\W*(notes?|tips?|substitutions?|variations?|cook'?s notes?)\W*:?\s*$""", RegexOption.IGNORE_CASE)
     // any leading marks (bullets, tick boxes, circled numbers, private-use glyphs) that are not text, a digit, a fraction or a bracket
-    private val bullet = Regex("""^[^\p{L}\p{N}(\[¼½¾⅓⅔⅛⅜⅝⅞]+""")
+    private val bullet = Regex("""^[^\p{L}\p{Nd}(\[¼½¾⅓⅔⅛⅜⅝⅞]+""")
     private val stepNum = Regex("""^\s*(?:step\s*)?\d{1,2}\s*[.):\-]\s+""", RegexOption.IGNORE_CASE)
     private val qtyStart = Regex("""^\s*(?:\d|[¼½¾⅓⅔⅛⅜⅝⅞]|a\s+(?:pinch|dash|handful|few)|one\s|two\s|three\s|half\s)""", RegexOption.IGNORE_CASE)
     private val unitWord = Regex("""\b(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|grams?|g|kg|ml|l|cloves?|cans?|pinch|dash|slices?|sticks?|packages?|bunch|sprigs?)\b""", RegexOption.IGNORE_CASE)
@@ -132,7 +132,7 @@ object TextRecipeParser {
         }
         val unplaced = mutableListOf<String>()
         fun ingLike(l: String) = looksLikeIngredient(l) || PageScan.ingredientLike(bullet.replace(l, ""))
-        fun subHeader(l: String) = l.length < 50 && (l.endsWith(":") || l.startsWith("For the ", true))
+        fun subHeader(l: String) = l.length < 50 && (l.endsWith(":") || (l.startsWith("For ", true) && l.split(' ').size <= 4 && l.none { it.isDigit() || it == ',' }))
         if (ingBlocks.isNotEmpty()) {
             val best = ingBlocks.maxBy { b -> ingScore(b, dirBlocks, ::ingLike) }
             var chosen: List<String> = best.second
@@ -191,7 +191,7 @@ object TextRecipeParser {
             if (prevIng != null && !prevIng.header && !bullet.containsMatchIn(l) && !qtyStart.containsMatchIn(t) && (t.first().isLowerCase() || t.first() == '(' || prevIng.text.endsWith(",") || prevIng.text.endsWith(" and") || prevIng.text.endsWith(" or")) && t.length < 80 && !t.endsWith(":")) {
                 ingredients[ingredients.lastIndex] = prevIng.copy(text = prevIng.text + " " + t); continue
             }
-            val isHeader = t.endsWith(":") || (t.length < 40 && t.startsWith("For the ", true) && !qtyStart.containsMatchIn(t)) || (t.length < 40 && t == t.uppercase() && t.any { it.isLetter() } && !qtyStart.containsMatchIn(t))
+            val isHeader = t.endsWith(":") || (t.length < 40 && t.startsWith("For ", true) && t.split(' ').size <= 4 && t.none { it.isDigit() || it == ',' }) || (t.length < 40 && t == t.uppercase() && t.any { it.isLetter() } && !qtyStart.containsMatchIn(t))
             ingredients += Ingredient(text = if (isHeader) t.trimEnd(':').trim() else t, header = isHeader)
         }
         val directions = mergeWrapped(sections.getValue("dir").map { l -> Pair(stepNum.replace(bullet.replace(l, ""), "").trim(), bullet.containsMatchIn(l) || stepNum.containsMatchIn(l)) }.filter { it.first.isNotEmpty() })

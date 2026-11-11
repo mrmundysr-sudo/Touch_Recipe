@@ -2,17 +2,16 @@
 
 > Handoff guide only. Verify live GitHub state before acting.
 
-## Current verified planning handoff
-- Repository: `mrmundysr-sudo/Touch_Recipe` (private).
-- Default branch: `main`; initial repository is docs-only.
-- Product planning branch: `planning/touch-recipe-product-discovery`.
-- Android source branch (current): `claude/gallant-knuth-8dfywe` (open-parchment Grocery List; includes `claude/relaxed-faraday-ijecx2` @ `ea5f0e2`). Earlier Android line: `claude/blissful-rubin-d0ni9m`. Never merged to `main`.
-- iOS source branch: `claude/ios-testflight` (Capacitor app at the repo root, started from `claude/gallant-knuth-8dfywe` @ `0d496a5`; see `docs/IOS.md`). Never merged.
-- Latest verified APK / successful workflow: see the work report; local debug and release builds succeeded in the build sandbox; CI results are recorded there once run.
-- Open PRs: Check live GitHub.
-- Current task: Product discovery, feature scope, import feasibility, visual flow and asset mapping plan.
-- Last reviewed: 2026-10-30.
-- Base commit: verified from live repository at task start; refresh before implementation.
+## Current verified handoff
+- Repository: `mrmundysr-sudo/Touch_Recipe` (private). Default branch `main` (one commit, no app). Nothing is merged to `main`.
+- **Major-update branch (current work): `ccr-c5e79198-7pqe4i`.** Created from the planning branch, then merged `claude/ios-testflight` @ `8018f84` (verified to contain every other branch and all test-build tags). Holds the importer repair stage.
+- Android source before the update: `claude/gallant-knuth-8dfywe` @ `20a819b` (rollback point; last pre-update test build `devtest-recipe-42186752200-20a819b`).
+- iOS source before the update: `claude/ios-testflight` @ `8018f84` (rollback point). The iOS app (`www/`) does not yet contain the importer repairs.
+- Older lines, fully contained in the above: `claude/blissful-rubin-d0ni9m`, `claude/relaxed-faraday-ijecx2`, `planning/touch-recipe-product-discovery`.
+- Open PRs: none at 2026-11-11. Check live GitHub.
+- Current task: major update. Stage done: importer repair (web cross-check, PDF text, completeness validation). Next, after owner testing: source preservation and drafts, Recipe Rescue, scrolling layouts, artwork integration (separate stages).
+- Latest verified build and CI run: see `docs/knowledge/reports/2026-11-11-importer-repair.md`.
+- Last reviewed: 2026-11-11.
 
 ## Startup requirements
 1. Confirm exact repository and default branch.

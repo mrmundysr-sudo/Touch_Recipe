@@ -10,6 +10,7 @@ import android.os.ParcelFileDescriptor
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.mundymorning.touchrecipe.core.importer.TextLine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -20,7 +21,14 @@ import kotlin.math.max
 class OcrUnavailable(message: String) : Exception(message)
 
 /** On-device text recognition. Nothing is uploaded; the model ships inside the app. */
-interface OcrEngine { suspend fun recognize(bitmap: Bitmap): String }
+interface OcrEngine {
+    suspend fun recognize(bitmap: Bitmap): String
+    /** Recognised lines with their place in the image, so columns can be read in order. Engines without positions return lines stacked top to bottom. */
+    suspend fun recognizeLines(bitmap: Bitmap, page: Int = 0): List<TextLine> {
+        var y = 0f
+        return recognize(bitmap).lines().map { t -> (if (t.isBlank()) null else TextLine(t, 0f, y, 100f, y + 10f, page)).also { y += if (t.isBlank()) 14f else 12f } }.filterNotNull()
+    }
+}
 
 class MlKitOcr : OcrEngine {
     private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
@@ -28,6 +36,21 @@ class MlKitOcr : OcrEngine {
         try {
             recognizer.process(InputImage.fromBitmap(bitmap, 0))
                 .addOnSuccessListener { cont.resume(it.textBlocks.joinToString("\n") { b -> b.lines.joinToString("\n") { l -> l.text } }) }
+                .addOnFailureListener { cont.resumeWith(Result.failure(OcrUnavailable("Text recognition isn't available right now."))) }
+        } catch (e: Throwable) { cont.resumeWith(Result.failure(OcrUnavailable("Text recognition isn't available on this device."))) }
+    }
+
+    override suspend fun recognizeLines(bitmap: Bitmap, page: Int): List<TextLine> = suspendCancellableCoroutine { cont ->
+        try {
+            recognizer.process(InputImage.fromBitmap(bitmap, 0))
+                .addOnSuccessListener { result ->
+                    val out = ArrayList<TextLine>()
+                    for (b in result.textBlocks) for (l in b.lines) {
+                        val box = l.boundingBox ?: continue
+                        out += TextLine(l.text, box.left.toFloat(), box.top.toFloat(), box.right.toFloat(), box.bottom.toFloat(), page, runCatching { l.confidence }.getOrNull())
+                    }
+                    cont.resume(out)
+                }
                 .addOnFailureListener { cont.resumeWith(Result.failure(OcrUnavailable("Text recognition isn't available right now."))) }
         } catch (e: Throwable) { cont.resumeWith(Result.failure(OcrUnavailable("Text recognition isn't available on this device."))) }
     }
@@ -50,25 +73,37 @@ object ImageLoader {
 }
 
 object PdfPages {
-    const val MAX_PAGES = 6
-    /** Renders the first pages of a PDF so they can be recognised on-device. */
-    suspend fun render(context: Context, uri: Uri): List<Bitmap> = withContext(Dispatchers.IO) {
+    /** Most pages read from a PDF's own text. */
+    const val MAX_PAGES = 40
+    /** Most pages recognised from images (scanned PDFs): recognition is slow and memory-hungry. */
+    const val MAX_OCR_PAGES = 12
+
+    /** Copies the document into the app's cache so it can be opened by file. The caller deletes it. */
+    suspend fun copyToCache(context: Context, uri: Uri): File? = withContext(Dispatchers.IO) {
         val tmp = File.createTempFile("import", ".pdf", context.cacheDir)
-        try {
-            context.contentResolver.openInputStream(uri)?.use { i -> tmp.outputStream().use { o -> i.copyTo(o) } } ?: return@withContext emptyList()
-            ParcelFileDescriptor.open(tmp, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
+        val ok = runCatching { context.contentResolver.openInputStream(uri)?.use { i -> tmp.outputStream().use { o -> i.copyTo(o) } } != null }.getOrDefault(false)
+        if (ok) tmp else { tmp.delete(); null }
+    }
+
+    /** Renders one page (0-based) for on-device recognition. */
+    suspend fun renderPage(file: File, index: Int): Bitmap? = withContext(Dispatchers.IO) {
+        runCatching {
+            ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
                 PdfRenderer(pfd).use { r ->
-                    (0 until minOf(r.pageCount, MAX_PAGES)).map { i ->
-                        r.openPage(i).use { p ->
-                            val scale = 1800f / max(p.width, p.height)
-                            val bmp = Bitmap.createBitmap((p.width * scale).toInt().coerceAtLeast(1), (p.height * scale).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
-                            bmp.eraseColor(Color.WHITE)
-                            p.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                            bmp
-                        }
+                    if (index >= r.pageCount) return@use null
+                    r.openPage(index).use { p ->
+                        val scale = 2200f / max(p.width, p.height)
+                        val bmp = Bitmap.createBitmap((p.width * scale).toInt().coerceAtLeast(1), (p.height * scale).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+                        bmp.eraseColor(Color.WHITE)
+                        p.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        bmp
                     }
                 }
             }
-        } finally { tmp.delete() }
+        }.getOrNull()
+    }
+
+    suspend fun pageCount(file: File): Int = withContext(Dispatchers.IO) {
+        runCatching { ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd -> PdfRenderer(pfd).use { it.pageCount } } }.getOrDefault(0)
     }
 }
