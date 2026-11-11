@@ -71,6 +71,8 @@ data class ImportDraft(
     val confidence: Confidence,
     val warnings: List<ImportWarning> = emptyList(),
     val imageCandidates: List<String> = emptyList(),
+    /** Source text that looked like recipe content but could not be placed with confidence. Shown at review and kept with the recipe; never dropped. */
+    val unplaced: List<String> = emptyList(),
 ) {
     fun hasWarning(field: String) = warnings.any { it.field == field }
 }

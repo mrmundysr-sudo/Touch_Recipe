@@ -20,27 +20,53 @@ object WebRecipeExtractor {
         }
         val warnings = mutableListOf<ImportWarning>()
 
+        val page = runCatching { PageScan.scan(doc) }.getOrDefault(PageScan.Result(null, null))
         val ld = jsonLdRecipes(doc)
         var draft: ImportDraft? = null
         if (ld.isNotEmpty()) {
             // Pages sometimes carry several recipes (roundups): prefer the one with the most content.
-            val best = ld.maxBy { (it["recipeIngredient"] as? JsonArray)?.size ?: (it["ingredients"] as? JsonArray)?.size ?: 0 }
+            val best = ld.maxBy { ingredientLines(it).size * 2 + (if (it["recipeInstructions"] != null) 1 else 0) }
             draft = fromJsonLd(best, doc, pageUrl)
-            if (ld.size > 1) draft = draft.copy(warnings = draft.warnings + ImportWarning("recipe", "This page contains ${ld.size} recipes. We imported the most complete one; check that it's the one you wanted.", Severity.INFO))
+            val distinct = ld.map { clean(it["name"].str()) }.distinct().size
+            if (distinct > 1) draft = draft.copy(warnings = draft.warnings + ImportWarning("recipe", "This page contains $distinct recipes. We imported the most complete one; check that it's the one you wanted.", Severity.INFO))
         }
         if (draft == null || draft.recipe.ingredients.isEmpty() && draft.recipe.directions.isEmpty()) {
             val micro = microdata(doc, pageUrl)
-            if (micro != null && (micro.recipe.ingredients.isNotEmpty() || micro.recipe.directions.isNotEmpty())) draft = micro
+            if (micro != null && (micro.recipe.ingredients.isNotEmpty() || micro.recipe.directions.isNotEmpty())) draft = if (draft == null) micro else mergeMissing(draft, micro).copy(method = ImportMethod.MICRODATA)
         }
-        if (draft == null || draft.recipe.ingredients.isEmpty() || draft.recipe.directions.isEmpty()) {
-            val heur = heuristic(doc, pageUrl)
-            draft = if (draft == null) heur else mergeMissing(draft, heur)
-        }
-        val d = draft!!
+        draft = if (draft == null) heuristic(doc, pageUrl, page) else crossCheck(draft, doc, pageUrl, page)
+        val d = draft
         if (d.recipe.title.isBlank() || (d.recipe.ingredients.isEmpty() && d.recipe.directions.isEmpty())) {
             warnings += ImportWarning("recipe", "No recipe could be found on this page. It may need you to sign in, load more content, or block automatic access. You can paste the recipe text instead.", Severity.ERROR)
         }
-        return d.copy(warnings = d.warnings + warnings)
+        return ImportValidator.validate(d.copy(warnings = d.warnings + warnings))
+    }
+
+    /** Checks a data-block recipe against the visible page: fills gaps, prefers a fuller trustworthy page version, and reports suspected omissions. */
+    private fun crossCheck(base: ImportDraft, doc: Document, pageUrl: String?, page: PageScan.Result): ImportDraft {
+        val r = base.recipe
+        val ing = Reconcile.ingredients(r.ingredients, page.ingredients)
+        val dir = Reconcile.directions(r.directions, page.steps)
+        var ingredients = ing.value; var directions = dir.value
+        val extra = mutableListOf<ImportWarning>()
+        var guessed = false
+        // last resort for a section that is still empty: the older selector/heading guesses
+        if (ingredients.isEmpty() || directions.none { !it.header }) {
+            val h = heuristic(doc, pageUrl, PageScan.Result(null, null)).recipe
+            if (ingredients.isEmpty() && h.ingredients.isNotEmpty()) { ingredients = h.ingredients; guessed = true }
+            if (directions.none { !it.header } && h.directions.isNotEmpty()) { directions = h.directions; guessed = true }
+        }
+        val filledIng = r.ingredients.isEmpty() && ingredients.isNotEmpty(); val filledDir = r.directions.none { !it.header } && directions.any { !it.header }
+        if (filledIng || filledDir) guessed = true
+        if (guessed) extra += ImportWarning("recipe", "Some parts were guessed from the page layout. Please check them.", Severity.WARNING)
+        val lm = if (r.servings == null || (r.prepMinutes == null && r.cookMinutes == null && r.totalMinutes == null)) labeledMeta(doc) else Labeled()
+        val recipe = r.copy(ingredients = ingredients, directions = directions,
+            prepMinutes = r.prepMinutes ?: lm.prep, cookMinutes = r.cookMinutes ?: lm.cook, totalMinutes = r.totalMinutes ?: lm.total, servings = r.servings ?: lm.servings)
+        val kept = base.warnings.filterNot { (it.field == "ingredients" && ingredients.isNotEmpty() && it.message.contains("had no")) || (it.field == "directions" && directions.any { d -> !d.header } && it.message.contains("had no")) ||
+            (it.field == "servings" && recipe.servings != null) || (it.field == "times" && recipe.effectiveTotal != null) }
+        val changed = ing.changed || dir.changed || guessed
+        return base.copy(recipe = recipe, warnings = kept + ing.warnings + dir.warnings + extra, unplaced = (base.unplaced + ing.unplaced + dir.unplaced).distinct(),
+            confidence = if (changed && base.confidence == Confidence.HIGH) Confidence.MEDIUM else if (ing.unplaced.isNotEmpty() || dir.unplaced.isNotEmpty()) Confidence.MEDIUM else base.confidence)
     }
 
     fun failed(url: String?, msg: String) = ImportDraft(Recipe(sourceUrl = url), ImportMethod.HTML, Confidence.LOW, listOf(ImportWarning("recipe", msg, Severity.ERROR)))
@@ -105,7 +131,9 @@ object WebRecipeExtractor {
 
     private fun clean(s: String?): String {
         if (s.isNullOrBlank()) return ""
-        val text = if (s.contains('<') && s.contains('>')) Jsoup.parse(s).text() else Jsoup.parse("<p>$s</p>").text()
+        var text = if (s.contains('<') && s.contains('>')) Jsoup.parse(s).text() else Jsoup.parse("<p>$s</p>").text()
+        // data blocks are sometimes escaped twice ("&amp;ouml;", "&lt;p&gt;")
+        if (Regex("""&(?:[a-zA-Z]{2,8}|#\d{2,5});|</?[a-zA-Z][^>]{0,40}>""").containsMatchIn(text)) text = Jsoup.parse(text).text()
         return text.replace(' ', ' ').replace(Regex("""\s+"""), " ").trim()
     }
 
@@ -135,7 +163,7 @@ object WebRecipeExtractor {
             when (e) {
                 null, JsonNull -> {}
                 is JsonPrimitive -> {
-                    val lines = Jsoup.parse(e.content.replace(Regex("""(?i)<br\s*/?>|</p>|</li>"""), "\n")).wholeText().lines().map { clean(it) }.filter { it.isNotEmpty() }
+                    val lines = Jsoup.parse(unescapeTwice(e.content).replace(Regex("""(?i)<br\s*/?>|</p>|</li>"""), "\n")).wholeText().lines().map { clean(it) }.filter { it.isNotEmpty() }
                     steps += lines
                 }
                 is JsonArray -> e.forEach { walk(it) }
@@ -148,8 +176,10 @@ object WebRecipeExtractor {
                             walk(e["itemListElement"])
                         }
                         else -> {
-                            val t = clean((e["text"] ?: e["description"] ?: e["name"]).str())
-                            if (t.isNotEmpty()) steps += t
+                            val raw = unescapeTwice((e["text"] ?: e["description"] ?: e["name"]).str())
+                            // one HowToStep holding several paragraphs or list items is several steps
+                            if (Regex("""(?i)</p>\s*<p|</li>\s*<li|<br\s*/?>\s*<br""").containsMatchIn(raw)) steps += Jsoup.parse(raw.replace(Regex("""(?i)<br\s*/?>|</p>|</li>"""), "\n")).wholeText().lines().map { clean(it) }.filter { it.isNotEmpty() }
+                            else { val t = clean(raw); if (t.isNotEmpty()) steps += t }
                         }
                     }
                 }
@@ -159,6 +189,8 @@ object WebRecipeExtractor {
         return steps
     }
 
+    private fun unescapeTwice(s: String) = if (Regex("""&lt;/?[a-zA-Z]""").containsMatchIn(s)) org.jsoup.parser.Parser.unescapeEntities(s, false) else s
+
     fun servingsFrom(node: JsonElement?): Int? {
         val s = when (node) { is JsonArray -> node.map { it.str() }.firstOrNull { Regex("""\d""").containsMatchIn(it) } ?: node.firstOrNull().str(); else -> node.str() }
         return Regex("""\d+""").find(s)?.value?.toIntOrNull()?.takeIf { it in 1..999 }
@@ -167,8 +199,7 @@ object WebRecipeExtractor {
     private fun fromJsonLd(r: JsonObject, doc: Document, pageUrl: String?): ImportDraft {
         val warnings = mutableListOf<ImportWarning>()
         val title = clean(r["name"].str()).ifEmpty { clean(doc.title()) }
-        val ingredientLines = ((r["recipeIngredient"] ?: r["ingredients"]) as? JsonArray ?: (r["recipeIngredient"] as? JsonPrimitive)?.let { JsonArray(listOf(it)) })
-            ?.map { clean(it.str()) }?.filter { it.isNotEmpty() }.orEmpty()
+        val ingredientLines = ingredientLines(r)
         val ingredients = dedupeConsecutive(ingredientLines).map { Ingredient(text = it) }
         val stepsRaw = instructionSteps(r["recipeInstructions"])
         val directions = mutableListOf<Direction>()
@@ -206,6 +237,25 @@ object WebRecipeExtractor {
         )
         val ok = title.isNotEmpty() && ingredients.isNotEmpty() && directions.any { !it.header }
         return ImportDraft(recipe, ImportMethod.JSON_LD, if (ok) Confidence.HIGH else Confidence.MEDIUM, warnings, imgs).withSuggestedCategories(cats)
+    }
+
+    /** Ingredient lines of a data block. A single string holding the whole list (line breaks, `<br>` or list markup) is split into lines. */
+    private fun ingredientLines(r: JsonObject): List<String> {
+        val node = r["recipeIngredient"] ?: r["ingredients"]
+        val raw = when (node) { is JsonArray -> node.map { it.str() }; is JsonPrimitive -> listOf(node.content); else -> emptyList() }
+        return raw.flatMap { s ->
+            if (s.contains('\n') || Regex("""(?i)<br|<li|</p>""").containsMatchIn(s))
+                Jsoup.parse(s.replace(Regex("""(?i)<br\s*/?>|</p>|</li>"""), "\n")).wholeText().lines()
+            else listOf(s)
+        }.map { clean(it) }.filter { it.isNotEmpty() }.flatMap { splitRunTogether(it) }
+    }
+
+    private val qtyUnit = Regex("""(?<=[\p{L})]) (?=(?:\d+(?:[.,/]\d+)?(?: \d/\d)?|[¼½¾⅓⅔⅛⅜⅝⅞]) ?(?:cups?|tbsps?|tsps?|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|kg|ml|l|cloves?|cans?|sticks?|slices?|pinch|large|medium|small)\b)""", RegexOption.IGNORE_CASE)
+    /** One line that clearly holds several measured ingredients ("3 tbsp oil 2 cups flour 1 tsp salt ...") is split before each amount. */
+    private fun splitRunTogether(line: String): List<String> {
+        if (line.length < 110) return listOf(line)
+        val parts = line.split(qtyUnit).map { it.trim() }.filter { it.isNotEmpty() }
+        return if (parts.size >= 4 && parts.all { it.length < 140 }) parts else listOf(line)
     }
 
     private fun ImportDraft.withSuggestedCategories(cats: List<String>): ImportDraft =
@@ -271,7 +321,7 @@ object WebRecipeExtractor {
         return out
     }
 
-    private fun heuristic(doc: Document, pageUrl: String?): ImportDraft {
+    private fun heuristic(doc: Document, pageUrl: String?, page: PageScan.Result): ImportDraft {
         val title = clean(doc.selectFirst("meta[property=og:title]")?.attr("content") ?: doc.selectFirst("h1")?.text() ?: doc.title())
             .replace(Regex("""\s*[|\-–—]\s*[^|\-–—]{0,40}$"""), "").trim()
         fun pick(selectors: List<String>): List<String> {
@@ -282,9 +332,11 @@ object WebRecipeExtractor {
             }
             return emptyList()
         }
-        var ingredients = pick(ingredientSelectors)
-        var steps = pick(directionSelectors)
-        if (ingredients.isEmpty() || steps.isEmpty()) {
+        val pageIng = page.ingredients?.lines?.map { Ingredient(text = it.text, header = it.header) }
+        val pageSteps = page.steps?.lines?.map { if (it.header) Direction(text = it.text, header = true) else Direction(text = it.text, timerSeconds = Durations.timerSeconds(it.text)) }
+        var ingredients = if (pageIng != null) emptyList() else pick(ingredientSelectors)
+        var steps = if (pageSteps != null) emptyList() else pick(directionSelectors)
+        if ((pageIng == null && ingredients.isEmpty()) || (pageSteps == null && steps.isEmpty())) {
             // Heading-based: <h2>Ingredients</h2> followed by a list
             fun listAfter(heading: Regex): List<String> {
                 val h = doc.select("h1,h2,h3,h4,h5,strong,b").firstOrNull { heading.matches(it.text().trim().trimEnd(':')) } ?: return emptyList()
@@ -299,8 +351,8 @@ object WebRecipeExtractor {
                 }
                 return emptyList()
             }
-            if (ingredients.isEmpty()) ingredients = listAfter(Regex("""(?i)ingredients?"""))
-            if (steps.isEmpty()) steps = listAfter(Regex("""(?i)(directions?|instructions?|method|preparation|steps?)"""))
+            if (pageIng == null && ingredients.isEmpty()) ingredients = listAfter(Regex("""(?i)ingredients?"""))
+            if (pageSteps == null && steps.isEmpty()) steps = listAfter(Regex("""(?i)(directions?|instructions?|method|preparation|steps?)"""))
         }
         val img = doc.selectFirst("meta[property=og:image]")?.attr("content")?.let { absolute(it, pageUrl) }
         val desc = clean(doc.selectFirst("meta[property=og:description]")?.attr("content") ?: doc.selectFirst("meta[name=description]")?.attr("content"))
@@ -309,12 +361,12 @@ object WebRecipeExtractor {
             title = title, description = desc, sourceUrl = pageUrl,
             sourceName = pageUrl?.let { runCatching { URI(it).host?.removePrefix("www.") }.getOrNull() },
             prepMinutes = lm.prep, cookMinutes = lm.cook, totalMinutes = lm.total, servings = lm.servings,
-            ingredients = ingredients.map { Ingredient(text = it) }, directions = steps.map { Direction(text = it, timerSeconds = Durations.timerSeconds(it)) },
+            ingredients = pageIng ?: ingredients.map { Ingredient(text = it) }, directions = pageSteps ?: steps.map { Direction(text = it, timerSeconds = Durations.timerSeconds(it)) },
         )
         val w = mutableListOf(ImportWarning("recipe", "This page has no standard recipe data, so we guessed from its layout. Please check every field.", Severity.WARNING))
-        if (ingredients.isEmpty()) w += ImportWarning("ingredients", "No ingredients were found.")
-        if (steps.isEmpty()) w += ImportWarning("directions", "No directions were found.")
-        return ImportDraft(recipe, ImportMethod.HTML, if (ingredients.isNotEmpty() && steps.isNotEmpty()) Confidence.LOW else Confidence.LOW, w, listOfNotNull(img))
+        if (recipe.ingredients.none { !it.header }) w += ImportWarning("ingredients", "No ingredients were found.")
+        if (recipe.directions.none { !it.header }) w += ImportWarning("directions", "No directions were found.")
+        return ImportDraft(recipe, ImportMethod.HTML, Confidence.LOW, w, listOfNotNull(img))
     }
 
     private fun mergeMissing(base: ImportDraft, fill: ImportDraft): ImportDraft {
