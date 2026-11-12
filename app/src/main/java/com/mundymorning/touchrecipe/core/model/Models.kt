@@ -58,6 +58,23 @@ data class Recipe(
         }.lowercase()
 }
 
+/** Where an imported recipe came from. */
+@Serializable enum class SourceKind { WEB, PDF, IMAGE, TEXT, NONE }
+
+/**
+ * The original a recipe was made from, kept so it can be compared and repaired later.
+ * [files] are names in the app's private originals store (a page snapshot, the PDF, the photos); [text] is the text read from it.
+ */
+@Serializable
+data class OriginalSource(val kind: SourceKind = SourceKind.NONE, val url: String? = null, val files: List<String> = emptyList(), val text: String = "", val capturedAt: Long = 0L) {
+    val isEmpty: Boolean get() = kind == SourceKind.NONE || (url == null && files.isEmpty() && text.isBlank())
+    val lines: List<String> get() = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+}
+
+/** "Ask Mom whether this says 1 cup or 1/2 cup": a question attached to a line, a field or a spot on the original, kept until resolved. */
+@Serializable
+data class HelpNote(val id: String = newId(), val target: String, val text: String, val resolved: Boolean = false, val page: Int = 0, val x: Float? = null, val y: Float? = null)
+
 enum class Confidence { HIGH, MEDIUM, LOW }
 enum class ImportMethod { JSON_LD, MICRODATA, HTML, TEXT, OCR, SOCIAL_CAPTION, MANUAL }
 enum class Severity { INFO, WARNING, ERROR }
@@ -73,6 +90,8 @@ data class ImportDraft(
     val imageCandidates: List<String> = emptyList(),
     /** Source text that looked like recipe content but could not be placed with confidence. Shown at review and kept with the recipe; never dropped. */
     val unplaced: List<String> = emptyList(),
+    /** The original this draft was read from (page snapshot, PDF, photos, text). */
+    val source: OriginalSource = OriginalSource(),
 ) {
     fun hasWarning(field: String) = warnings.any { it.field == field }
 }
