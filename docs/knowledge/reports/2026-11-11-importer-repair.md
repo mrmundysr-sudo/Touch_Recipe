@@ -76,4 +76,4 @@ PDF checks:
 
 **Status:** Awaiting owner testing. Work stops here until feedback; Recipe Rescue is not started.
 
-Installing: the debug build shares its signing key with earlier DEV/TEST builds from the same CI, so it should install over them and keep saved recipes; if Android refuses, export a backup from the Junk Drawer first, then uninstall and reinstall.
+Installing: each CI debug build is signed with that run's own debug key, so Android will not install this build over an earlier test build. Uninstalling the earlier build deletes its saved recipes. To keep them: make a backup in the old build first (Junk Drawer, Backup), uninstall it, install this build, then restore the backup. APK SHA-256: `538374670badc63919e1c12569e9f461853650cc2970deab050dac436855f47a`.
