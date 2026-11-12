@@ -70,6 +70,21 @@ Shared scroll pieces `page_11` to `page_13`; controls for Recipe Detail (`page_1
 10. **Family question:** on a line tap ⋮ → "Needs family help", write a note, save the recipe. Does the question show on the recipe page, and can you tick it off?
 11. **Cook Mode:** on a long recipe scroll freely, tap a later step, start a timer, leave the app and come back.
 12. **Grocery List:** add a recipe's ingredients, scroll a long list, tick items, close and reopen.
-13. **Large text:** Settings → Extra large text, then look at a recipe, Cook Mode and Recipe Rescue. Is anything cut off or unreachable?
+13. **Large text:** in Settings choose the largest text size, then look at a recipe, Cook Mode and Recipe Rescue. Is anything cut off or unreachable?
 
 ## Build and delivery
+| Item | Value |
+|---|---|
+| Source commit of the build | `c37510f13571774a6d6fa2ab30ad7b43c1fb8aef` on `ccr-c5e79198-7pqe4i` |
+| CI run | Android CI run 43276480262 (run number 29): success. build-test (165 unit and Robolectric tests including the real-page benchmark, lint, debug and release assemble) and instrumented (emulator smoke test) both green |
+| Earlier runs in this pass | 43224319646 and 43225970984 failed on tests and were fixed (three cases: a photo-size threshold, a duplicated button label, selection buttons off the screen edge) |
+| Test build | Prerelease `devtest-recipe-43276480262-c37510f`, file `touch-recipe-debug-c37510f-DEVTEST.apk`, package `com.mundymorning.touchrecipe.debug`, version 1.2.0-debug |
+| APK SHA-256 | `7a95bd616940f8e70821719e4bf26a5cde2425e920d3da96860268e90306d8c2` |
+| Publisher run | DEV/TEST release run 43279318091: success |
+| Art template | `docs/art-template/2026-11/` and `docs/art-template/touch_recipe_visual_template_2026-11_new-pages-only.zip` in the repository; the full package ZIP (existing 26 files byte for byte plus the new pages) was delivered with the build |
+| Device testing | None by the developer |
+
+**Status:** Awaiting owner testing on the Samsung.
+
+Installing: each CI debug build has its own signing key, so this build will not install over the importer build. Back up in the old build first (Junk Drawer, Backup), uninstall it, install this one, restore.
+
