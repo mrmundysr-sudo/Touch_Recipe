@@ -66,3 +66,14 @@ PDF checks:
 - The CI trigger and the DEV/TEST publisher were widened from `claude/**` to also accept `ccr-**`, because the update branch has that name. The publisher is otherwise unchanged (prerelease only, never `main`).
 
 ## Build and delivery
+| Item | Value |
+|---|---|
+| Source commit of the build | `1f8c0c17b6a8ded416c28027d4e2b7c02203e1bc` on `ccr-c5e79198-7pqe4i` |
+| CI run | Android CI run 43108667815 (run number 24): success. Jobs: build-test (unit and Robolectric tests with the benchmark corpus fetched, lint, debug and release assemble) and instrumented (emulator smoke test) |
+| Test build | Prerelease `devtest-recipe-43108667815-1f8c0c1`, file `touch-recipe-debug-1f8c0c1-DEVTEST.apk`, package `com.mundymorning.touchrecipe.debug`, version 1.1.0-debug |
+| Publisher run | DEV/TEST release run 43157877117: success, including its checks that the file is a real signed APK and that the published link downloads the same file |
+| Device testing | None. The build has not been installed on a phone by the developer |
+
+**Status:** Awaiting owner testing. Work stops here until feedback; Recipe Rescue is not started.
+
+Installing: the debug build shares its signing key with earlier DEV/TEST builds from the same CI, so it should install over them and keep saved recipes; if Android refuses, export a backup from the Junk Drawer first, then uninstall and reinstall.
