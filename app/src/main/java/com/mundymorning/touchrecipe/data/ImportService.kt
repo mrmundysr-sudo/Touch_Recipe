@@ -115,22 +115,64 @@ class ImportService(
     }.getOrNull()
 
     /** Downloads the first usable image candidate into private storage; returns the stored file name. */
-    suspend fun fetchPhoto(candidates: List<String>): String? {
-        for (c in candidates.take(3)) { fetcher.fetchBytes(c)?.let { b -> photos.saveBytes(b)?.let { return it } } }
+    suspend fun fetchPhoto(candidates: List<String>, page: String? = null): String? {
+        for (c in candidates.take(4)) {
+            val b = fetcher.fetchImage(c, page) ?: continue
+            // a tracking pixel or an icon is not the recipe's photograph: try the next candidate
+            val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size, bounds)
+            if (bounds.outWidth in 1..159 || bounds.outHeight in 1..119) continue
+            photos.saveBytes(b)?.let { return it }
+        }
         return null
     }
 
+    /** Result of cleaning one photographed page: what to read, what to keep, and the dish picture if the page shows one. */
+    private class PagePhoto(val read: android.graphics.Bitmap, val cleanedFile: String?, val dish: android.graphics.Bitmap?, val dishSure: Boolean)
+
+    /**
+     * Straightens and crops a photographed card or page when its edges are clear, and looks for a photograph of the dish
+     * on it. The picture as taken is never altered: the cleaned page and the dish photo are separate, new pictures.
+     */
+    private fun cleanPage(bmp: android.graphics.Bitmap, lookForCard: Boolean): PagePhoto {
+        val quad = if (lookForCard) PageImageTools.findDocument(bmp) else null
+        val flat = if (quad != null) runCatching { PageImageTools.warp(bmp, quad) }.getOrNull() else null
+        val cleaned = flat?.let { runCatching { PageImageTools.enhance(it) }.getOrNull() }
+        val cleanedFile = cleaned?.let { originals?.saveBytes(PageImageTools.jpeg(it), "jpg") }
+        val page = flat ?: bmp
+        val region = PageImageTools.findDishPhoto(page)
+        val dish = region?.let { r -> runCatching { PageImageTools.crop(page, r) }.getOrNull() }
+        return PagePhoto(if (cleanedFile != null && cleaned != null) cleaned else bmp, cleanedFile, dish, (region?.confidence ?: 0f) >= 0.7f)
+    }
+
+    private fun dishNote(sure: Boolean) = ImportWarning("photo",
+        if (sure) "A picture of the dish was found on the page and set as the cover. You can adjust or change it."
+        else "A picture on the page was set as the cover, but it may not be the dish or may be cut badly. Check it, adjust it or remove it.", if (sure) Severity.INFO else Severity.WARNING)
+
     suspend fun fromImages(uris: List<Uri>, onStatus: (String) -> Unit): ImportDraft {
         val lines = mutableListOf<TextLine>()
+        val kept = mutableListOf<String>(); val cleaned = mutableListOf<String>()
+        var cover: String? = null; var dishFile: String? = null; var dishSure = false
         uris.forEachIndexed { i, u ->
             onStatus("Reading text from the photo${if (uris.size > 1) " ${i + 1} of ${uris.size}" else ""}…")
             val bmp = ImageLoader.decode(context, u) ?: throw ImportFailure("That image could not be opened.")
-            lines += try { ocr.recognizeLines(bmp, i) } catch (e: OcrUnavailable) { throw ImportFailure((e.message ?: "Text recognition failed.") + " You can still use Paste or Type Recipe.", retryable = true) }
+            val page = withContext(Dispatchers.Default) { cleanPage(bmp, lookForCard = true) }
+            lines += try { ocr.recognizeLines(page.read, i) } catch (e: OcrUnavailable) { throw ImportFailure((e.message ?: "Text recognition failed.") + " You can still use Paste or Type Recipe.", retryable = true) }
+            // the photograph itself is kept, untouched: a handwritten card is worth more than its transcription
+            originals?.copyFromUri(u, "jpg")?.let { kept += it; cleaned += page.cleanedFile.orEmpty() }
+            val dish = page.dish
+            if (cover == null && dish != null) {
+                val bytes = PageImageTools.jpeg(dish, 92)
+                cover = photos.saveBytes(bytes); dishFile = originals?.saveBytes(bytes, "jpg"); dishSure = page.dishSure
+            }
         }
         val d = ocrDraft(lines)
-        // the photographs themselves are kept, untouched: a handwritten card is worth more than its transcription
-        val kept = uris.mapNotNull { originals?.copyFromUri(it, "jpg") }
-        return d.copy(source = OriginalSource(SourceKind.IMAGE, files = kept, text = LayoutReader.read(lines), capturedAt = now()))
+        val notes = buildList {
+            if (cleaned.any { it.isNotBlank() }) add(ImportWarning("photo", "The page was straightened and cropped for reading. The photo exactly as you took it is kept too; you can adjust the crop in Recipe Rescue.", Severity.INFO))
+            if (cover != null) add(dishNote(dishSure))
+        }
+        return d.copy(warnings = d.warnings + notes, suggestedPhoto = cover,
+            source = OriginalSource(SourceKind.IMAGE, files = kept, text = LayoutReader.read(lines), capturedAt = now(), cleaned = if (cleaned.any { it.isNotBlank() }) cleaned else emptyList(), dishPhoto = dishFile))
     }
 
     /**
@@ -149,6 +191,8 @@ class ImportService(
             val lines = mutableListOf<TextLine>()
             val notes = mutableListOf<ImportWarning>()
             var ocrPages = 0; var skipped = 0
+            var cover: String? = layer?.picture?.let { photos.saveBytes(it) }; var dishFile: String? = null; var dishSure = true
+            if (cover != null) notes += ImportWarning("photo", "The picture inside the PDF was set as the cover. You can change it.", Severity.INFO)
             val readable = minOf(pageCount, PdfPages.MAX_PAGES)
             for (i in 0 until readable) {
                 val words = layer?.pages?.getOrNull(i).orEmpty()
@@ -159,6 +203,12 @@ class ImportService(
                 if (ocrPages >= PdfPages.MAX_OCR_PAGES) { skipped++; if (words.isNotEmpty()) lines += words; continue }
                 onStatus("Reading page ${i + 1} of $readable…")
                 val bmp = PdfPages.renderPage(file, i)
+                if (bmp != null && cover == null && words.isEmpty()) {
+                    // a scanned page: look for the dish photograph printed on it
+                    val region = PageImageTools.findDishPhoto(bmp)
+                    val dish = region?.let { r -> runCatching { PageImageTools.crop(bmp, r) }.getOrNull() }
+                    if (dish != null) { val bytes = PageImageTools.jpeg(dish, 92); cover = photos.saveBytes(bytes); dishFile = originals?.saveBytes(bytes, "jpg"); dishSure = (region?.confidence ?: 0f) >= 0.7f; if (cover != null) notes += dishNote(dishSure) }
+                }
                 val recognised = if (bmp == null) emptyList() else try { ocr.recognizeLines(bmp, i) } catch (e: OcrUnavailable) {
                     if (words.isEmpty() && lines.isEmpty() && i == readable - 1) throw ImportFailure((e.message ?: "Text recognition failed.") + " You can still use Paste or Type Recipe.", retryable = true)
                     emptyList()
@@ -176,11 +226,32 @@ class ImportService(
             if (skipped > 0) notes += ImportWarning("recipe", "$skipped scanned page${if (skipped == 1) " was" else "s were"} not read (only ${PdfPages.MAX_OCR_PAGES} scanned pages are read per import).")
             val draft = if (ocrPages > 0) ocrDraft(lines, layer?.title) else TextRecipeParser.parse(LayoutReader.read(lines), ImportMethod.TEXT, titleHint = layer?.title)
             val kept = originals?.copyFromUri(Uri.fromFile(file), "pdf")
-            return draft.copy(warnings = draft.warnings + notes, source = OriginalSource(SourceKind.PDF, draft.recipe.sourceUrl, listOfNotNull(kept), LayoutReader.read(lines), now()))
+            return draft.copy(warnings = draft.warnings + notes, suggestedPhoto = cover, source = OriginalSource(SourceKind.PDF, draft.recipe.sourceUrl, listOfNotNull(kept), LayoutReader.read(lines), now(), dishPhoto = dishFile))
         } finally { file.delete() }
     }
 
-    private class TextLayer(val pages: List<List<TextLine>>, val title: String?, val locked: Boolean)
+    private class TextLayer(val pages: List<List<TextLine>>, val title: String?, val locked: Boolean, val picture: ByteArray? = null)
+
+    /**
+     * The recipe's own picture inside a digital PDF: the largest photograph-shaped image on the first pages that carry text.
+     * It is taken straight from the file, so nothing has to be guessed from how the page looks.
+     */
+    private fun embeddedPicture(doc: com.tom_roush.pdfbox.pdmodel.PDDocument, pages: List<List<TextLine>>): ByteArray? {
+        var best: android.graphics.Bitmap? = null
+        for (i in 0 until minOf(doc.numberOfPages, 4)) {
+            if (pages.getOrNull(i).orEmpty().sumOf { it.text.length } < 30) continue      // a scanned page is one big image of text, not a photo
+            val res = runCatching { doc.getPage(i).resources }.getOrNull() ?: continue
+            for (name in runCatching { res.xObjectNames.toList() }.getOrDefault(emptyList())) {
+                val x = runCatching { res.getXObject(name) }.getOrNull() as? com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject ?: continue
+                val w = x.width; val h = x.height
+                if (w < 300 || h < 200 || w.toFloat() / h > 3f || h.toFloat() / w > 2.5f || w.toLong() * h > 40_000_000L) continue
+                val current = best
+                if (current != null && w.toLong() * h <= current.width.toLong() * current.height) continue
+                runCatching { x.image }.getOrNull()?.let { best = it }
+            }
+        }
+        return best?.let { PageImageTools.jpeg(it, 92) }
+    }
 
     /** The PDF's own text, page by page. Null when the document cannot be parsed; the pages can then still be rendered and recognised. */
     private fun readTextLayer(file: java.io.File): TextLayer? = try {
@@ -190,7 +261,7 @@ class ImportService(
             val n = minOf(doc.numberOfPages, PdfPages.MAX_PAGES)
             val pages = (0 until n).map { i -> runCatching { PdfTextLayer.page(doc, i) }.getOrDefault(emptyList()) } + List(doc.numberOfPages - n) { emptyList() }
             val title = runCatching { doc.documentInformation?.title }.getOrNull()?.takeIf { it.isNotBlank() && !it.endsWith(".pdf", true) && !it.startsWith("Microsoft Word", true) }?.let { TextRecipeParser.pageTitle(it) }
-            TextLayer(pages, title, false)
+            TextLayer(pages, title, false, runCatching { embeddedPicture(doc, pages) }.getOrNull())
         }
     } catch (e: com.tom_roush.pdfbox.pdmodel.encryption.InvalidPasswordException) { TextLayer(emptyList(), null, true)
     } catch (e: Throwable) { null }

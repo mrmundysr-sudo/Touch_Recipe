@@ -63,10 +63,12 @@ class ImportViewModel(private val c: AppContainer) : ViewModel() {
                     ui.value = ImportUi.Failed(draft.warnings.first { it.severity == Severity.ERROR }.message, retryable = input is ImportInput.Url, offline = false, blocked = input is ImportInput.Url)
                     return@launch
                 }
-                if (draft.imageCandidates.isNotEmpty()) {
+                if (draft.suggestedPhoto != null) c.importSession.photoFile = draft.suggestedPhoto   // cut from the source itself (PDF picture or dish photo on a page)
+                else if (draft.imageCandidates.isNotEmpty()) {
                     ui.value = ImportUi.Working("Fetching the photo…")
-                    c.importSession.photoFile = c.importer.fetchPhoto(draft.imageCandidates)
-                    if (c.importSession.photoFile == null) draft = draft.copy(warnings = draft.warnings + ImportWarning("photo", "The page's photo could not be downloaded. You can add your own.", Severity.INFO))
+                    c.importSession.photoFile = c.importer.fetchPhoto(draft.imageCandidates, draft.recipe.sourceUrl)
+                    // an available photo that could not be fetched is said plainly, never dropped quietly
+                    if (c.importSession.photoFile == null) draft = draft.copy(warnings = draft.warnings + ImportWarning("photo", "This recipe has a photo, but it could not be downloaded. You can try again later from the recipe, or add your own.", Severity.WARNING))
                 }
                 c.importSession.draft.value = draft
                 ui.value = ImportUi.Done(draft)
@@ -134,7 +136,8 @@ fun ImportScreen(c: AppContainer, nav: NavController) {
         }
     }
 
-    if (urlSheet) UrlSheet(clipboardText = { clipboard.getText()?.text.orEmpty() }, onDismiss = { urlSheet = false }, onImport = { urlSheet = false; vm.start(ImportInput.Url(it)) }, normalize = c.importer::normalizeUrl)
+    if (urlSheet) UrlSheet(clipboardText = { clipboard.getText()?.text.orEmpty() }, onDismiss = { urlSheet = false }, onImport = { urlSheet = false; vm.start(ImportInput.Url(it)) }, normalize = c.importer::normalizeUrl,
+        onBrowse = { u -> urlSheet = false; nav.navigate(Routes.rescue(draftForPage(c, u).id)) })
     if (textSheet) TextSheet(clipboardText = { clipboard.getText()?.text.orEmpty() }, onDismiss = { textSheet = false }, onImport = { textSheet = false; vm.start(c.importer.classify(it).let { i -> if (i is ImportInput.Url) ImportInput.Text(it) else i }) })
     if (scanSheet) ModalBottomSheet({ scanSheet = false }) {
         Column(Modifier.padding(20.dp).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -163,7 +166,7 @@ fun ImportScreen(c: AppContainer, nav: NavController) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun UrlSheet(clipboardText: () -> String, onDismiss: () -> Unit, onImport: (String) -> Unit, normalize: (String) -> String?) {
+private fun UrlSheet(clipboardText: () -> String, onDismiss: () -> Unit, onImport: (String) -> Unit, normalize: (String) -> String?, onBrowse: (String) -> Unit = {}) {
     var url by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     ModalBottomSheet(onDismiss) {
@@ -178,6 +181,8 @@ private fun UrlSheet(clipboardText: () -> String, onDismiss: () -> Unit, onImpor
                 BigButton("Paste from clipboard", { url = clipboardText().trim(); error = null }, Modifier.weight(1f), primary = false)
                 BigButton("Import", { normalize(url)?.let(onImport) ?: run { error = "That doesn't look like a web address." } }, Modifier.weight(1f).testTag("url-import"))
             }
+            // for sites that only show the recipe in a browser: open the page inside the app and import what is on screen
+            BigButton("Open the page in the app and import from there", { normalize(url)?.let(onBrowse) ?: run { error = "That doesn't look like a web address." } }, Modifier.fillMaxWidth().testTag("url-browse"), primary = false)
         }
     }
 }
@@ -244,7 +249,7 @@ private fun ResultSheet(ui: ImportUi, onCancel: () -> Unit, onRetry: () -> Unit,
                         }
                         Text("These lines will be added to the recipe's notes so nothing is lost. You can move or delete them on the next screen.", style = MaterialTheme.typography.bodySmall)
                     }
-                    d.warnings.filter { it.severity == Severity.INFO && (it.field == "ingredients" || it.field == "directions") }.forEach { Text(it.message, style = MaterialTheme.typography.bodySmall) }
+                    d.warnings.filter { it.severity == Severity.INFO && (it.field == "ingredients" || it.field == "directions" || (it.field == "photo" && !it.message.startsWith("No photo"))) }.forEach { Text(it.message, style = MaterialTheme.typography.bodySmall) }
                     BigButton("Continue to Review", onContinue, Modifier.fillMaxWidth().testTag("result-continue"))
                     BigButton("Compare with the original (Recipe Rescue)", onRescue, Modifier.fillMaxWidth().testTag("result-rescue"), primary = false)
                     BigButton("Save for later", onLater, Modifier.fillMaxWidth().testTag("result-later"), primary = false)

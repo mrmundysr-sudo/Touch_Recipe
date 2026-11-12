@@ -66,12 +66,12 @@ class OriginalStore(context: Context) {
     fun unlink(recipeId: String, drafts: DraftStore? = null) {
         val o = forRecipe(recipeId) ?: return
         File(links, "$recipeId.json").delete()
-        deleteUnreferenced(o.source.files, drafts)
+        deleteUnreferenced(o.source.allFiles, drafts)
         changes.value++
     }
 
     fun deleteUnreferenced(names: List<String>, drafts: DraftStore?) {
-        val used = allLinked().flatMap { it.source.files }.toSet() + drafts?.all().orEmpty().flatMap { it.source.files }
+        val used = allLinked().flatMap { it.source.allFiles }.toSet() + drafts?.all().orEmpty().flatMap { it.source.allFiles }
         names.filter { it !in used }.forEach { file(it).delete() }
     }
 

@@ -215,7 +215,7 @@ object WebRecipeExtractor {
         val cats = (r["recipeCategory"]).let { c -> when (c) { is JsonArray -> c.map { it.str() }; null -> emptyList(); else -> c.str().split(",") } }.map { clean(it) }.filter { it.isNotEmpty() }
         val cuisine = (r["recipeCuisine"]).let { c -> when (c) { is JsonArray -> c.firstOrNull().str(); else -> c.str() } }.let(::clean).ifEmpty { null }
         val prep = Durations.toMinutes(r["prepTime"].str()); val cook = Durations.toMinutes(r["cookTime"].str()); val total = Durations.toMinutes(r["totalTime"].str())
-        val imgs = (images(r["image"], pageUrl) + listOfNotNull(doc.selectFirst("meta[property=og:image]")?.attr("content")?.let { absolute(it, pageUrl) })).distinct()
+        val imgs = ImageCandidates.rank(doc, images(r["image"], pageUrl), pageUrl)
         val servings = servingsFrom(r["recipeYield"])
         val metaDesc = clean(doc.selectFirst("meta[property=og:description]")?.attr("content") ?: doc.selectFirst("meta[name=description]")?.attr("content"))
         val description = clean(r["description"].str()).ifEmpty { metaDesc }
@@ -285,7 +285,7 @@ object WebRecipeExtractor {
             ingredients = ingredients, directions = steps.map { Direction(text = it, timerSeconds = Durations.timerSeconds(it)) },
         )
         val w = mutableListOf(ImportWarning("recipe", "Read from the page's embedded recipe markup. Please check each field.", Severity.INFO))
-        return ImportDraft(recipe, ImportMethod.MICRODATA, if (ingredients.isNotEmpty() && steps.isNotEmpty()) Confidence.MEDIUM else Confidence.LOW, w, listOfNotNull(img))
+        return ImportDraft(recipe, ImportMethod.MICRODATA, if (ingredients.isNotEmpty() && steps.isNotEmpty()) Confidence.MEDIUM else Confidence.LOW, w, ImageCandidates.rank(doc, listOfNotNull(img), pageUrl))
     }
 
     // ---------- HTML heuristics ----------
@@ -366,7 +366,9 @@ object WebRecipeExtractor {
         val w = mutableListOf(ImportWarning("recipe", "This page has no standard recipe data, so we guessed from its layout. Please check every field.", Severity.WARNING))
         if (recipe.ingredients.none { !it.header }) w += ImportWarning("ingredients", "No ingredients were found.")
         if (recipe.directions.none { !it.header }) w += ImportWarning("directions", "No directions were found.")
-        return ImportDraft(recipe, ImportMethod.HTML, Confidence.LOW, w, listOfNotNull(img))
+        val pictures = ImageCandidates.rank(doc, emptyList(), pageUrl)
+        if (pictures.isEmpty()) w += ImportWarning("photo", "No photo was found.", Severity.INFO)
+        return ImportDraft(recipe, ImportMethod.HTML, Confidence.LOW, w, pictures)
     }
 
     private fun mergeMissing(base: ImportDraft, fill: ImportDraft): ImportDraft {

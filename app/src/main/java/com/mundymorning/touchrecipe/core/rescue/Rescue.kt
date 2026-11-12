@@ -17,6 +17,8 @@ data class RescueDraft(
     val findings: List<String> = emptyList(),
     /** Set when repairing a recipe that is already in the collection: saving updates that recipe. Null for a new import. */
     val recipeId: String? = null,
+    /** Other pictures offered by the page, so the cover can be switched. */
+    val imageCandidates: List<String> = emptyList(),
     val undo: List<Recipe> = emptyList(),
     val redo: List<Recipe> = emptyList(),
     val createdAt: Long = 0L,

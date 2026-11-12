@@ -15,13 +15,15 @@ sealed interface FetchOutcome {
 interface PageFetcher {
     suspend fun fetchPage(url: String): FetchOutcome
     suspend fun fetchBytes(url: String, maxBytes: Int = 8 * 1024 * 1024): ByteArray?
+    /** A picture belonging to [page]. Many picture hosts only answer when told which page is asking, the way a browser does. */
+    suspend fun fetchImage(url: String, page: String?): ByteArray? = fetchBytes(url)
 }
 
 /** Plain user-directed HTTP GET. Does not log in, solve challenges or evade blocks: a blocked page is reported as blocked. */
 class HttpPageFetcher : PageFetcher {
     private val ua = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36 TouchRecipe/1.0"
 
-    private fun open(url: String, accept: String): HttpURLConnection {
+    private fun open(url: String, accept: String, referer: String? = null): HttpURLConnection {
         var current = url
         repeat(6) {
             val u = URL(current)
@@ -31,6 +33,7 @@ class HttpPageFetcher : PageFetcher {
             c.connectTimeout = 12_000; c.readTimeout = 15_000
             c.setRequestProperty("User-Agent", ua)
             c.setRequestProperty("Accept", accept)
+            if (referer != null) c.setRequestProperty("Referer", referer)
             c.setRequestProperty("Accept-Language", java.util.Locale.getDefault().toLanguageTag() + ",en;q=0.8")
             val code = c.responseCode
             if (code in 300..399) {
@@ -67,9 +70,12 @@ class HttpPageFetcher : PageFetcher {
         } catch (e: Exception) { FetchOutcome.Failure("The page could not be loaded.") }
     }
 
-    override suspend fun fetchBytes(url: String, maxBytes: Int): ByteArray? = withContext(Dispatchers.IO) {
+    override suspend fun fetchImage(url: String, page: String?): ByteArray? = fetch(url, 12 * 1024 * 1024, page)
+    override suspend fun fetchBytes(url: String, maxBytes: Int): ByteArray? = fetch(url, maxBytes, null)
+
+    private suspend fun fetch(url: String, maxBytes: Int, referer: String?): ByteArray? = withContext(Dispatchers.IO) {
         try {
-            val c = open(url, "image/*")
+            val c = open(url, "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8", referer)
             if (c.responseCode !in 200..299) return@withContext null
             val out = ByteArrayOutputStream()
             c.inputStream.use { ins ->

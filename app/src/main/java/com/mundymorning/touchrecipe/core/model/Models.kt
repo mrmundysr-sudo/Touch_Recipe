@@ -66,7 +66,16 @@ data class Recipe(
  * [files] are names in the app's private originals store (a page snapshot, the PDF, the photos); [text] is the text read from it.
  */
 @Serializable
-data class OriginalSource(val kind: SourceKind = SourceKind.NONE, val url: String? = null, val files: List<String> = emptyList(), val text: String = "", val capturedAt: Long = 0L) {
+data class OriginalSource(
+    val kind: SourceKind = SourceKind.NONE, val url: String? = null, val files: List<String> = emptyList(), val text: String = "", val capturedAt: Long = 0L,
+    /** For photographs: the straightened, cropped page made from each original (same order as [files], "" where there is none). The original is never replaced. */
+    val cleaned: List<String> = emptyList(),
+    /** The picture of the finished dish cut out of the page, kept as its own file in the originals store. */
+    val dishPhoto: String? = null,
+) {
+    /** The file to read or show for page [i]: the cleaned page when there is one, otherwise the original. */
+    fun best(i: Int): String? = cleaned.getOrNull(i)?.takeIf { it.isNotBlank() } ?: files.getOrNull(i)
+    val allFiles: List<String> get() = files + cleaned.filter { it.isNotBlank() } + listOfNotNull(dishPhoto)
     val isEmpty: Boolean get() = kind == SourceKind.NONE || (url == null && files.isEmpty() && text.isBlank())
     val lines: List<String> get() = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
 }
@@ -92,6 +101,8 @@ data class ImportDraft(
     val unplaced: List<String> = emptyList(),
     /** The original this draft was read from (page snapshot, PDF, photos, text). */
     val source: OriginalSource = OriginalSource(),
+    /** A cover picture already cut out of the source itself (a PDF's own picture, or the dish photo on a scanned page): a name in the photo store. */
+    val suggestedPhoto: String? = null,
 ) {
     fun hasWarning(field: String) = warnings.any { it.field == field }
 }

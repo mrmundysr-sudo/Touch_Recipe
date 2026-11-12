@@ -125,7 +125,7 @@ class ReviewViewModel(private val c: AppContainer, private val editId: String?) 
         val s = state.value
         if (s.candidates.size < 2) return false
         val next = (s.candidateIndex + 1) % s.candidates.size
-        val file = c.importer.fetchPhoto(listOf(s.candidates[next])) ?: return false
+        val file = c.importer.fetchPhoto(listOf(s.candidates[next]), s.sourceText.takeIf { it.startsWith("http") }) ?: return false
         edit { it.copy(photo = file, candidateIndex = next) }; return true
     }
     fun photo() = c.photos

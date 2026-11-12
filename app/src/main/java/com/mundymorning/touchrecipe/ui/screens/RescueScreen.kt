@@ -106,6 +106,7 @@ fun draftFromImport(c: AppContainer): RescueDraft? {
         // the raw text lives once, in the source, not in every undo step
         recipe = d.recipe.copy(photo = c.importSession.photoFile ?: d.recipe.photo, rawSource = null), source = src,
         findings = d.warnings.filter { it.severity != Severity.INFO }.map { it.message } + d.unplaced.map { "Found in the original but not placed: $it" },
+        imageCandidates = d.imageCandidates,
         createdAt = c.clock(), updatedAt = c.clock(),
     )
     c.drafts.save(draft); c.importSession.clear()
@@ -179,7 +180,7 @@ class RescueViewModel(private val c: AppContainer, private val draftId: String) 
         val d = state.value?.draft ?: return
         closed = true; pending.value = null
         c.drafts.delete(d.id)
-        c.originals.deleteUnreferenced(d.source.files, c.drafts)
+        c.originals.deleteUnreferenced(d.source.allFiles, c.drafts)
     }
 }
 
@@ -284,6 +285,7 @@ private fun ZoomableImage(bmp: Bitmap, pins: List<HelpNote>, modifier: Modifier,
 fun OriginalPane(
     c: AppContainer, source: OriginalSource, helpNotes: List<HelpNote>, modifier: Modifier = Modifier,
     onTransfer: ((String, String) -> String)? = null, onAskAbout: ((Int, Float, Float) -> Unit)? = null, onReadPage: ((String, String?) -> Unit)? = null,
+    onEditSource: ((OriginalSource) -> Unit)? = null, onCover: ((String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -298,6 +300,11 @@ fun OriginalPane(
     var web by remember { mutableStateOf<WebView?>(null) }
     var page by rememberSaveable { mutableIntStateOf(0) }
     var savedCopy by rememberSaveable { mutableStateOf(source.url == null) }
+    var showCleaned by rememberSaveable { mutableStateOf(true) }
+    var cropPage by remember { mutableStateOf<Bitmap?>(null) }      // the photo as taken, opened for marking the card's corners
+    var cropDish by remember { mutableStateOf<Bitmap?>(null) }      // the page as shown, opened for cutting out the dish photo
+    var confirmReread by remember { mutableStateOf<Bitmap?>(null) }
+    var busy by remember { mutableStateOf(false) }
 
     fun send(target: String, text: String) {
         if (text.isBlank()) { scope.launch { snack.say(if (tab == 1) "Tap one or more lines on the left first." else "Select some text in the page first.") }; return }
@@ -361,24 +368,36 @@ fun OriginalPane(
                     }
                 }
                 SourceKind.IMAGE, SourceKind.PDF -> {
-                    val files = source.files.filter { c.originals.exists(it) }
                     val pdf = source.kind == SourceKind.PDF
-                    val pageCount by produceState(if (pdf) 0 else files.size, files) { if (pdf) value = files.firstOrNull()?.let { PdfPages.pageCount(c.originals.file(it)) } ?: 0 }
-                    val bmp by produceState<Bitmap?>(null, files, page, pdf) {
+                    val files = source.files.filter { c.originals.exists(it) }
+                    val hasCleaned = !pdf && source.cleaned.getOrNull(page)?.let { it.isNotBlank() && c.originals.exists(it) } == true
+                    // a photograph has two faces: exactly as taken, and straightened for reading. Neither replaces the other.
+                    val name = if (pdf) files.firstOrNull() else (if (showCleaned && hasCleaned) source.cleaned[page] else source.files.getOrNull(page))?.takeIf { c.originals.exists(it) }
+                    val pageCount by produceState(if (pdf) 0 else source.files.size, files, pdf) { if (pdf) value = files.firstOrNull()?.let { PdfPages.pageCount(c.originals.file(it)) } ?: 0 }
+                    val bmp by produceState<Bitmap?>(null, name, page, pdf) {
                         value = null
-                        value = if (pdf) files.firstOrNull()?.let { PdfPages.renderPage(c.originals.file(it), page) }
-                        else files.getOrNull(page)?.let { f -> withContext(Dispatchers.IO) { ImageLoader.decode(context, Uri.fromFile(c.originals.file(f)), 2400) } }
+                        value = if (name == null) null else if (pdf) PdfPages.renderPage(c.originals.file(name), page)
+                        else withContext(Dispatchers.IO) { ImageLoader.decode(context, Uri.fromFile(c.originals.file(name)), 2400) }
                     }
                     Column(Modifier.fillMaxSize()) {
                         val shown = bmp
                         if (shown != null) ZoomableImage(shown, helpNotes.filter { !it.resolved && it.x != null && it.page == page }, Modifier.weight(1f).fillMaxWidth().testTag("orig-image"), onAskAbout?.let { ask -> { x: Float, y: Float -> ask(page, x, y) } })
-                        else Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { Text(if (files.isEmpty()) "The original file is no longer stored. The text read from it is under Text." else "Opening the original…", Modifier.padding(16.dp), style = fieldText) }
+                        else Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { Text(if (name == null) "The original file is no longer stored. The text read from it is under Text." else "Opening the original…", Modifier.padding(16.dp), style = fieldText) }
                         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (pageCount > 1) {
                                 TextButton({ page = (page - 1).coerceAtLeast(0) }, enabled = page > 0) { Text("‹ Previous") }
                                 Text("${page + 1} of $pageCount", Modifier.weight(1f), style = fieldText.copy(fontSize = 14.sp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                                 TextButton({ page = (page + 1).coerceAtMost(pageCount - 1) }, enabled = page < pageCount - 1) { Text("Next ›") }
                             } else Text("Pinch to zoom, double-tap to enlarge${if (onAskAbout != null) ", press and hold to leave a question" else ""}.", Modifier.weight(1f).padding(vertical = 6.dp), style = fieldText.copy(fontSize = 13.sp), color = Palette.Ink.copy(alpha = 0.75f))
+                        }
+                        if (!pdf) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (hasCleaned) { Chip("Straightened", showCleaned, { showCleaned = true }, Modifier.testTag("orig-cleaned")); Chip("As photographed", !showCleaned, { showCleaned = false }, Modifier.testTag("orig-as-taken")) }
+                            if (onEditSource != null && !busy) {
+                                TextButton({ scope.launch { val f = source.files.getOrNull(page); cropPage = if (f == null) null else withContext(Dispatchers.IO) { ImageLoader.decode(context, Uri.fromFile(c.originals.file(f)), 2400) } } }, Modifier.testTag("orig-straighten")) { Text(if (hasCleaned) "Adjust the crop" else "Straighten and crop", color = Palette.Forest) }
+                                if (shown != null) TextButton({ confirmReread = shown }, Modifier.testTag("orig-reread")) { Text("Read the text again", color = Palette.Forest) }
+                            }
+                            if (onCover != null && shown != null && !busy) TextButton({ cropDish = shown }, Modifier.testTag("orig-dish")) { Text("Cut out the dish photo", color = Palette.Forest) }
+                            if (busy) Text("Working…", style = fieldText.copy(fontSize = 13.sp))
                         }
                     }
                 }
@@ -421,6 +440,55 @@ fun OriginalPane(
             confirmButton = { TextButton({ val msg = onTransfer?.invoke(target, edited).orEmpty(); pending = null; picked = emptySet(); if (msg.isNotEmpty()) scope.launch { snack.say(msg) } }, Modifier.testTag("transfer-confirm")) { Text("Add") } },
             dismissButton = { TextButton({ pending = null }) { Text("Cancel") } })
     }
+
+    cropPage?.let { photo ->
+        CropDialog(photo, remember(photo) { com.mundymorning.touchrecipe.data.PageImageTools.findDocument(photo) ?: com.mundymorning.touchrecipe.core.image.Region(0.05f, 0.05f, 0.95f, 0.95f).toQuad() },
+            "Straighten and crop", "Drag the four corners onto the corners of the card or page. The photo as you took it is kept unchanged.", rectangle = false, offerSharpen = true,
+            onFindEdges = { com.mundymorning.touchrecipe.data.PageImageTools.findDocument(photo) }, onDismiss = { cropPage = null },
+            onApply = { q, sharpen ->
+                cropPage = null; busy = true
+                scope.launch {
+                    val saved = withContext(Dispatchers.Default) { runCatching { c.originals.saveBytes(com.mundymorning.touchrecipe.data.PageImageTools.jpeg(com.mundymorning.touchrecipe.data.PageImageTools.enhance(com.mundymorning.touchrecipe.data.PageImageTools.warp(photo, q), sharpen)), "jpg") }.getOrNull() }
+                    busy = false
+                    if (saved == null) snack.say("That crop couldn't be made. Try moving the corners.") else {
+                        val list = MutableList(source.files.size) { i -> source.cleaned.getOrNull(i).orEmpty() }
+                        val old = list.getOrNull(page).orEmpty(); if (page in list.indices) list[page] = saved
+                        onEditSource?.invoke(source.copy(cleaned = list)); showCleaned = true
+                        if (old.isNotBlank()) c.originals.file(old).delete()   // only the previous straightened copy; never the photo itself
+                        snack.say("Straightened. Use Read the text again to re-read it.")
+                    }
+                }
+            })
+    }
+    cropDish?.let { shownPage ->
+        CropDialog(shownPage, remember(shownPage) { (com.mundymorning.touchrecipe.data.PageImageTools.findDishPhoto(shownPage) ?: com.mundymorning.touchrecipe.core.image.Region(0.15f, 0.12f, 0.85f, 0.55f)).toQuad() },
+            "Cut out the dish photo", "Drag the corners around the picture of the finished dish. It becomes the recipe's cover; the page itself is not changed.", rectangle = true, offerSharpen = false,
+            onDismiss = { cropDish = null },
+            onApply = { q, _ ->
+                cropDish = null; busy = true
+                scope.launch {
+                    val bytes = withContext(Dispatchers.Default) { runCatching { com.mundymorning.touchrecipe.data.PageImageTools.jpeg(com.mundymorning.touchrecipe.data.PageImageTools.crop(shownPage, com.mundymorning.touchrecipe.core.image.Region(q.tl.x, q.tl.y, q.br.x, q.br.y)), 92) }.getOrNull() }
+                    val cover = bytes?.let { c.photos.saveBytes(it) }
+                    busy = false
+                    if (cover == null) snack.say("That picture couldn't be cut out.") else {
+                        val kept = bytes?.let { b -> c.originals.saveBytes(b, "jpg") }; val old = source.dishPhoto
+                        if (kept != null) { onEditSource?.invoke(source.copy(dishPhoto = kept)); if (old != null) c.originals.file(old).delete() }
+                        onCover?.invoke(cover); snack.say("Set as the recipe's cover picture.")
+                    }
+                }
+            })
+    }
+    confirmReread?.let { picture ->
+        ConfirmDialog("Read the text again?", "The text on the left is replaced by a fresh reading of this picture${if (source.files.size > 1) " (added below the other pages' text)" else ""}. The recipe on the right is not changed.", "Read again",
+            onDismiss = { confirmReread = null }, onConfirm = {
+                confirmReread = null; busy = true
+                scope.launch {
+                    val text = runCatching { com.mundymorning.touchrecipe.core.importer.LayoutReader.read(c.ocr.recognizeLines(picture, page)) }.getOrDefault("")
+                    busy = false
+                    if (text.isBlank()) snack.say("No text could be read from this picture.") else { onEditSource?.invoke(source.copy(text = if (source.files.size > 1) source.text + "\n\n" + text else text)); picked = emptySet(); tab = 1 }
+                }
+            })
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -436,6 +504,7 @@ private fun EditorPane(c: AppContainer, vm: RescueViewModel, s: RescueState, mod
     var rowMenu by remember { mutableStateOf<String?>(null) }
     var helpFor by remember { mutableStateOf<String?>(null) }
     var photoMenu by remember { mutableStateOf(false) }
+    var candidateIndex by rememberSaveable { mutableIntStateOf(0) }
     val pickers = rememberPhotoPickers({ uri -> scope.launch { c.photos.saveFromUri(uri)?.let { f -> vm.update { st -> Rescue.setPhoto(st, f) } } ?: snack.say("That photo couldn't be used.") } }, { scope.launch { snack.say(it) } })
     val numbers = remember(r.directions) { var n = 0; r.directions.map { if (it.header) 0 else ++n } }
 
@@ -574,6 +643,11 @@ private fun EditorPane(c: AppContainer, vm: RescueViewModel, s: RescueState, mod
             if (firstImage != null) BigButton("Use the original photo", { photoMenu = false; scope.launch { c.photos.saveBytes(withContext(Dispatchers.IO) { c.originals.file(firstImage).readBytes() })?.let { f -> vm.update { st -> Rescue.setPhoto(st, f) } } ?: snack.say("That picture couldn't be used.") } }, Modifier.fillMaxWidth())
             BigButton("Choose from gallery", { photoMenu = false; pickers.gallery() }, Modifier.fillMaxWidth(), primary = firstImage == null)
             BigButton("Take a photo", { photoMenu = false; pickers.camera() }, Modifier.fillMaxWidth(), primary = false)
+            val others = s.draft.imageCandidates
+            if (others.size > 1 || (others.size == 1 && r.photo == null)) BigButton("Try another picture from the page", { photoMenu = false; scope.launch {
+                candidateIndex = (candidateIndex + 1) % others.size
+                c.importer.fetchPhoto(listOf(others[candidateIndex]), s.draft.source.url)?.let { f -> vm.update { st -> Rescue.setPhoto(st, f) } } ?: snack.say("That picture couldn't be downloaded.")
+            } }, Modifier.fillMaxWidth().testTag("rescue-next-picture"), primary = false)
             if (r.photo != null) BigButton("Remove picture", { photoMenu = false; vm.update { st -> Rescue.setPhoto(st, null) } }, Modifier.fillMaxWidth(), primary = false)
         }
     }
@@ -650,6 +724,8 @@ fun RescueScreen(c: AppContainer, nav: NavController, draftId: String) {
                     OriginalPane(c, s.draft.source, s.draft.helpNotes, m,
                         onTransfer = { target, text -> vm.transfer(target, text) },
                         onAskAbout = { p, x, y -> pinAt = Triple(p, x, y) },
+                        onEditSource = { src -> vm.update { x -> x.copy(draft = x.draft.copy(source = src)) } },
+                        onCover = { name -> vm.update { x -> Rescue.setPhoto(x, name) } },
                         onReadPage = { html, url ->
                             val d = WebRecipeExtractor.extract(html, url); val r = d.recipe
                             // keep what the page showed, so it can be compared offline next time
@@ -796,8 +872,8 @@ fun UnfinishedScreen(c: AppContainer, nav: NavController) {
         Text("Stored originals (page copies, PDFs, photos and scans) use ${megabytes(c.originals.bytesUsed())} on this phone. They are only removed when you delete them: here for unfinished recipes, or under View the original on a saved recipe.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("originals-usage"))
     }
     deleting?.let { d ->
-        ConfirmDialog("Delete “${d.recipe.title.ifBlank { "Untitled recipe" }}”?", "The unfinished work is removed, and so is the stored copy of its original (${megabytes(c.originals.bytesOf(d.source.files))}) unless a saved recipe uses it. This cannot be undone.", "Delete", destructive = true,
-            onDismiss = { deleting = null }, onConfirm = { c.drafts.delete(d.id); c.originals.deleteUnreferenced(d.source.files, c.drafts); deleting = null })
+        ConfirmDialog("Delete “${d.recipe.title.ifBlank { "Untitled recipe" }}”?", "The unfinished work is removed, and so is the stored copy of its original (${megabytes(c.originals.bytesOf(d.source.allFiles))}) unless a saved recipe uses it. This cannot be undone.", "Delete", destructive = true,
+            onDismiss = { deleting = null }, onConfirm = { c.drafts.delete(d.id); c.originals.deleteUnreferenced(d.source.allFiles, c.drafts); deleting = null })
     }
 }
 
@@ -818,6 +894,6 @@ fun OriginalScreen(c: AppContainer, nav: NavController, recipeId: String) {
             else OriginalPane(c, o.source, o.helpNotes, Modifier.weight(1f).fillMaxWidth())
         }
     }
-    if (confirm && o != null) ConfirmDialog("Remove the stored original?", "The copy kept on this phone (${megabytes(c.originals.bytesOf(o.source.files))}) is deleted. The recipe itself, its text and its web address are kept. This cannot be undone.", "Remove", destructive = true,
-        onDismiss = { confirm = false }, onConfirm = { confirm = false; c.originals.link(recipeId, o.source.copy(files = emptyList()), o.helpNotes); c.originals.deleteUnreferenced(o.source.files, c.drafts) })
+    if (confirm && o != null) ConfirmDialog("Remove the stored original?", "The copy kept on this phone (${megabytes(c.originals.bytesOf(o.source.allFiles))}) is deleted. The recipe itself, its text and its web address are kept. This cannot be undone.", "Remove", destructive = true,
+        onDismiss = { confirm = false }, onConfirm = { confirm = false; c.originals.link(recipeId, o.source.copy(files = emptyList(), cleaned = emptyList(), dishPhoto = null), o.helpNotes); c.originals.deleteUnreferenced(o.source.allFiles, c.drafts) })
 }
