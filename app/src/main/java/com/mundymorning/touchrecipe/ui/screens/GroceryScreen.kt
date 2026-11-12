@@ -40,7 +40,9 @@ import com.mundymorning.touchrecipe.core.grocery.*
 import com.mundymorning.touchrecipe.core.model.GroceryItem
 import com.mundymorning.touchrecipe.core.planner.Planner
 import com.mundymorning.touchrecipe.ui.Routes
-import com.mundymorning.touchrecipe.ui.art.ArtScreen
+import com.mundymorning.touchrecipe.ui.art.ArtButton
+import com.mundymorning.touchrecipe.ui.art.ArtSlot
+import com.mundymorning.touchrecipe.ui.art.PageFrame
 import com.mundymorning.touchrecipe.ui.components.*
 import com.mundymorning.touchrecipe.ui.theme.BodyFont
 import com.mundymorning.touchrecipe.ui.theme.DisplayFont
@@ -68,22 +70,31 @@ fun GroceryScreen(c: AppContainer, nav: NavController) {
     val allAisles = DEFAULT_AISLES + customAisles
     val checkedCount = items.count { it.checked }
 
-    ArtScreen("grocery", "Grocery List", describe = { t ->
-        if (t.id == "week") "Week range, ${Planner.rangeLabel(week)}" else null
-    }, onTarget = { id ->
-        when {
-            id == "back" -> nav.goBackOr(Routes.HUB)
-            id == "week" -> weekSheet = true
-            id == "basket" -> scope.launch { val n = c.repo.generateGroceries(week); basketSheet = true; snack.showSnackbar(if (n == 0) "No meals are planned this week, so nothing was added." else "Refreshed from $n planned ${if (n == 1) "meal" else "meals"}.") }
-            id == "add" -> addSheet = true
-            id == "clear" -> if (checkedCount == 0) scope.launch { snack.showSnackbar("Nothing is checked off yet.") } else confirmClear = true
-        }
-    }) {
-        Box(Modifier.region(page.target("week").box).padding(end = dp(40f), start = dp(8f)).clearAndSetSemantics { }, contentAlignment = Alignment.CenterStart) {
-            FitText(Planner.rangeLabel(week), TextStyle(fontFamily = BodyFont, fontWeight = FontWeight.Bold, fontSize = sp(24f), color = Palette.Ink), modifier = Modifier.testTag("grocery-week"))
-        }
-        // one continuous open parchment panel: category headings in bold with their items beneath, scrolling inside the panel
-        GroceryList(c, week, items, allAisles, collapsed, onOpen = { rowSheet = it }, modifier = Modifier.region("list"))
+    PageFrame("Grocery List",
+        topBar = {
+            Column(Modifier.fillMaxWidth().background(Palette.CreamDeep.copy(alpha = 0.7f)).padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ArtButton("back", "←", round = true, description = "Back", onClick = { nav.goBackOr(Routes.HUB) })
+                    Text("Grocery List", Modifier.weight(1f).padding(start = 12.dp).semantics { heading() }, style = TextStyle(fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 24.sp, color = Palette.Forest))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    ArtButton("week", "Week", Modifier.weight(1f), description = "Week range, ${Planner.rangeLabel(week)}", hint = "Chooses the week", onClick = { weekSheet = true }) {
+                        Text(Planner.rangeLabel(week) + "  ▾", style = TextStyle(fontFamily = BodyFont, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Palette.Ink), maxLines = 1, modifier = Modifier.testTag("grocery-week"))
+                    }
+                    ArtButton("basket", "From meal plan", hint = "Adds the ingredients of this week's planned meals",
+                        onClick = { scope.launch { val n = c.repo.generateGroceries(week); basketSheet = true; snack.showSnackbar(if (n == 0) "No meals are planned this week, so nothing was added." else "Refreshed from $n planned ${if (n == 1) "meal" else "meals"}.") } })
+                }
+            }
+        },
+        bottomBar = {
+            Row(Modifier.fillMaxWidth().background(Palette.CreamDeep.copy(alpha = 0.7f)).padding(horizontal = 10.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ArtButton("add", "Add Item", Modifier.weight(1f), primary = true, onClick = { addSheet = true })
+                ArtButton("clear", "Clear checked", Modifier.weight(1f), onClick = { if (checkedCount == 0) scope.launch { snack.showSnackbar("Nothing is checked off yet.") } else confirmClear = true })
+            }
+        },
+    ) {
+        // one list as long as it needs to be: category headings in bold with their items beneath
+        GroceryList(c, week, items, allAisles, collapsed, onOpen = { rowSheet = it }, modifier = Modifier.fillMaxSize())
     }
 
     if (weekSheet) WeekSheet(week, sundayStart, { weekSheet = false }, { c.selectedWeek.value = it })
@@ -105,7 +116,10 @@ private fun GroceryList(c: AppContainer, week: java.time.LocalDate, all: List<Gr
     val text = TextStyle(fontFamily = BodyFont, fontSize = 17.sp, color = Palette.Ink)
     // known categories first (in their usual order), then any other category that has items; empty categories are not shown
     val groups = (aisles + all.map { it.aisle }).distinct().map { k -> k to all.filter { it.aisle == k } }.filter { it.second.isNotEmpty() }
-    LazyColumn(modifier.padding(horizontal = 6.dp).fadeBottom(18.dp).testTag("grocery-list"), contentPadding = PaddingValues(bottom = 28.dp)) {
+    // the list position survives leaving the app and coming back
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    LazyColumn(modifier.testTag("grocery-list"), state = listState, contentPadding = PaddingValues(bottom = 20.dp)) {
+        item(key = "art-top") { ArtSlot("grocery_list_top") }
         if (groups.isEmpty()) item(key = "empty") {
             Text("Nothing on your list yet. Tap Add Item below, add ingredients from a recipe, or plan meals and tap the basket.", Modifier.padding(horizontal = 10.dp, vertical = 16.dp).testTag("grocery-empty"), style = text.copy(fontSize = 18.sp), color = Palette.Ink.copy(alpha = 0.75f))
         }

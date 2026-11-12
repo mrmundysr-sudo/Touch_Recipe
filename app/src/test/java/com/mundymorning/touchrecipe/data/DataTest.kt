@@ -208,4 +208,42 @@ class DataTest {
         assertTrue(r.recipe.notes.startsWith("Family favourite.")); assertTrue(r.recipe.notes.contains("• 1 cup whole milk")); assertTrue(r.recipe.notes.contains("• 2 tbsp butter"))
         assertTrue(r.unplaced.isEmpty())
     }
+
+    // ---- 2026-11 major update: originals and unfinished recipes are kept as files, never removed silently ----
+    @Test fun everyImportKeepsItsOriginal() = blocking {
+        val c = testContainer(ctx, fetcher = FakeFetcher().apply { pages["https://site.test/soup"] = FetchOutcome.Page(LD_PAGE, "https://site.test/soup") }, ocr = FakeOcr("Pancakes\nIngredients\n1 cup flour\n1 egg\nDirections\nMix and fry for 3 minutes."))
+        val web = c.importer.import(ImportInput.Url("https://site.test/soup"))
+        assertEquals(SourceKind.WEB, web.source.kind); assertEquals("https://site.test/soup", web.source.url)
+        assertTrue("a copy of the page is stored", web.source.files.size == 1 && c.originals.exists(web.source.files[0]) && c.originals.file(web.source.files[0]).readText().contains("Imported Carbonara"))
+        val pdfBytes = pdf("recipe-single.pdf")
+        val p = c.importer.import(ImportInput.Pdf(fileUri(ctx, "keep.pdf", pdfBytes)))
+        assertEquals(SourceKind.PDF, p.source.kind); assertEquals("the PDF itself is kept, byte for byte", pdfBytes.size.toLong(), c.originals.file(p.source.files.single()).length())
+        assertTrue(p.source.text.contains("2 1/2 cups all-purpose flour"))
+        val photo = jpegBytes()
+        val img = c.importer.import(ImportInput.Image(fileUri(ctx, "card.jpg", photo)))
+        assertEquals(SourceKind.IMAGE, img.source.kind); assertEquals("the photograph is kept unchanged", photo.size.toLong(), c.originals.file(img.source.files.single()).length())
+        val txt = c.importer.import(ImportInput.Text("Toast\n2 slices bread\nToast them for 2 minutes."))
+        assertEquals(SourceKind.TEXT, txt.source.kind); assertTrue(txt.source.text.contains("2 slices bread"))
+    }
+
+    @Test fun draftsSurviveARestartAndOriginalsAreOnlyDeletedWhenNothingUsesThem() = blocking {
+        val c = testContainer(ctx)
+        val file = c.originals.saveBytes(jpegBytes(), "jpg")!!; val other = c.originals.saveBytes(jpegBytes(), "jpg")!!
+        val src = OriginalSource(SourceKind.IMAGE, files = listOf(file), text = "2 cups flour", capturedAt = 5)
+        val draft = com.mundymorning.touchrecipe.core.rescue.RescueDraft(recipe = Recipe(title = "Card"), source = src, helpNotes = listOf(HelpNote(target = "source", text = "What is this word?", x = 0.5f, y = 0.5f)), createdAt = 1, updatedAt = 2)
+        c.drafts.save(draft)
+        // a new process: fresh store objects over the same files
+        val again = DraftStore(ctx).all().single { it.id == draft.id }
+        assertEquals(draft, again); assertEquals(1, again.openQuestions)
+        // saving the recipe links the same file; deleting the draft must then keep it
+        val originals = OriginalStore(ctx)
+        originals.link("recipe-1", src, draft.helpNotes)
+        c.drafts.delete(draft.id); originals.deleteUnreferenced(src.files + other, c.drafts)
+        assertTrue("still used by the saved recipe", originals.exists(file)); assertFalse("used by nothing", originals.exists(other))
+        assertEquals("What is this word?", originals.forRecipe("recipe-1")!!.helpNotes.single().text)
+        originals.updateHelp("recipe-1") { l -> l.map { it.copy(resolved = true) } }
+        assertTrue(OriginalStore(ctx).forRecipe("recipe-1")!!.helpNotes.single().resolved)
+        originals.unlink("recipe-1", c.drafts)
+        assertFalse(originals.exists(file)); assertNull(originals.forRecipe("recipe-1"))
+    }
 }

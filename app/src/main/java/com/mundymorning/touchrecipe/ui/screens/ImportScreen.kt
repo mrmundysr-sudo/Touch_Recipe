@@ -2,6 +2,9 @@ package com.mundymorning.touchrecipe.ui.screens
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -9,6 +12,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -42,6 +48,8 @@ sealed interface ImportUi {
 class ImportViewModel(private val c: AppContainer) : ViewModel() {
     val ui = MutableStateFlow<ImportUi>(c.importSession.draft.value?.let { ImportUi.Done(it) } ?: ImportUi.Idle)
     private var last: ImportInput? = null
+    /** The web address of the last attempt, so a page that would not import can be opened and read on screen instead. */
+    val lastUrl: String? get() = (last as? ImportInput.Url)?.url
     private var job: Job? = null
 
     fun start(input: ImportInput) {
@@ -97,6 +105,8 @@ fun ImportScreen(c: AppContainer, nav: NavController) {
     var shareHelp by remember { mutableStateOf(false) }
     var resultOpen by remember { mutableStateOf(ui !is ImportUi.Idle) }
 
+    val draftTick by c.drafts.changes.collectAsState()
+    val draftCount = remember(draftTick) { c.drafts.count() }
     LaunchedEffect(share) { share?.let { vm.start(it); resultOpen = true; c.pendingShare.value = null } }
     LaunchedEffect(ui) { if (ui !is ImportUi.Idle) resultOpen = true }
 
@@ -115,7 +125,14 @@ fun ImportScreen(c: AppContainer, nav: NavController) {
             "share" -> shareHelp = true
             "continue" -> if (c.importSession.draft.value != null) { vm.keepUnplaced(); nav.navigate(Routes.review()) } else scope.launch { snack.showSnackbar("Add a recipe first: paste a link, type or paste text, scan, or choose a file.") }
         }
-    })
+    }) {
+        // temporary code-drawn entry to the unfinished recipes; an artwork piece will take this place
+        if (draftCount > 0) Box(Modifier.region(com.mundymorning.touchrecipe.ui.art.NRect(0.56f, 0.014f, 0.42f, 0.064f)).clip(androidx.compose.foundation.shape.RoundedCornerShape(50)).background(androidx.compose.ui.graphics.Color(0xFFFBF4E6).copy(alpha = 0.96f))
+            .border(1.5.dp, com.mundymorning.touchrecipe.ui.theme.Palette.Brass, androidx.compose.foundation.shape.RoundedCornerShape(50))
+            .clickable(onClickLabel = "Opens Unfinished Recipes", role = Role.Button) { nav.navigate(Routes.UNFINISHED) }.testTag("unfinished-chip"), contentAlignment = Alignment.Center) {
+            Text("Unfinished ($draftCount)", color = com.mundymorning.touchrecipe.ui.theme.Palette.Ink, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1)
+        }
+    }
 
     if (urlSheet) UrlSheet(clipboardText = { clipboard.getText()?.text.orEmpty() }, onDismiss = { urlSheet = false }, onImport = { urlSheet = false; vm.start(ImportInput.Url(it)) }, normalize = c.importer::normalizeUrl)
     if (textSheet) TextSheet(clipboardText = { clipboard.getText()?.text.orEmpty() }, onDismiss = { textSheet = false }, onImport = { textSheet = false; vm.start(c.importer.classify(it).let { i -> if (i is ImportInput.Url) ImportInput.Text(it) else i }) })
@@ -138,7 +155,10 @@ fun ImportScreen(c: AppContainer, nav: NavController) {
     }
     if (resultOpen && ui !is ImportUi.Idle) ResultSheet(ui, onCancel = { vm.cancel(); resultOpen = false }, onRetry = vm::retry,
         onClose = { resultOpen = false; vm.dismiss() }, onPasteInstead = { resultOpen = false; vm.dismiss(); textSheet = true },
-        onContinue = { resultOpen = false; vm.keepUnplaced(); nav.navigate(Routes.review()) }, onDiscard = { resultOpen = false; vm.discard() })
+        onContinue = { resultOpen = false; vm.keepUnplaced(); nav.navigate(Routes.review()) }, onDiscard = { resultOpen = false; vm.discard() },
+        onRescue = { resultOpen = false; draftFromImport(c)?.let { d -> vm.discard(); nav.navigate(Routes.rescue(d.id)) } },
+        onLater = { resultOpen = false; if (draftFromImport(c) != null) { vm.discard(); scope.launch { snack.say("Kept in Unfinished Recipes") } } },
+        onOpenPage = vm.lastUrl?.let { u -> { resultOpen = false; vm.dismiss(); nav.navigate(Routes.rescue(draftForPage(c, u).id)) } })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -181,7 +201,8 @@ private fun TextSheet(clipboardText: () -> String, onDismiss: () -> Unit, onImpo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ResultSheet(ui: ImportUi, onCancel: () -> Unit, onRetry: () -> Unit, onClose: () -> Unit, onPasteInstead: () -> Unit, onContinue: () -> Unit, onDiscard: () -> Unit) {
+private fun ResultSheet(ui: ImportUi, onCancel: () -> Unit, onRetry: () -> Unit, onClose: () -> Unit, onPasteInstead: () -> Unit, onContinue: () -> Unit, onDiscard: () -> Unit,
+                        onRescue: () -> Unit = {}, onLater: () -> Unit = {}, onOpenPage: (() -> Unit)? = null) {
     ModalBottomSheet(onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.padding(20.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState()).semantics { liveRegion = LiveRegionMode.Polite }.testTag("import-result"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             when (ui) {
@@ -196,6 +217,8 @@ private fun ResultSheet(ui: ImportUi, onCancel: () -> Unit, onRetry: () -> Unit,
                     Text(ui.message, Modifier.testTag("import-error"))
                     Text("Nothing was saved. Your other recipes are untouched.", style = MaterialTheme.typography.bodySmall)
                     if (ui.retryable) BigButton("Try again", onRetry, Modifier.fillMaxWidth())
+                    // the page can still be opened on screen and read from there, the way a browser shows it
+                    if (onOpenPage != null && !ui.offline) BigButton("Open the page here and read it", onOpenPage, Modifier.fillMaxWidth().testTag("result-open-page"), primary = false)
                     BigButton("Paste or type the recipe instead", onPasteInstead, Modifier.fillMaxWidth(), primary = !ui.retryable)
                     TextButton(onClose, Modifier.fillMaxWidth()) { Text("Close") }
                 }
@@ -223,6 +246,8 @@ private fun ResultSheet(ui: ImportUi, onCancel: () -> Unit, onRetry: () -> Unit,
                     }
                     d.warnings.filter { it.severity == Severity.INFO && (it.field == "ingredients" || it.field == "directions") }.forEach { Text(it.message, style = MaterialTheme.typography.bodySmall) }
                     BigButton("Continue to Review", onContinue, Modifier.fillMaxWidth().testTag("result-continue"))
+                    BigButton("Compare with the original (Recipe Rescue)", onRescue, Modifier.fillMaxWidth().testTag("result-rescue"), primary = false)
+                    BigButton("Save for later", onLater, Modifier.fillMaxWidth().testTag("result-later"), primary = false)
                     TextButton(onDiscard, Modifier.fillMaxWidth()) { Text("Discard this import") }
                 }
                 ImportUi.Idle -> {}

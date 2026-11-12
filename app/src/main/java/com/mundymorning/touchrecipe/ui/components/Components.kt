@@ -110,6 +110,8 @@ fun EditableRows(
     numbered: Boolean = false, hint: String, showErrors: Boolean = false, compact: Boolean = false,
     textStyle: TextStyle = TextStyle(fontSize = 16.sp, color = Palette.Ink), rowBackground: Color = Color(0xFFFBF4E6),
     newRow: () -> EditRow, tag: String = "rows", allowHeaders: Boolean = false, onEmptyRowClear: Boolean = false,
+    /** True on a page that scrolls as a whole: every row is laid out (no inner scrolling) and a row is moved with its up button. */
+    expand: Boolean = false,
 ) {
     val state = rememberLazyListState()
     var dragId by remember { mutableStateOf<String?>(null) }
@@ -123,7 +125,7 @@ fun EditableRows(
         val id = focusNext ?: return@LaunchedEffect
         runCatching { focusers[id]?.requestFocus() }
         focusNext = null
-        rows.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { state.animateScrollToItem(it) }
+        if (!expand) rows.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { state.animateScrollToItem(it) }
     }
 
     fun move(from: Int, to: Int) {
@@ -134,8 +136,7 @@ fun EditableRows(
     var number = 0
     val numbers = rows.map { if (it.header) 0 else ++number }
 
-    LazyColumn(modifier.testTag(tag), state = state, verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp)) {
-        itemsIndexed(rows, key = { _, r -> r.id }) { index, row ->
+    val rowContent: @Composable (Int, EditRow) -> Unit = { index, row ->
             val fr = focusers.getOrPut(row.id) { FocusRequester() }
             val dragging = dragId == row.id
             val invalid = showErrors && row.text.isBlank()
@@ -155,8 +156,9 @@ fun EditableRows(
                     },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // drag handle
-                Box(
+                // drag handle (inside a scrolling page: a move-up button instead, so the page scroll is never fought over)
+                if (expand) Box(Modifier.size(44.dp).clickable(enabled = index > 0, onClickLabel = "Move up", role = Role.Button) { move(index, index - 1) }.semantics { contentDescription = "Move up" }, contentAlignment = Alignment.Center) { Text("↑", fontSize = 20.sp, color = if (index > 0) Palette.Wood else Palette.Wood.copy(alpha = 0.3f)) }
+                else Box(
                     Modifier.size(44.dp).semantics { contentDescription = "Reorder handle. Use the actions menu to move up or down."; role = Role.Button }
                         .pointerInput(row.id) {
                             detectDragGestures(
@@ -200,7 +202,10 @@ fun EditableRows(
                 )
                 IconButtonBox("Delete ${if (numbered) "step ${numbers[index]}" else "item ${index + 1}"}", "−", Palette.Tomato) { onDelete(row, index) }
             }
-        }
+    }
+    if (expand) Column(modifier.testTag(tag), verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp)) { rows.forEachIndexed { index, row -> key(row.id) { rowContent(index, row) } } }
+    else LazyColumn(modifier.testTag(tag), state = state, verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp)) {
+        itemsIndexed(rows, key = { _, r -> r.id }) { index, row -> rowContent(index, row) }
     }
 }
 

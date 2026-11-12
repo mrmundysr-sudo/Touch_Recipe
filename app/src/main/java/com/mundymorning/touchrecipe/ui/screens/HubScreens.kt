@@ -26,7 +26,7 @@ fun SplashScreen(c: AppContainer, onDone: () -> Unit) {
     LaunchedEffect(Unit) {
         // Prepare local data while the splash is visible, but never trap the user: a hard 1.6 s ceiling and tap-to-skip.
         val minShow = launch { delay(900) }
-        runCatching { kotlinx.coroutines.withTimeout(1600) { c.repo.ensureSeeded(); c.photos.sweep(c.repo.db.recipes().all().mapNotNull { it.photo }.toSet()) } }
+        runCatching { kotlinx.coroutines.withTimeout(1600) { c.repo.ensureSeeded(); c.photos.sweep(c.repo.db.recipes().all().mapNotNull { it.photo }.toSet() + c.drafts.all().mapNotNull { it.recipe.photo }) } }
         minShow.join()
         onDone()
     }

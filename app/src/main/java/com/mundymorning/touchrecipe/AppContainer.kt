@@ -26,7 +26,10 @@ class AppContainer(
     val repo = Repository(db, clock)
     val photos = PhotoStore(context)
     val art = ArtLoader(context)
-    val importer = ImportService(context, fetcher, ocr, photos)
+    /** Originals (page snapshots, PDFs, scans) and unfinished recipes: plain files, no database change. */
+    val originals = OriginalStore(context)
+    val drafts = DraftStore(context)
+    val importer = ImportService(context, fetcher, ocr, photos, originals)
     val backup = BackupManager(context, repo, photos, prefs)
     val importSession = ImportSession()
     /** The week shown by both the Meal Planner and the Grocery List. */

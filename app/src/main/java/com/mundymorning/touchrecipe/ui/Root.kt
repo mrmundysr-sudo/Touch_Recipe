@@ -46,6 +46,9 @@ object Routes {
     const val PLANNER = "planner"; const val GROCERY = "grocery"; const val DRAWER = "drawer"
     const val SETTINGS = "settings"; const val CATEGORIES = "categories"; const val BACKUP = "backup"; const val THEMES = "themes"
     const val HELP = "help"; const val TOOLS = "tools"; const val PRINT = "print"
+    const val RESCUE = "rescue/{id}"; fun rescue(draftId: String) = "rescue/$draftId"
+    const val UNFINISHED = "unfinished"
+    const val ORIGINAL = "original/{id}"; fun original(recipeId: String) = "original/$recipeId"
 }
 
 @Composable
@@ -106,6 +109,9 @@ fun TouchRecipeRoot(c: AppContainer, activity: Activity? = null) {
                     composable(Routes.HELP) { HelpScreen(c, nav) }
                     composable(Routes.TOOLS) { ToolsScreen(c, nav) }
                     composable(Routes.PRINT) { PrintShareScreen(c, nav) }
+                    composable(Routes.RESCUE, listOf(navArgument("id") { type = NavType.StringType })) { RescueScreen(c, nav, it.arguments!!.getString("id")!!) }
+                    composable(Routes.UNFINISHED) { UnfinishedScreen(c, nav) }
+                    composable(Routes.ORIGINAL, listOf(navArgument("id") { type = NavType.StringType })) { OriginalScreen(c, nav, it.arguments!!.getString("id")!!) }
                 }
                 // Top, over the pages' decorative title space: a bottom snackbar would cover (and swallow taps on) Save, Next, Add Item.
                 SnackbarHost(snack, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 68.dp))

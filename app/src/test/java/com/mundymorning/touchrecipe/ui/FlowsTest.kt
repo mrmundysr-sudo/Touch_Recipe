@@ -397,4 +397,115 @@ class FlowsTest {
         rule.onNodeWithTag("timer-name").performTextInput("Biscuits"); rule.onNodeWithText("5 min").performClick(); rule.onNodeWithText("10 min").performClick(); rule.waitForIdle()
         assertEquals(2, c.prefs.timers.value.size); assertEquals("Biscuits", c.prefs.timers.value[0].name); assertTrue(c.prefs.timers.value.all { it.endAtMs != null })
     }
+
+    // ---------- 2026-11 major update: continuous pages ----------
+    @Test fun longRecipeIsOneContinuousPageWithNothingCutOff() {
+        start(false)
+        val long = Recipe(id = "big", title = "A Sunday Feast With A Deliberately Long Title That Must Be Shown In Full Rather Than Cut Short", servings = 8,
+            ingredients = (1..40).map { Ingredient("bi$it", "$it cups ingredient number $it") }, directions = (1..25).map { Direction("bd$it", "Step number $it: stir everything together well and keep going until it is done.") }, notes = "Closing note at the very end.")
+        runBlocking { c.repo.saveRecipe(long) }
+        rule.tapArt("rolodex"); rule.waitTag("recipe-card:big"); rule.clickTag("recipe-card:big"); rule.assertPage(long.title)
+        rule.onNodeWithText(long.title).assertExists()   // the whole title, not an ellipsis
+        // every ingredient and every direction is reachable by scrolling the one page; the buttons never leave the screen
+        rule.onNodeWithTag("ingredient-list").performScrollToNode(hasTestTag("ingredient:bi40")); rule.onNodeWithText("40 cups ingredient number 40").assertExists()
+        rule.onNodeWithTag("ingredient-list").performScrollToNode(hasTestTag("direction:bd25")); rule.onNodeWithText("Step number 25", substring = true).assertExists()
+        rule.onNodeWithTag("ingredient-list").performScrollToNode(hasTestTag("detail-notes")); rule.onNodeWithText("Closing note at the very end.").assertExists()
+        rule.waitTag("art:cook"); rule.waitTag("art:grocery"); rule.waitTag("art:serv_inc")
+        // Cook Mode: all 25 steps in one scrolling page, any step can be made current, and Next still works
+        rule.tapArt("cook"); rule.waitTag("step-number"); assertEquals("1", rule.textOf("step-number"))
+        rule.onNodeWithTag("cook-scroll").performScrollToNode(hasTestTag("cook-step:24")); rule.onNodeWithTag("cook-step:24", useUnmergedTree = true).performClick()
+        rule.waitUntil(20000) { rule.textOf("step-number") == "25" }
+        rule.tapArt("prev"); rule.waitUntil(20000) { rule.textOf("step-number") == "24" }
+        rule.waitUntil(20000) { runBlocking { c.repo.cookSession("big") }?.stepIndex == 23 }   // progress is saved as it happens
+    }
+
+    // ---------- 2026-11 major update: Recipe Rescue ----------
+    private val messy = "Grandma's Biscuits\nServes 8\nIngredients\n2 cups flour\n1 tbsp WRONG LINE\n1/2 cup milk\nDirections\nMix the flour and the milk.\nBake for 15 minutes."
+
+    @Test fun importCanBeSavedForLaterAndResumedFromUnfinishedRecipes() {
+        start(false); rule.tapArt("new_recipe"); rule.assertPage("Import Recipe")
+        rule.tapArt("text"); rule.onNodeWithTag("text-field").performTextInput(messy); rule.onNodeWithTag("text-import").performClick()
+        rule.waitTag("result-later"); rule.onNodeWithTag("result-later").performScrollTo().performClick()
+        rule.waitUntil(20000) { c.drafts.count() == 1 }
+        assertTrue("nothing is saved to the collection yet", recipes().isEmpty()); assertNull(c.importSession.draft.value)
+        val d = c.drafts.all().single()
+        assertEquals("Grandma's Biscuits", d.recipe.title); assertEquals(3, d.recipe.ingredients.size); assertEquals(SourceKind.TEXT, d.source.kind)
+        assertTrue("the original text is kept with the draft", d.source.text.contains("1 tbsp WRONG LINE"))
+        // it is listed, and opening it shows the original beside the recipe
+        rule.waitTag("unfinished-chip"); rule.onNodeWithTag("unfinished-chip", useUnmergedTree = true).performClick(); rule.assertPage("Unfinished Recipes")
+        rule.waitTag("unfinished:${d.id}"); rule.onNodeWithTag("unfinished:${d.id}", useUnmergedTree = true).performClick(); rule.assertPage("Recipe Rescue")
+        rule.waitTag("orig-lines"); rule.waitTag("rescue-editor"); rule.waitTag("orig-line:0")
+    }
+
+    @Test fun rescueRemovesWrongLinesTransfersFromTheOriginalUndoesAndSaves() {
+        start(false)
+        val draft = runBlocking { c.importer.import(com.mundymorning.touchrecipe.data.ImportInput.Text(messy)) }
+        c.importSession.draft.value = draft
+        val d = com.mundymorning.touchrecipe.ui.screens.draftFromImport(c)!!
+        val wrong = d.recipe.ingredients[1].id
+        rule.tapArt("new_recipe"); rule.assertPage("Import Recipe"); rule.waitTag("unfinished-chip"); rule.onNodeWithTag("unfinished-chip", useUnmergedTree = true).performClick()
+        rule.waitTag("unfinished:${d.id}"); rule.onNodeWithTag("unfinished:${d.id}", useUnmergedTree = true).performClick(); rule.assertPage("Recipe Rescue")
+        // select mode: remove one wrong ingredient, everything else stays
+        rule.clickTag("rescue-select"); rule.waitTag("select:$wrong"); rule.onNodeWithTag("select:$wrong", useUnmergedTree = true).performClick()
+        rule.clickTag("rescue-remove-selected")
+        rule.waitUntil(20000) { c.drafts.get(d.id)?.recipe?.ingredients?.size == 2 }
+        assertEquals(listOf("2 cups flour", "1/2 cup milk"), c.drafts.get(d.id)!!.recipe.ingredients.map { it.text }); assertEquals(2, c.drafts.get(d.id)!!.recipe.directions.size)
+        // undo brings it back, redo removes it again
+        rule.clickTag("rescue-undo"); rule.waitUntil(20000) { c.drafts.get(d.id)?.recipe?.ingredients?.size == 3 }
+        rule.clickTag("rescue-redo"); rule.waitUntil(20000) { c.drafts.get(d.id)?.recipe?.ingredients?.size == 2 }
+        // transfer two lines of the original into the ingredients, in order
+        val lines = d.source.lines
+        val a = lines.indexOf("2 cups flour"); val b = lines.indexOf("1/2 cup milk")
+        rule.onNodeWithTag("orig-lines").performScrollToNode(hasTestTag("orig-line:$a")); rule.onNodeWithTag("orig-line:$a", useUnmergedTree = true).performClick()
+        rule.onNodeWithTag("orig-lines").performScrollToNode(hasTestTag("orig-line:$b")); rule.onNodeWithTag("orig-line:$b", useUnmergedTree = true).performClick()
+        rule.clickTag("transfer:ingredients")
+        rule.waitUntil(20000) { c.drafts.get(d.id)?.recipe?.ingredients?.size == 4 }
+        assertEquals(listOf("2 cups flour", "1/2 cup milk", "2 cups flour", "1/2 cup milk"), c.drafts.get(d.id)!!.recipe.ingredients.map { it.text })
+        // save: a new recipe with its original attached, and the draft is gone
+        rule.clickTag("rescue-save"); rule.assertPage("Grandma's Biscuits")
+        val saved = recipes().single()
+        assertEquals(4, saved.ingredients.size); assertEquals(8, saved.servings); assertEquals(0, c.drafts.count())
+        val kept = c.originals.forRecipe(saved.id)!!
+        assertTrue("the original stays with the saved recipe", kept.source.text.contains("1 tbsp WRONG LINE"))
+        rule.onNodeWithTag("ingredient-list").performScrollToNode(hasTestTag("view-original")); rule.onNodeWithTag("view-original").assertExists()
+    }
+
+    @Test fun rescueStartFreshKeepsChosenFieldsAndQuestionsSurviveSaving() {
+        start(false)
+        c.importSession.draft.value = runBlocking { c.importer.import(com.mundymorning.touchrecipe.data.ImportInput.Text(messy)) }
+        val d = com.mundymorning.touchrecipe.ui.screens.draftFromImport(c)!!
+        // a question on one ingredient, written the way the editor does it
+        c.drafts.save(com.mundymorning.touchrecipe.core.rescue.Rescue.addHelp(com.mundymorning.touchrecipe.core.rescue.RescueState(d), d.recipe.ingredients[2].id, "Ask Mom whether this says 1 cup or 1/2 cup.").draft)
+        rule.tapArt("new_recipe"); rule.waitTag("unfinished-chip"); rule.onNodeWithTag("unfinished-chip", useUnmergedTree = true).performClick()
+        rule.waitTag("unfinished:${d.id}"); rule.onNodeWithText("1 question open", substring = true).assertExists()
+        rule.onNodeWithTag("unfinished:${d.id}", useUnmergedTree = true).performClick(); rule.assertPage("Recipe Rescue")
+        rule.onNodeWithTag("rescue-editor").performScrollToNode(hasTestTag("help-flag:${d.recipe.ingredients[2].id}")); rule.waitTag("help-flag:${d.recipe.ingredients[2].id}")
+        // Start Fresh, keeping the title
+        rule.clickTag("rescue-more"); rule.clickTag("rescue-fresh"); rule.waitTag("fresh-keep:f:title"); rule.onNodeWithTag("fresh-keep:f:title", useUnmergedTree = true).performClick(); rule.clickTag("fresh-confirm")
+        rule.waitUntil(20000) { c.drafts.get(d.id)?.recipe?.ingredients?.isEmpty() == true }
+        val cleared = c.drafts.get(d.id)!!
+        assertEquals("Grandma's Biscuits", cleared.recipe.title); assertTrue(cleared.recipe.directions.isEmpty()); assertNull(cleared.recipe.servings)
+        assertTrue("the original is untouched by Start Fresh", cleared.source.text.contains("2 cups flour")); assertEquals(1, cleared.openQuestions)
+        // an empty recipe cannot be saved by accident
+        rule.clickTag("rescue-save"); rule.waitText("Add at least one ingredient", substring = true); assertTrue(recipes().isEmpty())
+        // undo restores everything, then it saves with the open question attached
+        rule.clickTag("rescue-undo"); rule.waitUntil(20000) { c.drafts.get(d.id)?.recipe?.ingredients?.size == 3 }
+        rule.clickTag("rescue-save"); rule.assertPage("Grandma's Biscuits")
+        val saved = recipes().single()
+        assertEquals(1, c.originals.forRecipe(saved.id)!!.helpNotes.count { !it.resolved })
+        rule.waitTag("detail-questions"); rule.onNodeWithText("Ask Mom whether this says 1 cup or 1/2 cup.", substring = true).assertExists()
+    }
+
+    @Test fun savedRecipeCanBeRepairedAndUpdatesOnlyAfterConfirmation() {
+        start(); rule.tapArt("rolodex"); rule.waitTag("recipe-card:r1"); rule.clickTag("recipe-card:r1"); rule.assertPage("Spaghetti al Pomodoro")
+        rule.clickTag("detail-more"); rule.clickTag("detail-rescue"); rule.assertPage("Recipe Rescue")
+        val d = c.drafts.all().single(); assertEquals("r1", d.recipeId)
+        rule.clickTag("rescue-select"); rule.clickTag("rescue-all-steps"); rule.clickTag("rescue-remove-selected")
+        rule.waitUntil(20000) { c.drafts.get(d.id)?.recipe?.directions?.isEmpty() == true }
+        assertEquals("the saved recipe is not touched while it is being repaired", 3, runBlocking { c.repo.getRecipe("r1") }!!.directions.size)
+        rule.clickTag("rescue-save"); rule.waitText("Update the saved recipe?"); rule.onNodeWithText("Update").performClick(); rule.assertPage("Spaghetti al Pomodoro")
+        val r = runBlocking { c.repo.getRecipe("r1") }!!
+        assertTrue(r.directions.isEmpty()); assertEquals("ingredients, categories and the rest are kept", sampleRecipe("r1").ingredients.size to listOf("b_dinner"), r.ingredients.size to r.categoryIds)
+        assertEquals(1, recipes().size); assertEquals(0, c.drafts.count())
+    }
 }

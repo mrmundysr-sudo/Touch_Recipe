@@ -30,7 +30,9 @@ import com.mundymorning.touchrecipe.AppContainer
 import com.mundymorning.touchrecipe.core.importer.Durations
 import com.mundymorning.touchrecipe.core.model.*
 import com.mundymorning.touchrecipe.ui.Routes
-import com.mundymorning.touchrecipe.ui.art.ArtScreen
+import com.mundymorning.touchrecipe.ui.art.ArtButton
+import com.mundymorning.touchrecipe.ui.art.ArtSlot
+import com.mundymorning.touchrecipe.ui.art.PageFrame
 import com.mundymorning.touchrecipe.ui.art.NRect
 import com.mundymorning.touchrecipe.ui.components.*
 import com.mundymorning.touchrecipe.ui.theme.BodyFont
@@ -114,6 +116,8 @@ class ReviewViewModel(private val c: AppContainer, private val editId: String?) 
     fun save(r: Recipe) = viewModelScope.launch {
         val s = c.repo.saveRecipe(r)
         if (originalPhoto != null && originalPhoto != s.photo) c.photos.delete(originalPhoto)
+        // the original the recipe came from stays with it, so it can be compared or repaired later
+        if (editId == null) c.importSession.draft.value?.source?.let { src -> if (!src.isEmpty) c.originals.link(s.id, src, emptyList()) }
         c.importSession.clear(); saved.value = s.id
     }
 
@@ -175,66 +179,93 @@ fun ReviewScreen(c: AppContainer, nav: NavController, editId: String?) {
         scope.launch { val dup = vm.duplicateOf(r); if (dup != null) duplicate = dup else vm.save(r) }
     }
 
-    ArtScreen("review", if (editId != null) "Edit recipe" else "Review and save", onTarget = { id ->
-        when (id) {
-            "back" -> leave()
-            "photo" -> photoMenu = true
-            "add_ingredient" -> vm.edit { it.copy(ingredients = it.ingredients + EditRow(newId(), "")) }
-            "add_direction" -> vm.edit { it.copy(directions = it.directions + EditRow(newId(), "")) }
-            "ingredients_head" -> ingEditor = true
-            "directions_head" -> dirEditor = true
-            "add_category" -> catsOpen = true
-            "details" -> detailsOpen = true
-            "save" -> trySave()
-        }
-    }) {
-        // photo over the placeholder
-        if (s.photo != null) PhotoImage(c.photos, s.photo, Modifier.region(page.target("photo").box).clip(RoundedCornerShape(dp(14f))), s.title, description = "Recipe photo. Tap to change.")
-        // title and source fields
-        val fieldStyle = TextStyle(fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = sp(32f), color = Palette.Ink)
-        Box(Modifier.region("title").padding(start = dp(14f), end = dp(48f)), contentAlignment = Alignment.CenterStart) {
-            val invalid = s.showErrors && s.title.isBlank()
-            BasicTextField(s.title, { v -> vm.edit { it.copy(title = v) } }, Modifier.fillMaxWidth().testTag("title-field").semantics { contentDescription = "Recipe title" },
-                textStyle = fieldStyle, maxLines = 2, cursorBrush = SolidColor(Palette.Tomato),
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next),
-                decorationBox = { inner -> if (s.title.isEmpty()) Text(if (invalid) "Title needed" else "Recipe title", style = fieldStyle, color = if (invalid) MaterialTheme.colorScheme.error else Palette.Ink.copy(alpha = 0.45f)); inner() })
-        }
-        if (s.showErrors && s.title.isBlank()) Box(Modifier.region("title").border(3.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(dp(14f))).clearAndSetSemantics { })
-        WarnBadge("title", warn("title"), Modifier.region(NRect(0.80f, 0.205f, 0.12f, 0.05f)))
-        Box(Modifier.region("source").padding(start = dp(10f), end = dp(10f)), contentAlignment = Alignment.CenterStart) {
-            val st = TextStyle(fontFamily = BodyFont, fontSize = sp(28f), color = Palette.Ink)
-            BasicTextField(s.sourceText, { v -> vm.edit { it.copy(sourceText = v) } }, Modifier.fillMaxWidth().testTag("source-field").semantics { contentDescription = "Source" },
-                textStyle = st, singleLine = true, cursorBrush = SolidColor(Palette.Tomato), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
-                decorationBox = { inner -> if (s.sourceText.isEmpty()) Text("Source (website or cookbook)", style = st, color = Palette.Ink.copy(alpha = 0.45f)); inner() })
-        }
-        WarnBadge("photo", warn("photo"), Modifier.region(NRect(0.30f, 0.20f, 0.07f, 0.05f)).offset(y = dp(-40f)))
-
-        // ingredient rows (dynamic, start with one)
-        WarnBadge("ingredients", warn("ingredients"), Modifier.region(NRect(0.52f, 0.352f, 0.12f, 0.04f)))
-        EditableRows(
-            s.ingredients, { r -> vm.edit { it.copy(ingredients = r) } }, onDelete = { row, i ->
-                val before = s.ingredients
-                if (before.size == 1) vm.edit { it.copy(ingredients = listOf(EditRow(newId(), ""))) } else vm.edit { it.copy(ingredients = before.filter { x -> x.id != row.id }) }
-                scope.launch { snack.undoable("Removed ingredient ${i + 1}") { vm.edit { it.copy(ingredients = before) } } }
-            },
-            Modifier.region("ingredients").fadeBottom(), hint = "Ingredient, e.g. 2 cups flour", showErrors = false, compact = true, tag = "ing-rows",
-            textStyle = TextStyle(fontFamily = BodyFont, fontSize = sp(30f), lineHeight = sp(38f), color = Palette.Ink), newRow = { EditRow(newId(), "") },
-        )
-        WarnBadge("directions", warn("directions"), Modifier.region(NRect(0.52f, 0.552f, 0.12f, 0.04f)))
-        EditableRows(
-            s.directions, { r -> vm.edit { it.copy(directions = r) } }, onDelete = { row, i ->
-                val before = s.directions
-                if (before.size == 1) vm.edit { it.copy(directions = listOf(EditRow(newId(), ""))) } else vm.edit { it.copy(directions = before.filter { x -> x.id != row.id }) }
-                scope.launch { snack.undoable("Removed step ${i + 1}") { vm.edit { it.copy(directions = before) } } }
-            },
-            Modifier.region("directions").fadeBottom(), numbered = true, hint = "Describe this step", compact = true, tag = "dir-rows",
-            textStyle = TextStyle(fontFamily = BodyFont, fontSize = sp(30f), lineHeight = sp(38f), color = Palette.Ink), newRow = { EditRow(newId(), "") },
-        )
-        // categories: the enabled ones, tap to attach
-        FlowRow(Modifier.region(NRect(0.505f, 0.811f, 0.45f, 0.1f)).fadeBottom(18.dp).clipToBounds().verticalScroll(rememberScrollState()).testTag("review-categories"), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
-            cats.filter { it.enabled || it.id in s.categories }.forEach { cat ->
-                Chip(cat.name, cat.id in s.categories, { vm.edit { it.copy(categories = if (cat.id in it.categories) it.categories - cat.id else it.categories + cat.id) } })
+    val pageTitle = if (editId != null) "Edit recipe" else "Review and save"
+    val rowStyle = TextStyle(fontFamily = BodyFont, fontSize = 17.sp, lineHeight = 23.sp, color = Palette.Ink)
+    val headStyle = TextStyle(fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = Palette.Forest)
+    PageFrame(pageTitle,
+        topBar = {
+            Row(Modifier.fillMaxWidth().background(Palette.CreamDeep.copy(alpha = 0.7f)).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ArtButton("back", "←", round = true, description = "Back", onClick = { leave() })
+                Text(pageTitle, Modifier.weight(1f).semantics { heading() }, style = headStyle, maxLines = 1)
+                ArtButton("details", "Details", hint = "Times, servings, notes and description", onClick = { detailsOpen = true })
             }
+        },
+        bottomBar = {
+            Column(Modifier.fillMaxWidth().background(Palette.CreamDeep.copy(alpha = 0.7f)).padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ArtButton("add_ingredient", "+ Ingredient", Modifier.weight(1f), onClick = { vm.edit { it.copy(ingredients = it.ingredients + EditRow(newId(), "")) } })
+                    ArtButton("add_direction", "+ Direction", Modifier.weight(1f), onClick = { vm.edit { it.copy(directions = it.directions + EditRow(newId(), "")) } })
+                    ArtButton("add_category", "+ Category", Modifier.weight(1f), onClick = { catsOpen = true })
+                }
+                ArtButton("save", "Save Recipe", Modifier.fillMaxWidth(), primary = true, onClick = { trySave() })
+            }
+        },
+    ) {
+        // one page as long as the recipe: every ingredient and every direction is on it, nothing sits in a small window
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 20.dp).testTag("review-scroll"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ArtSlot("import_review_top")
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(112.dp, 84.dp).clip(RoundedCornerShape(12.dp)).background(Palette.CreamDeep).clickable(onClickLabel = "Changes the recipe photo", role = Role.Button) { photoMenu = true }.testTag("review-photo"), contentAlignment = Alignment.Center) {
+                    if (s.photo != null) PhotoImage(c.photos, s.photo, Modifier.fillMaxSize(), s.title, description = "Recipe photo. Tap to change.") else Text("Add photo", color = Palette.Forest, fontWeight = FontWeight.SemiBold)
+                }
+                WarnBadge("photo", warn("photo"))
+            }
+            val fieldStyle = TextStyle(fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 30.sp, color = Palette.Ink)
+            val invalid = s.showErrors && s.title.isBlank()
+            val fieldShape = RoundedCornerShape(10.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f).clip(fieldShape).background(Color(0xFFFBF4E6)).border(if (invalid) 3.dp else 1.dp, if (invalid) MaterialTheme.colorScheme.error else Palette.Brass.copy(alpha = 0.6f), fieldShape).padding(horizontal = 10.dp, vertical = 8.dp)) {
+                    BasicTextField(s.title, { v -> vm.edit { it.copy(title = v) } }, Modifier.fillMaxWidth().testTag("title-field").semantics { contentDescription = "Recipe title" },
+                        textStyle = fieldStyle, cursorBrush = SolidColor(Palette.Tomato),
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next),
+                        decorationBox = { inner -> if (s.title.isEmpty()) Text(if (invalid) "Title needed" else "Recipe title", style = fieldStyle, color = if (invalid) MaterialTheme.colorScheme.error else Palette.Ink.copy(alpha = 0.45f)); inner() })
+                }
+                WarnBadge("title", warn("title"))
+            }
+            Box(Modifier.fillMaxWidth().clip(fieldShape).background(Color(0xFFFBF4E6)).border(1.dp, Palette.Brass.copy(alpha = 0.6f), fieldShape).padding(horizontal = 10.dp, vertical = 8.dp)) {
+                BasicTextField(s.sourceText, { v -> vm.edit { it.copy(sourceText = v) } }, Modifier.fillMaxWidth().testTag("source-field").semantics { contentDescription = "Source" },
+                    textStyle = rowStyle, singleLine = true, cursorBrush = SolidColor(Palette.Tomato), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
+                    decorationBox = { inner -> if (s.sourceText.isEmpty()) Text("Source (website or cookbook)", style = rowStyle, color = Palette.Ink.copy(alpha = 0.45f)); inner() })
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Ingredients (${s.ingredients.count { it.text.isNotBlank() && !it.header }})", Modifier.weight(1f).semantics { heading() }, style = headStyle)
+                WarnBadge("ingredients", warn("ingredients"))
+                TextButton({ ingEditor = true }, Modifier.testTag("review-edit-ingredients")) { Text("Reorder", color = Palette.Forest) }
+            }
+            EditableRows(
+                s.ingredients, { r -> vm.edit { it.copy(ingredients = r) } }, onDelete = { row, i ->
+                    val before = s.ingredients
+                    if (before.size == 1) vm.edit { it.copy(ingredients = listOf(EditRow(newId(), ""))) } else vm.edit { it.copy(ingredients = before.filter { x -> x.id != row.id }) }
+                    scope.launch { snack.undoable("Removed ingredient ${i + 1}") { vm.edit { it.copy(ingredients = before) } } }
+                },
+                Modifier.fillMaxWidth(), hint = "Ingredient, e.g. 2 cups flour", showErrors = false, compact = true, tag = "ing-rows", textStyle = rowStyle, newRow = { EditRow(newId(), "") }, expand = true,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Directions (${s.directions.count { it.text.isNotBlank() && !it.header }})", Modifier.weight(1f).semantics { heading() }, style = headStyle)
+                WarnBadge("directions", warn("directions"))
+                TextButton({ dirEditor = true }, Modifier.testTag("review-edit-directions")) { Text("Reorder", color = Palette.Forest) }
+            }
+            EditableRows(
+                s.directions, { r -> vm.edit { it.copy(directions = r) } }, onDelete = { row, i ->
+                    val before = s.directions
+                    if (before.size == 1) vm.edit { it.copy(directions = listOf(EditRow(newId(), ""))) } else vm.edit { it.copy(directions = before.filter { x -> x.id != row.id }) }
+                    scope.launch { snack.undoable("Removed step ${i + 1}") { vm.edit { it.copy(directions = before) } } }
+                },
+                Modifier.fillMaxWidth(), numbered = true, hint = "Describe this step", compact = true, tag = "dir-rows", textStyle = rowStyle, newRow = { EditRow(newId(), "") }, expand = true,
+            )
+            Text("Categories", Modifier.semantics { heading() }, style = headStyle)
+            FlowRow(Modifier.fillMaxWidth().testTag("review-categories"), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                cats.filter { it.enabled || it.id in s.categories }.forEach { cat ->
+                    Chip(cat.name, cat.id in s.categories, { vm.edit { it.copy(categories = if (cat.id in it.categories) it.categories - cat.id else it.categories + cat.id) } })
+                }
+            }
+            if (editId == null && c.importSession.draft.collectAsState().value != null) BigButton("Compare with the original (Recipe Rescue)", {
+                // the edits made here go along; nothing is saved to the collection until Recipe Rescue saves it
+                c.importSession.draft.value?.let { d -> c.importSession.draft.value = d.copy(recipe = vm.buildRecipe()) }
+                draftFromImport(c)?.let { d -> nav.navigate(Routes.rescue(d.id)) { popUpTo(Routes.IMPORT) } }
+            }, Modifier.fillMaxWidth().testTag("review-rescue"), primary = false)
+            ArtSlot("import_review_bottom", 34.dp)
         }
     }
 

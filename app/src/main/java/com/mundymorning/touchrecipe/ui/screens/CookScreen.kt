@@ -12,6 +12,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,7 +43,9 @@ import com.mundymorning.touchrecipe.core.timer.CookTimer
 import com.mundymorning.touchrecipe.data.Repository.CookSession
 import com.mundymorning.touchrecipe.data.TimerAlarm
 import com.mundymorning.touchrecipe.ui.Routes
-import com.mundymorning.touchrecipe.ui.art.ArtScreen
+import com.mundymorning.touchrecipe.ui.art.ArtButton
+import com.mundymorning.touchrecipe.ui.art.ArtSlot
+import com.mundymorning.touchrecipe.ui.art.PageFrame
 import com.mundymorning.touchrecipe.core.quantity.Quantities
 import com.mundymorning.touchrecipe.ui.components.*
 import com.mundymorning.touchrecipe.ui.theme.BodyFont
@@ -155,15 +158,15 @@ fun CookScreen(c: AppContainer, nav: NavController, id: String, servings: Int? =
     }
 
     if (missing) {
-        ArtScreen("cook", "Cook Mode", onTarget = { if (it == "back") nav.goBackOr(Routes.HUB) }) {
-            Column(Modifier.region("top").padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Nothing to cook yet", fontFamily = DisplayFont, fontSize = sp(44f), fontWeight = FontWeight.Bold, color = Palette.Ink, textAlign = TextAlign.Center)
-                Text("This recipe has no directions. Add some in the recipe, then Cook Mode can guide you step by step.", color = Palette.Ink, textAlign = TextAlign.Center, fontSize = sp(26f))
+        PageFrame("Cook Mode", topBar = { Row(Modifier.fillMaxWidth().padding(8.dp)) { ArtButton("back", "←", round = true, description = "Back", onClick = { nav.goBackOr(Routes.HUB) }) } }) {
+            Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Nothing to cook yet", fontFamily = DisplayFont, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, textAlign = TextAlign.Center)
+                Text("This recipe has no directions. Add some in the recipe, then Cook Mode can guide you step by step.", color = Palette.Ink, textAlign = TextAlign.Center, fontSize = 17.sp)
             }
         }
         return
     }
-    if (u == null) { ArtScreen("cook", "Cook Mode", onTarget = {}); return }
+    if (u == null) { PageFrame("Cook Mode", topBar = {}) {}; return }
 
     val timerLabel = when {
         !u.timer.configured -> "Set timer"
@@ -172,66 +175,102 @@ fun CookScreen(c: AppContainer, nav: NavController, id: String, servings: Int? =
         u.timer.remainingMs in 1 until u.timer.totalMs -> "Resume timer"
         else -> "Start timer"
     }
+    // the recipe's ingredients, amounts scaled to the servings chosen on the recipe page
+    val ingredients = liveRecipe?.ingredients ?: u.recipe.ingredients
+    val factor = Quantities.factor(u.recipe.servings, servings)
+    val listState = rememberLazyListState()
+    // rows ahead of the first step: top decoration, Ingredients heading, the ingredient rows (or one "none" row), Directions heading
+    val firstStepRow = 2 + maxOf(ingredients.size, 1) + 1
+    var shownIndex by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(u.index) {
+        // moving to another step brings it into view; opening the page never moves it, so the reading position is kept
+        if (shownIndex != -1 && shownIndex != u.index) runCatching { listState.animateScrollToItem(firstStepRow + u.index) }
+        shownIndex = u.index
+    }
 
-    ArtScreen("cook", "Cook Mode: ${u.recipe.title}", onTarget = { t ->
-        when (t) {
-            "back" -> nav.goBackOr(Routes.detail(id))     // progress and timer are saved continuously
-            "prev" -> vm.prev()
-            "next" -> if (vm.next()) finishDialog = true
-        }
-    }) {
-        // step chip
-        Box(Modifier.region("stepchip").semantics(mergeDescendants = true) { contentDescription = "Step ${u.index + 1} of ${u.steps.size}" }, contentAlignment = Alignment.Center) {
-            FitText("Step ${u.index + 1} of ${u.steps.size}", TextStyle(fontFamily = BodyFont, fontWeight = FontWeight.Bold, fontSize = sp(26f), color = Palette.Ink), textAlign = TextAlign.Center)
-        }
-        // current direction (title, step number, text) and, only when the step needs one, the timer
-        Column(Modifier.region("top").padding(start = dp(22f), end = dp(22f), top = dp(100f), bottom = dp(16f))) {
-            Text(u.recipe.title.ifBlank { "Recipe" }, fontFamily = BodyFont, fontWeight = FontWeight.SemiBold, fontSize = sp(24f), color = Palette.Forest, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${u.index + 1}", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = sp(80f), color = Palette.Tomato, modifier = Modifier.testTag("step-number"))
-                if (u.index in u.completed) Text("  \u2713 done", color = Palette.Forest, fontWeight = FontWeight.Bold, fontSize = sp(28f), modifier = Modifier.testTag("step-done"))
-            }
-            Text(u.step.text, Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).testTag("step-text"), fontSize = sp(38f), lineHeight = sp(50f), color = Palette.Ink)
-            Spacer(Modifier.height(dp(8f)))
-            if (u.timer.configured) {
-                val shown = CookTimer.format(remaining.takeIf { u.timer.running || u.timer.remainingMs > 0 } ?: u.timer.totalMs)
+    PageFrame("Cook Mode: ${u.recipe.title}",
+        topBar = {
+            Column(Modifier.fillMaxWidth().background(Palette.CreamDeep.copy(alpha = 0.7f)).padding(horizontal = 8.dp, vertical = 6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(dp(18f))).background(Color(0xFFCF4A27)).clickable(onClickLabel = timerLabel, role = Role.Button) { pressTimer() }
-                        .padding(horizontal = dp(22f), vertical = dp(8f)).testTag("timer-button"), contentAlignment = Alignment.Center) {
-                        Text(timerLabel, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = sp(30f), color = Color(0xFFFFF4E0), modifier = Modifier.testTag("timer-label"))
-                    }
-                    Text(shown, Modifier.padding(start = dp(16f)).semantics { contentDescription = "Time left $shown" }.testTag("clock-face"), fontFamily = BodyFont, fontWeight = FontWeight.Bold, fontSize = sp(36f), color = Palette.Ink)
-                    TextButton({ durationDialog = true }, Modifier.testTag("timer-change")) { Text("Change", color = Palette.Forest, fontSize = sp(22f)) }
-                }
-                if (u.timerStep != u.index) Text("(timer from step ${u.timerStep + 1})", color = Palette.Forest, fontSize = sp(22f), fontWeight = FontWeight.SemiBold)
-            } else TextButton({ durationDialog = true }, Modifier.testTag("timer-add")) { Text("\u23F1 Add a timer", color = Palette.Forest, fontSize = sp(24f), fontWeight = FontWeight.SemiBold) }
-            val progress = u.completed.size.toFloat() / u.steps.size
-            LinearProgressIndicator(progress = { progress }, Modifier.fillMaxWidth().padding(top = dp(6f)).height(8.dp).clip(CircleShape).semantics { progressBarRangeInfo = ProgressBarRangeInfo(progress, 0f..1f); contentDescription = "${u.completed.size} of ${u.steps.size} steps completed" }.testTag("cook-progress"),
-                color = Palette.Tomato, trackColor = Palette.CreamDeep)
-        }
-        // the recipe's ingredients on the one tall parchment panel, amounts scaled to the servings chosen on the recipe page
-        val ingredients = liveRecipe?.ingredients ?: u.recipe.ingredients
-        val factor = Quantities.factor(u.recipe.servings, servings)
-        Column(Modifier.region("bottom").padding(horizontal = dp(18f), vertical = dp(10f))) {
-            Text("Ingredients", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = sp(34f), color = Palette.Forest, modifier = Modifier.semantics { heading() })
-            val img = u.step.image
-            if (img != null) PhotoImage(c.photos, img, Modifier.fillMaxWidth().height(110.dp).padding(bottom = 6.dp).clip(RoundedCornerShape(12.dp)), description = "Photo for step ${u.index + 1}")
-            if (ingredients.isEmpty()) Text("This recipe has no ingredients listed.", color = Palette.Ink.copy(alpha = 0.7f), fontSize = sp(24f), modifier = Modifier.padding(top = 8.dp))
-            LazyColumn(Modifier.weight(1f).fadeBottom().testTag("cook-ingredients")) {
-                itemsIndexed(ingredients, key = { _, i -> i.id }) { _, ing ->
-                    if (ing.header) Text(ing.text, fontWeight = FontWeight.Bold, color = Palette.Forest, fontSize = sp(26f), modifier = Modifier.padding(top = 8.dp).semantics { heading() })
-                    else Row(
-                        Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(ing.checked, role = Role.Checkbox, onValueChange = { v -> scope.launch { c.repo.updateIngredients(id) { l -> l.map { if (it.id == ing.id) it.copy(checked = v) else it } } } }).testTag("cook-ing:${ing.id}"),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(Modifier.size(26.dp).clip(RoundedCornerShape(6.dp)).border(2.dp, Palette.Forest, RoundedCornerShape(6.dp)).background(if (ing.checked) Palette.Forest else Color.Transparent), contentAlignment = Alignment.Center) {
-                            if (ing.checked) Text("\u2713", color = Palette.Cream, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    ArtButton("back", "←", round = true, description = "Back", hint = "Returns to the recipe; progress is kept", onClick = { nav.goBackOr(Routes.detail(id)) })   // progress and timer are saved continuously
+                    Column(Modifier.weight(1f).padding(start = 10.dp)) {
+                        Text(u.recipe.title.ifBlank { "Recipe" }, fontFamily = BodyFont, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Palette.Forest, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Step ", fontFamily = BodyFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Palette.Ink)
+                            Text("${u.index + 1}", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 26.sp, color = Palette.Tomato, modifier = Modifier.testTag("step-number"))
+                            Text(" of ${u.steps.size}", fontFamily = BodyFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Palette.Ink)
+                            if (u.index in u.completed) Text("  \u2713 done", color = Palette.Forest, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.testTag("step-done"))
                         }
-                        Spacer(Modifier.width(10.dp))
-                        Text(Quantities.scale(ing.text, factor), color = Palette.Ink, fontSize = sp(25f), lineHeight = sp(30f), textDecoration = if (ing.checked) androidx.compose.ui.text.style.TextDecoration.LineThrough else null)
+                    }
+                }
+                val progress = u.completed.size.toFloat() / u.steps.size
+                LinearProgressIndicator(progress = { progress }, Modifier.fillMaxWidth().padding(top = 4.dp).height(8.dp).clip(CircleShape).semantics { progressBarRangeInfo = ProgressBarRangeInfo(progress, 0f..1f); contentDescription = "${u.completed.size} of ${u.steps.size} steps completed" }.testTag("cook-progress"),
+                    color = Palette.Tomato, trackColor = Palette.CreamDeep)
+                // the timer stays in reach however far the page is scrolled
+                if (u.timer.configured) {
+                    val shown = CookTimer.format(remaining.takeIf { u.timer.running || u.timer.remainingMs > 0 } ?: u.timer.totalMs)
+                    Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFFCF4A27)).clickable(onClickLabel = timerLabel, role = Role.Button) { pressTimer() }
+                            .padding(horizontal = 14.dp, vertical = 6.dp).testTag("timer-button"), contentAlignment = Alignment.Center) {
+                            Text(timerLabel, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Color(0xFFFFF4E0), modifier = Modifier.testTag("timer-label"))
+                        }
+                        Text(shown, Modifier.padding(start = 12.dp).semantics { contentDescription = "Time left $shown" }.testTag("clock-face"), fontFamily = BodyFont, fontWeight = FontWeight.Bold, fontSize = 24.sp, color = Palette.Ink)
+                        TextButton({ durationDialog = true }, Modifier.testTag("timer-change")) { Text("Change", color = Palette.Forest, fontSize = 15.sp) }
+                    }
+                    if (u.timerStep != u.index) Text("(timer from step ${u.timerStep + 1})", color = Palette.Forest, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                } else TextButton({ durationDialog = true }, Modifier.testTag("timer-add")) { Text("\u23F1 Add a timer", color = Palette.Forest, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+            }
+        },
+        bottomBar = {
+            Row(Modifier.fillMaxWidth().background(Palette.CreamDeep.copy(alpha = 0.7f)).padding(horizontal = 10.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ArtButton("prev", "Previous step", Modifier.weight(1f), hint = "Returns to the prior direction", onClick = { vm.prev() })
+                ArtButton("next", if (u.index >= u.steps.lastIndex) "Finish" else "Next step", Modifier.weight(1f), primary = true, hint = "Completes this step and moves on", onClick = { if (vm.next()) finishDialog = true })
+            }
+        },
+    ) {
+        // ingredients first, then every step, in one page that scrolls freely: nobody is forced to advance one step at a time
+        LazyColumn(Modifier.fillMaxSize().testTag("cook-scroll"), state = listState, contentPadding = PaddingValues(bottom = 20.dp)) {
+            item(key = "art-top") { ArtSlot("cook_mode_top") }
+            item(key = "ing-head") { Text("Ingredients", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 24.sp, color = Palette.Forest, modifier = Modifier.padding(top = 4.dp).semantics { heading() }.testTag("cook-ingredients")) }
+            if (ingredients.isEmpty()) item(key = "ing-empty") { Text("This recipe has no ingredients listed.", color = Palette.Ink.copy(alpha = 0.7f), fontSize = 17.sp, modifier = Modifier.padding(top = 8.dp)) }
+            itemsIndexed(ingredients, key = { _, i -> "ing:" + i.id }) { _, ing ->
+                if (ing.header) Text(ing.text, fontWeight = FontWeight.Bold, color = Palette.Forest, fontSize = 18.sp, modifier = Modifier.padding(top = 8.dp).semantics { heading() })
+                else Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(ing.checked, role = Role.Checkbox, onValueChange = { v -> scope.launch { c.repo.updateIngredients(id) { l -> l.map { if (it.id == ing.id) it.copy(checked = v) else it } } } }).padding(vertical = 4.dp).testTag("cook-ing:${ing.id}"),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(26.dp).clip(RoundedCornerShape(6.dp)).border(2.dp, Palette.Forest, RoundedCornerShape(6.dp)).background(if (ing.checked) Palette.Forest else Color.Transparent), contentAlignment = Alignment.Center) {
+                        if (ing.checked) Text("\u2713", color = Palette.Cream, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(Quantities.scale(ing.text, factor), color = Palette.Ink, fontSize = 18.sp, lineHeight = 25.sp, textDecoration = if (ing.checked) androidx.compose.ui.text.style.TextDecoration.LineThrough else null)
+                }
+            }
+            item(key = "steps-head") { Text("Directions", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 24.sp, color = Palette.Forest, modifier = Modifier.padding(top = 14.dp).semantics { heading() }) }
+            itemsIndexed(u.steps, key = { _, d -> "step:" + d.id }) { i, d ->
+                val current = i == u.index; val done = i in u.completed
+                val shape = RoundedCornerShape(14.dp)
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 5.dp).clip(shape).background(if (current) Color(0xFFFFF4E0) else Color.Transparent)
+                        .then(if (current) Modifier.border(2.5.dp, Palette.Tomato, shape) else Modifier)
+                        .clickable(onClickLabel = "Make step ${i + 1} the current step", role = Role.Button) { vm.jump(i) }
+                        .semantics { if (current) stateDescription = "Current step"; if (done) contentDescription = "Step ${i + 1}, done" }
+                        .testTag("cook-step:$i").padding(10.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Box(Modifier.size(34.dp).clip(CircleShape).background(if (current) Palette.Tomato else if (done) Palette.Forest else Palette.Brass), contentAlignment = Alignment.Center) {
+                        Text(if (done && !current) "\u2713" else "${i + 1}", color = Palette.Cream, fontSize = 16.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        if (current) Text("Current step", color = Palette.Tomato, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(d.text, color = Palette.Ink, fontSize = if (current) 22.sp else 18.sp, lineHeight = if (current) 30.sp else 25.sp, modifier = if (current) Modifier.testTag("step-text") else Modifier)
+                        val img = d.image
+                        if (img != null) PhotoImage(c.photos, img, Modifier.fillMaxWidth().height(140.dp).padding(top = 6.dp).clip(RoundedCornerShape(12.dp)), description = "Photo for step ${i + 1}")
                     }
                 }
             }
+            item(key = "art-bottom") { ArtSlot("cook_mode_bottom", 34.dp) }
         }
     }
 

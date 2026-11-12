@@ -35,7 +35,9 @@ class ImportService(
     private val fetcher: PageFetcher,
     private val ocr: OcrEngine,
     private val photos: PhotoStore,
+    private val originals: OriginalStore? = null,
 ) {
+    private fun now() = System.currentTimeMillis()
     private val urlRegex = Regex("""https?://[^\s<>"']+""", RegexOption.IGNORE_CASE)
     private val socialHosts = listOf("tiktok.com", "instagram.com", "facebook.com", "fb.watch", "fb.com")
 
@@ -50,7 +52,7 @@ class ImportService(
 
     suspend fun import(input: ImportInput, onStatus: (String) -> Unit = {}): ImportDraft = when (input) {
         is ImportInput.Url -> fromUrl(input.url, onStatus)
-        is ImportInput.Text -> TextRecipeParser.parse(input.text)
+        is ImportInput.Text -> TextRecipeParser.parse(input.text).copy(source = OriginalSource(SourceKind.TEXT, text = input.text, capturedAt = now()))
         is ImportInput.Image -> fromImages(listOf(input.uri), onStatus)
         is ImportInput.Pdf -> fromPdf(input.uri, onStatus)
         is ImportInput.File -> fromFile(input, onStatus)
@@ -83,7 +85,9 @@ class ImportService(
                 }
                 if (r.body.contains("Just a moment", true) && draft.recipe.ingredients.isEmpty())
                     throw ImportFailure("This site asked for a browser check, so the recipe couldn't be read. Open the page in your browser, copy the recipe text, and use Paste or Type Recipe.", blocked = true)
-                return draft.copy(recipe = draft.recipe.copy(sourceUrl = draft.recipe.sourceUrl ?: r.finalUrl))
+                val snapshot = originals?.saveText(r.body, "html")
+                val source = OriginalSource(SourceKind.WEB, r.finalUrl, listOfNotNull(snapshot), com.mundymorning.touchrecipe.core.rescue.Rescue.pageText(r.body), now())
+                return draft.copy(recipe = draft.recipe.copy(sourceUrl = draft.recipe.sourceUrl ?: r.finalUrl), source = source)
             }
             is FetchOutcome.Blocked -> throw ImportFailure("${r.message} Open the page in your browser, copy the recipe text, and use Paste or Type Recipe — your original link will be kept if you paste it in the source field.", blocked = true)
             is FetchOutcome.Failure -> throw ImportFailure(r.message, retryable = true, offline = r.offline)
@@ -123,7 +127,10 @@ class ImportService(
             val bmp = ImageLoader.decode(context, u) ?: throw ImportFailure("That image could not be opened.")
             lines += try { ocr.recognizeLines(bmp, i) } catch (e: OcrUnavailable) { throw ImportFailure((e.message ?: "Text recognition failed.") + " You can still use Paste or Type Recipe.", retryable = true) }
         }
-        return ocrDraft(lines)
+        val d = ocrDraft(lines)
+        // the photographs themselves are kept, untouched: a handwritten card is worth more than its transcription
+        val kept = uris.mapNotNull { originals?.copyFromUri(it, "jpg") }
+        return d.copy(source = OriginalSource(SourceKind.IMAGE, files = kept, text = LayoutReader.read(lines), capturedAt = now()))
     }
 
     /**
@@ -168,7 +175,8 @@ class ImportService(
             if (pageCount > readable) notes += ImportWarning("recipe", "This PDF has $pageCount pages; only the first $readable were read. The rest was not imported.")
             if (skipped > 0) notes += ImportWarning("recipe", "$skipped scanned page${if (skipped == 1) " was" else "s were"} not read (only ${PdfPages.MAX_OCR_PAGES} scanned pages are read per import).")
             val draft = if (ocrPages > 0) ocrDraft(lines, layer?.title) else TextRecipeParser.parse(LayoutReader.read(lines), ImportMethod.TEXT, titleHint = layer?.title)
-            return draft.copy(warnings = draft.warnings + notes)
+            val kept = originals?.copyFromUri(Uri.fromFile(file), "pdf")
+            return draft.copy(warnings = draft.warnings + notes, source = OriginalSource(SourceKind.PDF, draft.recipe.sourceUrl, listOfNotNull(kept), LayoutReader.read(lines), now()))
         } finally { file.delete() }
     }
 
@@ -205,9 +213,9 @@ class ImportService(
             mime.startsWith("image/") -> fromImages(listOf(f.uri), onStatus)
             mime.contains("html") || name.endsWith(".html") || name.endsWith(".htm") -> {
                 val text = readText(f.uri)
-                WebRecipeExtractor.extract(text, null)
+                WebRecipeExtractor.extract(text, null).copy(source = OriginalSource(SourceKind.WEB, null, listOfNotNull(originals?.saveText(text, "html")), com.mundymorning.touchrecipe.core.rescue.Rescue.pageText(text), now()))
             }
-            mime.startsWith("text/") || name.endsWith(".txt") || name.endsWith(".md") -> TextRecipeParser.parse(readText(f.uri))
+            mime.startsWith("text/") || name.endsWith(".txt") || name.endsWith(".md") -> readText(f.uri).let { t -> TextRecipeParser.parse(t).copy(source = OriginalSource(SourceKind.TEXT, text = t, capturedAt = now())) }
             else -> throw ImportFailure("This file type isn't supported yet. Supported: PDF, images, text and web pages.")
         }
     }
