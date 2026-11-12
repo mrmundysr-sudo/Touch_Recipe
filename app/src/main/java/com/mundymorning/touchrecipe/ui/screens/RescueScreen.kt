@@ -747,12 +747,17 @@ fun RescueScreen(c: AppContainer, nav: NavController, draftId: String) {
                         .semantics { contentDescription = "Divider. Drag or tap to resize." }.testTag("rescue-divider"), contentAlignment = Alignment.Center) { Text("• • •", color = Palette.Cream, fontSize = 12.sp) }
                     EditorPane(c, vm, s, Modifier.weight(1f - split).fillMaxWidth())
                 }
-                if (s.selecting) Row(Modifier.fillMaxWidth().background(Palette.CreamDeep.copy(alpha = 0.9f)).horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SmallButton("Remove selected (${s.selection.size})", { vm.update { x -> Rescue.removeSelected(x) }; scope.launch { snack.undoable("Removed") { vm.update { x -> Rescue.undo(x) } } } }, tag = "rescue-remove-selected", enabled = s.selection.isNotEmpty(), strong = s.selection.isNotEmpty())
-                    SmallButton("Replace selected…", { replaceOpen = true }, tag = "rescue-replace-selected", enabled = s.selection.any { k -> !k.startsWith("f:") })
-                    SmallButton("All ingredients", { vm.update { x -> Rescue.selectAllIngredients(x) } }, tag = "rescue-all-ingredients")
-                    SmallButton("All steps", { vm.update { x -> Rescue.selectAllSteps(x) } }, tag = "rescue-all-steps")
-                    SmallButton("Cancel", { vm.update { x -> Rescue.cancelSelection(x) } }, tag = "rescue-cancel-selection")
+                if (s.selecting) Column(Modifier.fillMaxWidth().background(Palette.CreamDeep.copy(alpha = 0.9f)).padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // every selection action stays on screen at any width: nothing hides off the edge
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        SmallButton("All ingredients", { vm.update { x -> Rescue.selectAllIngredients(x) } }, Modifier.weight(1.3f), tag = "rescue-all-ingredients")
+                        SmallButton("All steps", { vm.update { x -> Rescue.selectAllSteps(x) } }, Modifier.weight(1f), tag = "rescue-all-steps")
+                        SmallButton("Cancel", { vm.update { x -> Rescue.cancelSelection(x) } }, Modifier.weight(1f), tag = "rescue-cancel-selection")
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        SmallButton("Remove (${s.selection.size})", { vm.update { x -> Rescue.removeSelected(x) }; scope.launch { snack.undoable("Removed") { vm.update { x -> Rescue.undo(x) } } } }, Modifier.weight(1f), tag = "rescue-remove-selected", enabled = s.selection.isNotEmpty(), strong = s.selection.isNotEmpty())
+                        SmallButton("Replace…", { replaceOpen = true }, Modifier.weight(1f), tag = "rescue-replace-selected", enabled = s.selection.any { k -> !k.startsWith("f:") })
+                    }
                 } else Row(Modifier.fillMaxWidth().background(Palette.CreamDeep.copy(alpha = 0.9f)).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SmallButton("Save for later", { leave(); scope.launch { snack.say("Kept in Unfinished Recipes") } }, Modifier.weight(1f), tag = "rescue-later")
                     SmallButton(if (s.draft.recipeId != null) "Update recipe" else "Save recipe", { save() }, Modifier.weight(1f), tag = "rescue-save", strong = true)

@@ -224,7 +224,7 @@ fun CookScreen(c: AppContainer, nav: NavController, id: String, servings: Int? =
         bottomBar = {
             Row(Modifier.fillMaxWidth().background(Palette.CreamDeep.copy(alpha = 0.7f)).padding(horizontal = 10.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ArtButton("prev", "Previous step", Modifier.weight(1f), hint = "Returns to the prior direction", onClick = { vm.prev() })
-                ArtButton("next", if (u.index >= u.steps.lastIndex) "Finish" else "Next step", Modifier.weight(1f), primary = true, hint = "Completes this step and moves on", onClick = { if (vm.next()) finishDialog = true })
+                ArtButton("next", if (u.index >= u.steps.lastIndex) "Finish cooking" else "Next step", Modifier.weight(1f), primary = true, hint = "Completes this step and moves on", onClick = { if (vm.next()) finishDialog = true })
             }
         },
     ) {

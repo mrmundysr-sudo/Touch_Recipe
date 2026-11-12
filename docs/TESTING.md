@@ -35,3 +35,7 @@ Opt-in live import check on a machine with internet: `./gradlew :app:testDebugUn
 Run the benchmark locally: clone `https://github.com/hhursev/recipe-scrapers`, check out the pinned commit, then `TR_CORPUS_DIR=/path/to/recipe-scrapers/tests/test_data ./gradlew :app:testDebugUnitTest --tests '*RealPageBenchmarkTest'`. The result line starts with `REAL-PAGE BENCHMARK`.
 
 Measured 2026-11-11 (same pages, same scoring, before -> after): complete imports 83.6% -> 90.6%; major loss 12.6% -> 5.4%; major loss with no warning 3.5% -> 0.7%; pages with no ingredients 6.2% -> 1.4%; pages with no directions 7.4% -> 1.2%. These are saved pages: fetching live sites, real PDFs from the owner, camera recognition and handwriting are not covered and still need device testing.
+
+## Functional update tests (2026-11-12)
+`RescueTest`, `RecipeImagesTest` (pure Kotlin), `ImageImportTest` (Robolectric with real graphics), additions to `DataTest` and `FlowsTest`. See `docs/knowledge/reports/2026-11-12-functional-update.md` for what each covers. CI ends its log with `FAILED-TEST` lines and a `TEST-TOTALS` line. Device checks that no automated test replaces are in the Samsung checklist in that report.
+

@@ -1,0 +1,83 @@
+{
+  "schema": "app-visual-builder/coords@1",
+  "page": "page_14",
+  "image_size": {
+    "width": 841,
+    "height": 470
+  },
+  "coordinate_space": "normalized_0_1",
+  "items": [
+    {
+      "id": "back",
+      "type": "box",
+      "label": "Back",
+      "x": 0.02378,
+      "y": 0.06383,
+      "w": 0.1308,
+      "h": 0.23404
+    },
+    {
+      "id": "more_options",
+      "type": "box",
+      "label": "More options",
+      "x": 0.70155,
+      "y": 0.06383,
+      "w": 0.1308,
+      "h": 0.23404
+    },
+    {
+      "id": "favorite",
+      "type": "box",
+      "label": "Favorite",
+      "x": 0.85018,
+      "y": 0.06383,
+      "w": 0.1308,
+      "h": 0.23404
+    },
+    {
+      "id": "fewer_servings",
+      "type": "box",
+      "label": "Fewer servings",
+      "x": 0.61831,
+      "y": 0.43617,
+      "w": 0.11891,
+      "h": 0.21277
+    },
+    {
+      "id": "servings_value",
+      "type": "box",
+      "label": "Servings value",
+      "x": 0.74911,
+      "y": 0.43617,
+      "w": 0.10702,
+      "h": 0.21277
+    },
+    {
+      "id": "more_servings",
+      "type": "box",
+      "label": "More servings",
+      "x": 0.86801,
+      "y": 0.43617,
+      "w": 0.11891,
+      "h": 0.21277
+    },
+    {
+      "id": "cook_mode",
+      "type": "box",
+      "label": "Cook Mode",
+      "x": 0.02378,
+      "y": 0.70213,
+      "w": 0.46968,
+      "h": 0.25532
+    },
+    {
+      "id": "add_to_grocery_list",
+      "type": "box",
+      "label": "Add to Grocery List",
+      "x": 0.50654,
+      "y": 0.70213,
+      "w": 0.46968,
+      "h": 0.25532
+    }
+  ]
+}

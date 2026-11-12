@@ -1,0 +1,29 @@
+{
+  "schema": "app-visual-builder/coords@1",
+  "page": "page_18",
+  "image_size": {
+    "width": 841,
+    "height": 400
+  },
+  "coordinate_space": "normalized_0_1",
+  "items": [
+    {
+      "id": "top_bar_background",
+      "type": "box",
+      "label": "Top bar background",
+      "x": 0.0,
+      "y": 0.1,
+      "w": 1.0,
+      "h": 0.375
+    },
+    {
+      "id": "divider_handle",
+      "type": "box",
+      "label": "Divider handle",
+      "x": 0.0,
+      "y": 0.575,
+      "w": 1.0,
+      "h": 0.11
+    }
+  ]
+}

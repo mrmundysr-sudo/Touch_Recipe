@@ -121,7 +121,7 @@ class ImportService(
             // a tracking pixel or an icon is not the recipe's photograph: try the next candidate
             val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
             android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size, bounds)
-            if (bounds.outWidth in 1..159 || bounds.outHeight in 1..119) continue
+            if (bounds.outWidth in 1..63 || bounds.outHeight in 1..63) continue
             photos.saveBytes(b)?.let { return it }
         }
         return null

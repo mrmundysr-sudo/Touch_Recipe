@@ -1,0 +1,56 @@
+{
+  "schema": "app-visual-builder/coords@1",
+  "page": "page_15",
+  "image_size": {
+    "width": 841,
+    "height": 480
+  },
+  "coordinate_space": "normalized_0_1",
+  "items": [
+    {
+      "id": "back",
+      "type": "box",
+      "label": "Back",
+      "x": 0.02378,
+      "y": 0.0625,
+      "w": 0.1308,
+      "h": 0.22917
+    },
+    {
+      "id": "step_chip",
+      "type": "box",
+      "label": "Step chip",
+      "x": 0.17836,
+      "y": 0.0625,
+      "w": 0.79667,
+      "h": 0.22917
+    },
+    {
+      "id": "timer_button",
+      "type": "box",
+      "label": "Timer button",
+      "x": 0.02378,
+      "y": 0.34375,
+      "w": 0.39239,
+      "h": 0.20833
+    },
+    {
+      "id": "previous_step",
+      "type": "box",
+      "label": "Previous Step",
+      "x": 0.02378,
+      "y": 0.66667,
+      "w": 0.46968,
+      "h": 0.25
+    },
+    {
+      "id": "next_step",
+      "type": "box",
+      "label": "Next Step",
+      "x": 0.50654,
+      "y": 0.66667,
+      "w": 0.46968,
+      "h": 0.25
+    }
+  ]
+}

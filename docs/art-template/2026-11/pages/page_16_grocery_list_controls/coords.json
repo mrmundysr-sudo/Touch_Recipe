@@ -1,0 +1,56 @@
+{
+  "schema": "app-visual-builder/coords@1",
+  "page": "page_16",
+  "image_size": {
+    "width": 841,
+    "height": 500
+  },
+  "coordinate_space": "normalized_0_1",
+  "items": [
+    {
+      "id": "back",
+      "type": "box",
+      "label": "Back",
+      "x": 0.02378,
+      "y": 0.06,
+      "w": 0.1308,
+      "h": 0.22
+    },
+    {
+      "id": "week_selector",
+      "type": "box",
+      "label": "Week selector",
+      "x": 0.02378,
+      "y": 0.33,
+      "w": 0.55886,
+      "h": 0.2
+    },
+    {
+      "id": "from_meal_plan",
+      "type": "box",
+      "label": "From meal plan",
+      "x": 0.60048,
+      "y": 0.33,
+      "w": 0.37574,
+      "h": 0.2
+    },
+    {
+      "id": "add_item",
+      "type": "box",
+      "label": "Add Item",
+      "x": 0.02378,
+      "y": 0.66,
+      "w": 0.46968,
+      "h": 0.24
+    },
+    {
+      "id": "clear_checked",
+      "type": "box",
+      "label": "Clear checked",
+      "x": 0.50654,
+      "y": 0.66,
+      "w": 0.46968,
+      "h": 0.24
+    }
+  ]
+}

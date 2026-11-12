@@ -9,9 +9,10 @@
 - iOS source before the update: `claude/ios-testflight` @ `8018f84` (rollback point). The iOS app (`www/`) does not yet contain the importer repairs.
 - Older lines, fully contained in the above: `claude/blissful-rubin-d0ni9m`, `claude/relaxed-faraday-ijecx2`, `planning/touch-recipe-product-discovery`.
 - Open PRs: none at 2026-11-11. Check live GitHub.
-- Current task: major update. Stage done: importer repair (web cross-check, PDF text, completeness validation). Next, after owner testing: source preservation and drafts, Recipe Rescue, scrolling layouts, artwork integration (separate stages).
-- Latest verified build and CI run: see `docs/knowledge/reports/2026-11-11-importer-repair.md`.
-- Last reviewed: 2026-11-11.
+- Current task: complete functional update (authorized 2026-11-12). Done on this branch: importer repair, recipe photographs and cropping, Recipe Rescue, unfinished recipes, kept originals, scrolling Recipe Detail / Cook Mode / Import Review / Grocery List. Not done: final artwork (template in `docs/art-template/2026-11/`), iOS parity.
+- Rollback points on this branch: `69bcbdb` (importer repair only, CI run 43158027710 green, test build `devtest-recipe-43108667815-1f8c0c1`).
+- Latest verified build and CI run: see `docs/knowledge/reports/2026-11-12-functional-update.md`.
+- Last reviewed: 2026-11-12.
 
 ## Startup requirements
 1. Confirm exact repository and default branch.

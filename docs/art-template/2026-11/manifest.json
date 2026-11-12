@@ -1,0 +1,713 @@
+{
+    "schema": "app-visual-builder/manifest@1",
+    "app_name": "Touch Recipe",
+    "exported_at": "2026-11-12T13:19:18.855681+00:00",
+    "page_count": 19,
+    "coordinate_space": "normalized_0_1",
+    "pages": [
+        {
+            "id": "page_01",
+            "index": 0,
+            "name": "Splash",
+            "folder": "pages/page_01_splash",
+            "notes": "Splash Screen ",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_01_splash/clean.png",
+                    "display_name": "splash_clean.png"
+                },
+                "markup": [],
+                "psd": null,
+                "coords": null,
+                "other": []
+            },
+            "image_size": null,
+            "items": []
+        },
+        {
+            "id": "page_02",
+            "index": 1,
+            "name": "Kitchen Hub",
+            "folder": "pages/page_02_kitchen_hub",
+            "notes": "psd layers: \n1) Stove/Oven\n2) Calendar\n3) Refrigerator-New Recipe Card\n4) Magnifying Glass\n5) Grocery Bag\n6) Junk Drawer\n7) Recipe Rolodex\n\nPage 2 is the Kitchen Hub. It is the main illustrated navigation screen, with complete kitchen objects acting as touch targets.\n\nWire the layers as follows:\n\n1. Stove/Oven — open Cook Mode.\n2. Calendar — open Meal Planner.\n3. Refrigerator/New Recipe Card — open Import Recipe.\n4. Magnifying Glass — open Search.\n5. Grocery Bag — open Grocery List.\n6. Junk Drawer — open the Kitchen Junk Drawer utility hub.\n7. Recipe Rolodex — open Recipe Collection.\n\nUse each complete illustrated object as its hit area. Do not place generic buttons over the artwork. Briefly illuminate every clickable object when the page loads and again when tapped. Preserve the artwork’s visual layering and keep navigation intuitive, memorable, and fast.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_02_kitchen_hub/clean.png",
+                    "display_name": "kitchen_hub_clean.png"
+                },
+                "markup": [],
+                "psd": {
+                    "path": "pages/page_02_kitchen_hub/layers.psd",
+                    "display_name": "kitchen_hub_layers.psd"
+                },
+                "coords": null,
+                "other": []
+            },
+            "image_size": null,
+            "items": []
+        },
+        {
+            "id": "page_03",
+            "index": 2,
+            "name": "Recipe Collection ",
+            "folder": "pages/page_03_recipe_collection",
+            "notes": "1) Search Magnifying-Glass Tab\n2) New Recipe Tab\n\nPage 3 is Recipe Collection. It should display saved recipes in a beautiful magazine-style collection.\n\nWire the layers as follows:\n\nSearch Magnifying-Glass Tab — open recipe search.\nNew Recipe Tab — open Import Recipe.\nRecipe Cards — populate dynamically with recipe photos, titles, times, servings, and favorite states.\nCategory Tabs — filter recipes by category.\nFavorite Controls — toggle favorite status.\nRecipe Card Area — open Recipe Detail when tapped.\n\nRecipe cards, photos, titles, metadata, categories, and favorite states must be generated from saved recipe data. Support scrolling, search, filtering, sorting, empty states, and long recipe titles without breaking the layout. Keep the magnifying-glass tab fixed while the recipe collection scrolls. Every illustrated clickable object should briefly illuminate on page load and when tapped.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_03_recipe_collection/clean.png",
+                    "display_name": "recipe_collection_clean.png"
+                },
+                "markup": [],
+                "psd": {
+                    "path": "pages/page_03_recipe_collection/layers.psd",
+                    "display_name": "recipe_collection_layers.psd"
+                },
+                "coords": null,
+                "other": [
+                    {
+                        "path": "pages/page_03_recipe_collection/other_1.png",
+                        "display_name": "recipe_collection_visual_reference.png"
+                    }
+                ]
+            },
+            "image_size": null,
+            "items": []
+        },
+        {
+            "id": "page_04",
+            "index": 3,
+            "name": "Recipe Detail",
+            "folder": "pages/page_04_recipe_detail",
+            "notes": "1) Cook Mode\n2) Add to Grocery List \n3) Favorite heart button\n4) Back arrow button\n\nPage 4 is Recipe Detail. Claude should populate the saved recipe into the illustrated magazine-style template.\n\nWire the layers as follows:\n\nBack Arrow Circle — return to Recipe Collection.\nRecipe Photo Area — display, replace, or remove the recipe photo.\nFavorite Heart — toggle and persist favorite status.\nTime/Serving Symbols — display prep time, cook time, total time, and servings dynamically.\nServing Controls — increase or decrease servings and scale ingredient quantities.\nIngredient Checkboxes — mark ingredients completed.\nCook Mode Panel — open Cook Mode.\nAdd to Grocery List Panel — add selected or all ingredients to Grocery List.\nIngredient Rows — populate dynamically with editable ingredient text and quantities.\nDirection Rows — populate dynamically with numbered directions.\n\nIngredient rows and direction numbers must be generated by code for each recipe. Support editing, deleting, reordering, and automatic renumbering. Keep the photo, title, ingredients, directions, times, servings, and categories editable where appropriate. Every clickable visual should briefly illuminate on page load and when tapped.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_04_recipe_detail/clean.png",
+                    "display_name": "recipe_detail_clean.png"
+                },
+                "markup": [],
+                "psd": {
+                    "path": "pages/page_04_recipe_detail/layers.psd",
+                    "display_name": "recipe_detail_layers.psd"
+                },
+                "coords": null,
+                "other": [
+                    {
+                        "path": "pages/page_04_recipe_detail/other_1.png",
+                        "display_name": "recipe_detail_reference.png"
+                    }
+                ]
+            },
+            "image_size": null,
+            "items": []
+        },
+        {
+            "id": "page_05",
+            "index": 4,
+            "name": "Cook Mode",
+            "folder": "pages/page_05_cook_mode",
+            "notes": "Cook Mode, current layout. The clean background has the step chip, an upper card for the current step, ONE tall lower parchment panel (about y 880-1540 of 1870) for the recipe's ingredients, and the Previous Step / Next Step buttons. The clock face and the Start Timer button are no longer part of the artwork: the timer is a code-rendered button on the step card, shown only when the step has a timer (or the cook adds one). The ingredient lines are drawn by the app over the lower panel, with tick boxes shared with Recipe Detail.\n\nWire the layers as follows:\n1. Previous Step — return to the prior direction.\n2. Back Arrow Circle — return to Recipe Detail.\n3. Next Step — complete the current step and advance.\n\nPopulate the recipe title, current step, step number and (when the step has one) the timer dynamically; update progress as the user advances. Completed steps show a coded completion state, not a baked-in checkmark. Every clickable object should briefly illuminate on page load and when tapped.\n\nSource note: clean.png is derived from the owner's edited image; the lower panel's side borders and bottom edge were repaired where the edit left a hard seam (about y 1160) and a partial bottom edge. layers.psd and cook_mode_reference.png still show the earlier layout (clock + Start Timer) and are kept as reference only; clean.png is the current background.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_05_cook_mode/clean.png",
+                    "display_name": "cook_mode_clean.png"
+                },
+                "markup": [],
+                "psd": {
+                    "path": "pages/page_05_cook_mode/layers.psd",
+                    "display_name": "cook_mode_layers.psd"
+                },
+                "coords": null,
+                "other": [
+                    {
+                        "path": "pages/page_05_cook_mode/other_1.png",
+                        "display_name": "cook_mode_reference.png"
+                    }
+                ]
+            },
+            "image_size": null,
+            "items": []
+        },
+        {
+            "id": "page_06",
+            "index": 5,
+            "name": "Import Recipe",
+            "folder": "pages/page_06_import_recipe",
+            "notes": "1) Back Arrow\n2) Paste Recipe URL\n3) Paste or Type Recipe\n4) Scan a Recipe\n5) Import PDF or File\n6) Share to Touch Recipe\n7) Continue to Review\n\nPage 6 is the Import Recipe screen. Each illustrated object is a complete clickable import method.\n\nWire the layers as follows:\n\n1. Back Arrow — return to Kitchen Hub.\n2. Paste Recipe URL — paste a webpage URL and extract the recipe.\n3. Paste or Type Recipe — accept free text or pasted recipe content.\n4. Scan a Recipe — use the camera/OCR to capture a printed recipe.\n5. Import PDF or File — import supported files from device storage.\n6. Share to Touch Recipe — receive recipes through Android’s Share menu.\n7. Continue to Review — send extracted content to Page 7 for correction and saving.\n\nShow clear progress and error states while importing. Preserve the original source when possible. Do not save directly without review. Every illustrated object should briefly illuminate on page load and when tapped.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_06_import_recipe/clean.png",
+                    "display_name": "import_recipe_clean.png"
+                },
+                "markup": [],
+                "psd": {
+                    "path": "pages/page_06_import_recipe/layers.psd",
+                    "display_name": "import_recipe_layers.psd"
+                },
+                "coords": null,
+                "other": []
+            },
+            "image_size": null,
+            "items": []
+        },
+        {
+            "id": "page_07",
+            "index": 6,
+            "name": "Import Review ",
+            "folder": "pages/page_07_import_review",
+            "notes": "1) Back Arrow\n2) Recipe Photo Area\n3) Add Ingredient\n4) Add Direction\n5) Add Category\n6) Edit Details\n7) Save Recipe\n8) Recipe Title\n9) Dynamic ingredient rows\n10) Dynamic direction rows\n11) Auto-number direction rows\n12) Editable recipe title field\n\nPage 7 is the Import Review screen. Claude should populate the extracted recipe into the illustrated template and keep every field editable.\n\nWire the layers as follows:\n\nBack Arrow — return to Import Recipe.\nRecipe Photo Area — display, replace, crop, or remove the imported photo.\nRecipe Title — editable title field.\nAdd Ingredient — append a new ingredient row.\nAdd Direction — append a new numbered direction row.\nAdd Category — open category selection and custom-category entry.\nEdit Details — edit servings, prep time, cook time, source, notes, and other fields.\nSave Recipe — validate and save the corrected recipe to Recipe Collection.\n\nStart with one ingredient row and one direction row. Claude should add additional rows dynamically as needed. Every generated row must support editing, deletion, reordering, and drag handles. Direction numbers should update automatically. All clickable artwork should briefly illuminate on page load and when tapped.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_07_import_review/clean.png",
+                    "display_name": "import_review_clean.png"
+                },
+                "markup": [],
+                "psd": {
+                    "path": "pages/page_07_import_review/layers.psd",
+                    "display_name": "import_review_layers.psd"
+                },
+                "coords": null,
+                "other": [
+                    {
+                        "path": "pages/page_07_import_review/other_1.png",
+                        "display_name": "import_review.png"
+                    }
+                ]
+            },
+            "image_size": null,
+            "items": []
+        },
+        {
+            "id": "page_08",
+            "index": 7,
+            "name": "Meal Planner",
+            "folder": "pages/page_08_meal_planner",
+            "notes": "Meal Planner dynamic fields and interactions:\n\n1) Monday label\n2) Monday date\n3) Monday recipe title\n4) Monday cook time\n5) Monday servings\n\n6) Tuesday label\n7) Tuesday date\n8) Tuesday recipe title\n9) Tuesday cook time\n10) Tuesday servings\n\n11) Wednesday label\n12) Wednesday date\n13) Wednesday recipe title\n14) Wednesday cook time\n15) Wednesday servings\n\n16) Thursday label\n17) Thursday date\n18) Thursday recipe title\n19) Thursday cook time\n20) Thursday servings\n\n21) Friday label\n22) Friday date\n23) Friday recipe title\n24) Friday cook time\n25) Friday servings\n\n26) Saturday label\n27) Saturday date\n28) Saturday recipe title\n29) Saturday cook time\n30) Saturday servings\n\n31) Sunday label\n32) Sunday date\n33) Sunday recipe title\n34) Sunday cook time\n35) Sunday servings\n\n36) Week/date-range selector\n37) Cat calendar illustration; opens week/date selection\n38) Grocery List basket; opens grocery list\n\nThe seven large blank rectangles are dynamic recipe-photo areas populated from the selected recipes.\n\nEach full meal card opens Recipe Detail when tapped. Users can assign, replace, remove, or leave a day empty. The week selector updates all dates and the displayed meal plan. Grocery List should combine ingredients from planned meals and avoid duplicate ingredients where possible.\n\nAll clickable artwork should briefly illuminate on page load.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_08_meal_planner/clean.png",
+                    "display_name": "meal_planner_clean.png"
+                },
+                "markup": [],
+                "psd": {
+                    "path": "pages/page_08_meal_planner/layers.psd",
+                    "display_name": "meal_planner_layers.psd"
+                },
+                "coords": null,
+                "other": [
+                    {
+                        "path": "pages/page_08_meal_planner/other_1.png",
+                        "display_name": "meal_planner_reference.png"
+                    },
+                    {
+                        "path": "pages/page_08_meal_planner/other_2.png",
+                        "display_name": "meal_planner_mockup.png"
+                    }
+                ]
+            },
+            "image_size": null,
+            "items": []
+        },
+        {
+            "id": "page_09",
+            "index": 8,
+            "name": "Grocery List",
+            "folder": "pages/page_09_grocery_list",
+            "notes": "Open parchment layout (replaces the earlier card-based layout). The page background is one continuous open parchment panel; there are no separate category cards, per-category 'All 0' badges, or per-category 'Add an item...' fields in the artwork.\n\nBaked into the artwork: header, back arrow, 'Grocery List' title, the empty week/date-range field, and the bottom 'Add Item' and 'Clear Checked' controls. The week text, category headings and items are drawn by the app.\n\nSource of clean.png: the owner-supplied image was a phone screenshot (status bar, navigation bar, brown side margins and the app's own week text were baked in). For production it was cropped to the art area, rescaled to 841x1870, and the baked-in week text was replaced with the empty field from the previous clean.png. Replace with a native export when available.\n\n1) Back Arrow — returns to the previous page.\n2) Week/Date Range — changes the grocery-list week.\n3) Grocery Basket — refreshes or opens the meals contributing ingredients.\n4) Open Parchment Area — list window inside the panel (panel x 12-831, y 424-1719 of 841x1870). The app draws bold category headings with their items beneath, and the list scrolls when it is longer than the space. Tapping a heading expands or collapses its category.\n5) Checkbox — marks an item purchased/unpurchased.\n6) Item Name — edits the grocery item.\n7) Quantity Field — edits the amount or unit.\n8) Entire Grocery Row — opens edit options, delete, or reorder.\n9) Add Item Panel — creates a new custom grocery item.\n10) Clear Checked Panel — removes or archives checked items.\n\nHeadings, rows, item names, quantities and checkboxes are dynamic code over the open parchment area—not separate Photoshop layers. layers.psd and grocery_list_reference.png still show the earlier card-based layout and are kept as reference only; clean.png is the current background.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_09_grocery_list/clean.png",
+                    "display_name": "grocery_list_clean.png"
+                },
+                "markup": [],
+                "psd": {
+                    "path": "pages/page_09_grocery_list/layers.psd",
+                    "display_name": "grocery_list_layers.psd"
+                },
+                "coords": null,
+                "other": [
+                    {
+                        "path": "pages/page_09_grocery_list/other_1.png",
+                        "display_name": "grocery_list_reference.png"
+                    }
+                ]
+            },
+            "image_size": null,
+            "items": []
+        },
+        {
+            "id": "page_10",
+            "index": 9,
+            "name": "Kitchen Junk Drawer",
+            "folder": "pages/page_10_kitchen_junk_drawer",
+            "notes": "1) Settings — brass gear\n2) Categories — stacked cards labeled  Recipes, Meals, Ingredients, Seasons, Cuisines\n3) Backup & Export — notebook\n4) Themes — color swatches\n5) Help — question-mark card\n6) Timer/Tools — small chef timer\n7) Print & Share — printer card\n8) back arrow circle\n\nPage 10 is a visual utility hub built from a kitchen junk drawer. The entire drawer is decorative on this page; only the individual objects are clickable.\n\nWire the layers as follows:\n\n1. Settings Gear — open app settings.\n2. Category Cards — open category management, including default categories and custom categories.\n3. Backup & Export Notebook — open backup, restore, import, and export tools.\n4. Theme Swatches — open visual theme and appearance settings.\n5. Help Card — open help, tips, and usage guidance.\n6. Chef Timer/Tools — open cooking utilities such as timer, conversions, and measurements.\n7. Print & Share Card — print or share recipes, meal plans, and grocery lists.\n8. Back Arrow — return to Kitchen Hub.\n\nEach object should illuminate briefly on page load and when tapped. Use the complete illustrated objects as the hit areas. Do not add generic replacement buttons over the artwork, and do not make the entire drawer a competing clickable target.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_10_kitchen_junk_drawer/clean.png",
+                    "display_name": "kitchen_junk_drawer_clean.png"
+                },
+                "markup": [],
+                "psd": {
+                    "path": "pages/page_10_kitchen_junk_drawer/layers.psd",
+                    "display_name": "kitchen_junk_drawer_layers.psd"
+                },
+                "coords": null,
+                "other": []
+            },
+            "image_size": null,
+            "items": []
+        },
+        {
+            "id": "page_11",
+            "index": 10,
+            "name": "Scrolling Page Top Piece",
+            "folder": "pages/page_11_scroll_top",
+            "notes": "NEW 2026-11. Shared by Recipe Detail, Cook Mode, Import Review and Grocery List. Decorative piece shown once at the very top of the scrolling content. Herbs or vines may fill the top band and the two side zones (70 px each); keep the centre plain parchment because recipe text starts right below it. No text in the artwork.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_11_scroll_top/clean.png",
+                    "display_name": "scroll_top_clean.png"
+                },
+                "markup": [],
+                "psd": null,
+                "coords": null,
+                "other": []
+            },
+            "image_size": {
+                "width": 841,
+                "height": 260
+            },
+            "items": []
+        },
+        {
+            "id": "page_12",
+            "index": 11,
+            "name": "Scrolling Page Repeating Side Strip",
+            "folder": "pages/page_12_scroll_tile",
+            "notes": "NEW 2026-11. Shared. This strip is repeated down the page for as long as the recipe needs, so its top edge must join its bottom edge without a visible seam. Decoration only in the two side zones (70 px each); the centre must be plain parchment (or transparent). It is never stretched.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_12_scroll_tile/clean.png",
+                    "display_name": "scroll_tile_clean.png"
+                },
+                "markup": [],
+                "psd": null,
+                "coords": null,
+                "other": []
+            },
+            "image_size": {
+                "width": 841,
+                "height": 400
+            },
+            "items": []
+        },
+        {
+            "id": "page_13",
+            "index": 12,
+            "name": "Scrolling Page Bottom Piece",
+            "folder": "pages/page_13_scroll_bottom",
+            "notes": "NEW 2026-11. Shared. Decorative piece shown once, after the last line of content, wherever that falls. It closes the side borders. No text in the artwork.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_13_scroll_bottom/clean.png",
+                    "display_name": "scroll_bottom_clean.png"
+                },
+                "markup": [],
+                "psd": null,
+                "coords": null,
+                "other": []
+            },
+            "image_size": {
+                "width": 841,
+                "height": 300
+            },
+            "items": []
+        },
+        {
+            "id": "page_14",
+            "index": 13,
+            "name": "Recipe Detail Controls",
+            "folder": "pages/page_14_recipe_detail_controls",
+            "notes": "NEW 2026-11, replaces the fixed layout of page_04 (page_04 artwork is kept, not deleted, and no longer drawn). Two bars that stay on screen while the recipe scrolls: the top bar (rows 0-150: Back, More options, Favorite heart) and the bottom bar (rows 190-470: servings minus / value / plus, Cook Mode, Add to Grocery List). Supply each control as its own PSD layer (Cutout 1..7 in the order of the boxes) so it can glow and be tapped; the servings value is text drawn by the app. Button labels may be part of the button artwork.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_14_recipe_detail_controls/clean.png",
+                    "display_name": "recipe_detail_controls_clean.png"
+                },
+                "markup": [],
+                "psd": null,
+                "coords": {
+                    "path": "pages/page_14_recipe_detail_controls/coords.json",
+                    "display_name": "recipe_detail_controls_coords.json"
+                },
+                "other": []
+            },
+            "image_size": {
+                "width": 841,
+                "height": 470
+            },
+            "items": [
+                {
+                    "id": "back",
+                    "type": "box",
+                    "label": "Back",
+                    "x": 0.02378,
+                    "y": 0.06383,
+                    "w": 0.1308,
+                    "h": 0.23404
+                },
+                {
+                    "id": "more_options",
+                    "type": "box",
+                    "label": "More options",
+                    "x": 0.70155,
+                    "y": 0.06383,
+                    "w": 0.1308,
+                    "h": 0.23404
+                },
+                {
+                    "id": "favorite",
+                    "type": "box",
+                    "label": "Favorite",
+                    "x": 0.85018,
+                    "y": 0.06383,
+                    "w": 0.1308,
+                    "h": 0.23404
+                },
+                {
+                    "id": "fewer_servings",
+                    "type": "box",
+                    "label": "Fewer servings",
+                    "x": 0.61831,
+                    "y": 0.43617,
+                    "w": 0.11891,
+                    "h": 0.21277
+                },
+                {
+                    "id": "servings_value",
+                    "type": "box",
+                    "label": "Servings value",
+                    "x": 0.74911,
+                    "y": 0.43617,
+                    "w": 0.10702,
+                    "h": 0.21277
+                },
+                {
+                    "id": "more_servings",
+                    "type": "box",
+                    "label": "More servings",
+                    "x": 0.86801,
+                    "y": 0.43617,
+                    "w": 0.11891,
+                    "h": 0.21277
+                },
+                {
+                    "id": "cook_mode",
+                    "type": "box",
+                    "label": "Cook Mode",
+                    "x": 0.02378,
+                    "y": 0.70213,
+                    "w": 0.46968,
+                    "h": 0.25532
+                },
+                {
+                    "id": "add_to_grocery_list",
+                    "type": "box",
+                    "label": "Add to Grocery List",
+                    "x": 0.50654,
+                    "y": 0.70213,
+                    "w": 0.46968,
+                    "h": 0.25532
+                }
+            ]
+        },
+        {
+            "id": "page_15",
+            "index": 14,
+            "name": "Cook Mode Controls",
+            "folder": "pages/page_15_cook_mode_controls",
+            "notes": "NEW 2026-11, replaces the fixed layout of page_05. Top bar (Back; a plate behind the app-drawn text 'Step 2 of 8' and progress line; the timer button, shown only when a step has a timer, with the time drawn by the app beside it) and bottom bar (Previous Step, Next Step). Each control as its own PSD layer. Ingredients and all steps scroll between the bars and are drawn by the app; the current step gets a code-drawn highlight.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_15_cook_mode_controls/clean.png",
+                    "display_name": "cook_mode_controls_clean.png"
+                },
+                "markup": [],
+                "psd": null,
+                "coords": {
+                    "path": "pages/page_15_cook_mode_controls/coords.json",
+                    "display_name": "cook_mode_controls_coords.json"
+                },
+                "other": []
+            },
+            "image_size": {
+                "width": 841,
+                "height": 480
+            },
+            "items": [
+                {
+                    "id": "back",
+                    "type": "box",
+                    "label": "Back",
+                    "x": 0.02378,
+                    "y": 0.0625,
+                    "w": 0.1308,
+                    "h": 0.22917
+                },
+                {
+                    "id": "step_chip",
+                    "type": "box",
+                    "label": "Step chip",
+                    "x": 0.17836,
+                    "y": 0.0625,
+                    "w": 0.79667,
+                    "h": 0.22917
+                },
+                {
+                    "id": "timer_button",
+                    "type": "box",
+                    "label": "Timer button",
+                    "x": 0.02378,
+                    "y": 0.34375,
+                    "w": 0.39239,
+                    "h": 0.20833
+                },
+                {
+                    "id": "previous_step",
+                    "type": "box",
+                    "label": "Previous Step",
+                    "x": 0.02378,
+                    "y": 0.66667,
+                    "w": 0.46968,
+                    "h": 0.25
+                },
+                {
+                    "id": "next_step",
+                    "type": "box",
+                    "label": "Next Step",
+                    "x": 0.50654,
+                    "y": 0.66667,
+                    "w": 0.46968,
+                    "h": 0.25
+                }
+            ]
+        },
+        {
+            "id": "page_16",
+            "index": 15,
+            "name": "Grocery List Controls",
+            "folder": "pages/page_16_grocery_list_controls",
+            "notes": "NEW 2026-11, replaces the fixed layout of page_09. Top bar (Back, the title 'Grocery List' may be part of the bar artwork, week selector plate with the dates drawn by the app, From meal plan basket) and bottom bar (Add Item, Clear checked). Each control as its own PSD layer. The list scrolls between the bars.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_16_grocery_list_controls/clean.png",
+                    "display_name": "grocery_list_controls_clean.png"
+                },
+                "markup": [],
+                "psd": null,
+                "coords": {
+                    "path": "pages/page_16_grocery_list_controls/coords.json",
+                    "display_name": "grocery_list_controls_coords.json"
+                },
+                "other": []
+            },
+            "image_size": {
+                "width": 841,
+                "height": 500
+            },
+            "items": [
+                {
+                    "id": "back",
+                    "type": "box",
+                    "label": "Back",
+                    "x": 0.02378,
+                    "y": 0.06,
+                    "w": 0.1308,
+                    "h": 0.22
+                },
+                {
+                    "id": "week_selector",
+                    "type": "box",
+                    "label": "Week selector",
+                    "x": 0.02378,
+                    "y": 0.33,
+                    "w": 0.55886,
+                    "h": 0.2
+                },
+                {
+                    "id": "from_meal_plan",
+                    "type": "box",
+                    "label": "From meal plan",
+                    "x": 0.60048,
+                    "y": 0.33,
+                    "w": 0.37574,
+                    "h": 0.2
+                },
+                {
+                    "id": "add_item",
+                    "type": "box",
+                    "label": "Add Item",
+                    "x": 0.02378,
+                    "y": 0.66,
+                    "w": 0.46968,
+                    "h": 0.24
+                },
+                {
+                    "id": "clear_checked",
+                    "type": "box",
+                    "label": "Clear checked",
+                    "x": 0.50654,
+                    "y": 0.66,
+                    "w": 0.46968,
+                    "h": 0.24
+                }
+            ]
+        },
+        {
+            "id": "page_17",
+            "index": 16,
+            "name": "Import Review Controls",
+            "folder": "pages/page_17_import_review_controls",
+            "notes": "NEW 2026-11, replaces the fixed layout of page_07. Top bar (Back, Details) and bottom bar (Add Ingredient, Add Direction, Add Category, Save Recipe). Each control as its own PSD layer. Photo, title, source, ingredient rows, direction rows and categories scroll between the bars and are drawn by the app.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_17_import_review_controls/clean.png",
+                    "display_name": "import_review_controls_clean.png"
+                },
+                "markup": [],
+                "psd": null,
+                "coords": {
+                    "path": "pages/page_17_import_review_controls/coords.json",
+                    "display_name": "import_review_controls_coords.json"
+                },
+                "other": []
+            },
+            "image_size": {
+                "width": 841,
+                "height": 520
+            },
+            "items": [
+                {
+                    "id": "back",
+                    "type": "box",
+                    "label": "Back",
+                    "x": 0.02378,
+                    "y": 0.05769,
+                    "w": 0.1308,
+                    "h": 0.21154
+                },
+                {
+                    "id": "details",
+                    "type": "box",
+                    "label": "Details",
+                    "x": 0.761,
+                    "y": 0.05769,
+                    "w": 0.21522,
+                    "h": 0.21154
+                },
+                {
+                    "id": "add_ingredient",
+                    "type": "box",
+                    "label": "Add Ingredient",
+                    "x": 0.02378,
+                    "y": 0.39423,
+                    "w": 0.30916,
+                    "h": 0.19231
+                },
+                {
+                    "id": "add_direction",
+                    "type": "box",
+                    "label": "Add Direction",
+                    "x": 0.34483,
+                    "y": 0.39423,
+                    "w": 0.30916,
+                    "h": 0.19231
+                },
+                {
+                    "id": "add_category",
+                    "type": "box",
+                    "label": "Add Category",
+                    "x": 0.66587,
+                    "y": 0.39423,
+                    "w": 0.31034,
+                    "h": 0.19231
+                },
+                {
+                    "id": "save_recipe",
+                    "type": "box",
+                    "label": "Save Recipe",
+                    "x": 0.02378,
+                    "y": 0.63462,
+                    "w": 0.95244,
+                    "h": 0.25
+                }
+            ]
+        },
+        {
+            "id": "page_18",
+            "index": 17,
+            "name": "Recipe Rescue",
+            "folder": "pages/page_18_recipe_rescue",
+            "notes": "NEW 2026-11. Working screen: the original on one side, the editable recipe on the other (side by side in landscape). It uses plain code-drawn panels on purpose. OPTIONAL artwork only: a top-bar background strip and the divider handle between the two panes. No artwork is required for this screen to be finished.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_18_recipe_rescue/clean.png",
+                    "display_name": "recipe_rescue_clean.png"
+                },
+                "markup": [],
+                "psd": null,
+                "coords": {
+                    "path": "pages/page_18_recipe_rescue/coords.json",
+                    "display_name": "recipe_rescue_coords.json"
+                },
+                "other": []
+            },
+            "image_size": {
+                "width": 841,
+                "height": 400
+            },
+            "items": [
+                {
+                    "id": "top_bar_background",
+                    "type": "box",
+                    "label": "Top bar background",
+                    "x": 0.0,
+                    "y": 0.1,
+                    "w": 1.0,
+                    "h": 0.375
+                },
+                {
+                    "id": "divider_handle",
+                    "type": "box",
+                    "label": "Divider handle",
+                    "x": 0.0,
+                    "y": 0.575,
+                    "w": 1.0,
+                    "h": 0.11
+                }
+            ]
+        },
+        {
+            "id": "page_19",
+            "index": 18,
+            "name": "Unfinished Recipes",
+            "folder": "pages/page_19_unfinished_recipes",
+            "notes": "NEW 2026-11. Plain list page (like Settings). OPTIONAL: a header illustration. On Import Recipe (page_06) the app currently draws a small 'Unfinished (n)' chip at the top right; if you want an illustrated object for it, add it to page_06 as a new PSD layer and say where.",
+            "slots": {
+                "clean": {
+                    "path": "pages/page_19_unfinished_recipes/clean.png",
+                    "display_name": "unfinished_recipes_clean.png"
+                },
+                "markup": [],
+                "psd": null,
+                "coords": null,
+                "other": []
+            },
+            "image_size": {
+                "width": 841,
+                "height": 300
+            },
+            "items": []
+        }
+    ],
+    "template_note": "2026-11 functional update: pages page_01..page_10 are unchanged. page_11..page_19 are new template pages with placeholder images. See the README section 'Template update 2026-11'."
+}

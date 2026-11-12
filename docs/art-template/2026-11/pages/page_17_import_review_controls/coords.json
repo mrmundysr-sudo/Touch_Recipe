@@ -1,0 +1,65 @@
+{
+  "schema": "app-visual-builder/coords@1",
+  "page": "page_17",
+  "image_size": {
+    "width": 841,
+    "height": 520
+  },
+  "coordinate_space": "normalized_0_1",
+  "items": [
+    {
+      "id": "back",
+      "type": "box",
+      "label": "Back",
+      "x": 0.02378,
+      "y": 0.05769,
+      "w": 0.1308,
+      "h": 0.21154
+    },
+    {
+      "id": "details",
+      "type": "box",
+      "label": "Details",
+      "x": 0.761,
+      "y": 0.05769,
+      "w": 0.21522,
+      "h": 0.21154
+    },
+    {
+      "id": "add_ingredient",
+      "type": "box",
+      "label": "Add Ingredient",
+      "x": 0.02378,
+      "y": 0.39423,
+      "w": 0.30916,
+      "h": 0.19231
+    },
+    {
+      "id": "add_direction",
+      "type": "box",
+      "label": "Add Direction",
+      "x": 0.34483,
+      "y": 0.39423,
+      "w": 0.30916,
+      "h": 0.19231
+    },
+    {
+      "id": "add_category",
+      "type": "box",
+      "label": "Add Category",
+      "x": 0.66587,
+      "y": 0.39423,
+      "w": 0.31034,
+      "h": 0.19231
+    },
+    {
+      "id": "save_recipe",
+      "type": "box",
+      "label": "Save Recipe",
+      "x": 0.02378,
+      "y": 0.63462,
+      "w": 0.95244,
+      "h": 0.25
+    }
+  ]
+}

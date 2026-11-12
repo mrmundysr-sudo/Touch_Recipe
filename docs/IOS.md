@@ -42,3 +42,20 @@ Prerequisite on Apple's side: an App Store Connect app record for `com.mundymorn
 - `npm test` — 56 Node tests (ports of the Android tests, art sync, ZIP/backup round trips incl. Android-format files).
 - `node tools/e2e.cjs` — 36 UI checks in a phone-size browser, zero console errors.
 - `ios-check.yml` — unsigned macOS build: project generation, patching, compile for the iOS Simulator (including the Swift bridge), launch, and a CI-only tour of every screen.
+
+## Work needed for parity with the Android functional update (2026-11)
+
+The iOS app was not changed by the 2026-11 update. To bring it level, port in this order (each has Kotlin tests whose cases can be copied into the Node tests):
+
+| Android piece | Port to | Notes |
+|---|---|---|
+| `core/importer/PageScan.kt`, `Reconcile.kt`, `ImportValidator.kt`, `ImageCandidates.kt`; changes in `WebRecipeExtractor.kt` and `TextRecipeParser.kt` | `www/js/engine/` | Pure logic; jsoup calls map to DOM calls as in the existing port. Same corpus benchmark and floors (`RealPageBenchmarkTest`). |
+| `core/importer/LayoutReader.kt` | `www/js/engine/` | Needs line positions from the native bridge: PDFKit selections per line, Vision observations with bounding boxes. |
+| `core/rescue/Rescue.kt`, `core/image/PageImages.kt` | `www/js/engine/` | Pure logic; image analysis runs on a canvas `ImageData`. |
+| `data/DraftStore.kt`, `OriginalStore` | Capacitor Filesystem | Files, not IndexedDB rows, so large originals stay out of the database. |
+| `data/PageImageTools.kt` | canvas (perspective warp needs a small homography routine) or a native helper in `tools/patch_ios.py` | |
+| `ui/art/ScrollPage.kt` and the four rebuilt screens, `RescueScreen.kt`, `CropTool.kt` | `www/js/screens/`, `www/css/app.css` | Landscape must be allowed for Recipe Rescue only. |
+| PDF embedded pictures | native bridge | PDFKit does not expose page images directly; rendering the page and using the dish-photo finder is the fallback. |
+
+Nothing here needs a new signing workflow. No TestFlight or App Store submission was started.
+
