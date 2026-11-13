@@ -1,26 +1,16 @@
 // Port of core/importer/WebRecipeExtractor.kt: schema.org JSON-LD -> microdata -> HTML heuristics.
 // It only reads what the user's own request returned; it does not bypass access controls.
 // `parseHtml(html) -> Document` is injected (DOMParser in the app, linkedom in tests).
-import { Recipe, Ingredient, Direction, Confidence, ImportMethod, Severity, warn } from './models.js';
+import { Recipe, Ingredient, Direction, Confidence, ImportMethod, Severity, warn, effectiveTotal } from './models.js';
 import { toMinutes, timerSeconds, looseMinutes } from './durations.js';
 
-let parseHtml = (html) => new DOMParser().parseFromString(html, 'text/html');
-export const setHtmlParser = (fn) => { parseHtml = fn; };
-
-const BLOCK = new Set(['ADDRESS', 'ARTICLE', 'ASIDE', 'BLOCKQUOTE', 'BR', 'DD', 'DIV', 'DL', 'DT', 'FIELDSET', 'FIGCAPTION', 'FIGURE', 'FOOTER', 'FORM', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'HEADER', 'HR', 'LI', 'MAIN', 'NAV', 'OL', 'P', 'PRE', 'SECTION', 'TABLE', 'TD', 'TH', 'TR', 'UL']);
-/** jsoup-style text(): whitespace normalised and trimmed, block elements separated by a space. */
-export function elText(node) {
-  const walk = (n) => {
-    if (n.nodeType === 3) return n.nodeValue;
-    if (n.nodeType === 9 || n.nodeType === 11) return [...n.childNodes].map(walk).join('');
-    if (n.nodeType !== 1) return '';
-    const tag = n.tagName.toUpperCase();
-    if (tag === 'SCRIPT' || tag === 'STYLE') return '';
-    const inner = [...n.childNodes].map(walk).join('');
-    return BLOCK.has(tag) ? ` ${inner} ` : inner;
-  };
-  return walk(node).replace(/\s+/g, ' ').trim();
-}
+import { parse as parseHtml, setHtmlParser as _setHtmlParser, elText as _elText, htmlLines } from './htmlparse.js';
+import { scan as pageScan } from './pagescan.js';
+import * as Reconcile from './reconcile.js';
+import { validate } from './validator.js';
+import { rankImages } from './imagecandidates.js';
+export const setHtmlParser = _setHtmlParser;
+export const elText = _elText;
 const attr = (el, name) => el?.getAttribute?.(name) ?? '';
 const blank = (s) => !s || !s.trim();
 const isObj = (e) => e && typeof e === 'object' && !Array.isArray(e);
@@ -36,7 +26,10 @@ function str(e) {
 function clean(s) {
   if (blank(s)) return '';
   const html = s.includes('<') && s.includes('>') ? s : `<p>${s}</p>`;
-  return elText(parseHtml(html).body ?? parseHtml(html)).replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
+  let text = elText(parseHtml(html).body ?? parseHtml(html));
+  // data blocks are sometimes escaped twice ("&amp;ouml;", "&lt;p&gt;")
+  if (/&(?:[a-zA-Z]{2,8}|#\d{2,5});|<\/?[a-zA-Z][^>]{0,40}>/.test(text)) text = elText(parseHtml(`<p>${text}</p>`).body);
+  return text.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function absolute(u, base) {
@@ -106,6 +99,8 @@ function images(node, base) {
   return [...new Set(urls.map((u) => absolute(u, base)).filter(Boolean))];
 }
 
+const unescapeTwice = (s) => (/&lt;\/?[a-zA-Z]/.test(s) ? (parseHtml(`<div>${s}</div>`).body ?? parseHtml(`<div>${s}</div>`)).textContent : s);
+
 function instructionSteps(node) {
   const steps = [];
   const walk = (e) => {
@@ -117,12 +112,14 @@ function instructionSteps(node) {
         if (name) steps.push('§' + name);
         walk(e.itemListElement);
       } else {
-        const t = clean(str(e.text ?? e.description ?? e.name));
-        if (t) steps.push(t);
+        const raw = unescapeTwice(str(e.text ?? e.description ?? e.name));
+        // one HowToStep holding several paragraphs or list items is several steps
+        if (/<\/p>\s*<p|<\/li>\s*<li|<br\s*\/?>\s*<br/i.test(raw)) steps.push(...htmlLines(raw).map(clean).filter(Boolean));
+        else { const t = clean(raw); if (t) steps.push(t); }
       }
       return;
     }
-    const html = String(e).replace(/<br\s*\/?>|<\/p>|<\/li>/gi, '\n');
+    const html = unescapeTwice(String(e)).replace(/<br\s*\/?>|<\/p>|<\/li>/gi, '\n');
     const body = parseHtml(html).body ?? parseHtml(html);
     steps.push(...(body.textContent || '').split('\n').map(clean).filter(Boolean));
   };
@@ -136,14 +133,26 @@ export function servingsFrom(node) {
   return n != null && n >= 1 && n <= 999 ? n : null;
 }
 
+const QTY_UNIT = /(?<=[\p{L})]) (?=(?:\d+(?:[.,/]\d+)?(?: \d\/\d)?|[¼½¾⅓⅔⅛⅜⅝⅞]) ?(?:cups?|tbsps?|tsps?|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|kg|ml|l|cloves?|cans?|sticks?|slices?|pinch|large|medium|small)\b)/giu;
+/** One line that clearly holds several measured ingredients ("3 tbsp oil 2 cups flour 1 tsp salt ...") is split before each amount. */
+function splitRunTogether(line) {
+  if (line.length < 110) return [line];
+  const parts = line.split(QTY_UNIT).map((x) => x.trim()).filter(Boolean);
+  return parts.length >= 4 && parts.every((x) => x.length < 140) ? parts : [line];
+}
+/** Ingredient lines of a data block. A single string holding the whole list (line breaks, `<br>` or list markup) is split into lines. */
+function ingredientLines(r) {
+  const node = r.recipeIngredient ?? r.ingredients;
+  const raw = Array.isArray(node) ? node.map(str) : node != null && !isObj(node) ? [String(node)] : [];
+  return raw.flatMap((x) => (x.includes('\n') || /<br|<li|<\/p>/i.test(x) ? htmlLines(x) : [x])).map(clean).filter(Boolean).flatMap(splitRunTogether);
+}
+
 const dedupeConsecutive = (lines) => lines.reduce((acc, l) => { if (acc[acc.length - 1] !== l) acc.push(l); return acc; }, []);
 
 function fromJsonLd(r, doc, pageUrl) {
   const warnings = [];
   const title = clean(str(r.name)) || clean(doc.title || '');
-  const rawIng = r.recipeIngredient ?? r.ingredients;
-  const ingLines = (Array.isArray(rawIng) ? rawIng : rawIng != null && !isObj(rawIng) ? [rawIng] : []).map((x) => clean(str(x))).filter(Boolean);
-  const ingredients = dedupeConsecutive(ingLines).map((t) => Ingredient({ text: t }));
+  const ingredients = dedupeConsecutive(ingredientLines(r)).map((t) => Ingredient({ text: t }));
   const directions = instructionSteps(r.recipeInstructions).map((s) => (s.startsWith('§') ? Direction({ text: s.slice(1).trim().replace(/:+$/, ''), header: true }) : Direction({ text: s, timerSeconds: timerSeconds(s) })));
   const author = Array.isArray(r.author) ? str(r.author[0]) : str(r.author);
   const publisher = clean(str(r.publisher));
@@ -154,8 +163,7 @@ function fromJsonLd(r, doc, pageUrl) {
   const rcu = r.recipeCuisine;
   const cuisine = clean(Array.isArray(rcu) ? str(rcu[0]) : str(rcu)) || null;
   const prep = toMinutes(str(r.prepTime)), cook = toMinutes(str(r.cookTime)), total = toMinutes(str(r.totalTime));
-  const og = attr(doc.querySelector('meta[property="og:image"]'), 'content');
-  const imgs = [...new Set([...images(r.image, pageUrl), ...(og ? [absolute(og, pageUrl)] : [])].filter(Boolean))];
+  const imgs = rankImages(doc, images(r.image, pageUrl), pageUrl);
   const servings = servingsFrom(r.recipeYield);
   const metaDesc = clean(attr(doc.querySelector('meta[property="og:description"]'), 'content') || attr(doc.querySelector('meta[name="description"]'), 'content'));
   const description = clean(str(r.description)) || metaDesc;
@@ -200,7 +208,7 @@ function microdata(doc, pageUrl) {
     ingredients, directions: steps.map((t) => Direction({ text: t, timerSeconds: timerSeconds(t) })),
   });
   return { recipe, method: ImportMethod.MICRODATA, confidence: ingredients.length && steps.length ? Confidence.MEDIUM : Confidence.LOW,
-    warnings: [warn('recipe', "Read from the page's embedded recipe markup. Please check each field.", Severity.INFO)], imageCandidates: img ? [img] : [] };
+    warnings: [warn('recipe', "Read from the page's embedded recipe markup. Please check each field.", Severity.INFO)], imageCandidates: rankImages(doc, img ? [img] : [], pageUrl) };
 }
 
 // ---------- HTML heuristics ----------
@@ -227,7 +235,9 @@ export function labeledMeta(doc) {
   return out;
 }
 
-function heuristic(doc, pageUrl) {
+function heuristic(doc, pageUrl, page) {
+  const pageIng = page?.ingredients ? page.ingredients.lines.map((l) => Ingredient({ text: l.text, header: l.header })) : null;
+  const pageSteps = page?.steps ? page.steps.lines.map((l) => (l.header ? Direction({ text: l.text, header: true }) : Direction({ text: l.text, timerSeconds: timerSeconds(l.text) }))) : null;
   const ogTitle = attr(doc.querySelector('meta[property="og:title"]'), 'content');
   const h1 = doc.querySelector('h1');
   const title = clean(ogTitle || (h1 ? elText(h1) : '') || doc.title || '').replace(/\s*[|\-–—]\s*[^|\-–—]{0,40}$/, '').trim();
@@ -238,9 +248,9 @@ function heuristic(doc, pageUrl) {
     }
     return [];
   };
-  let ingredients = pick(ingredientSelectors);
-  let steps = pick(directionSelectors);
-  if (!ingredients.length || !steps.length) {
+  let ingredients = pageIng ? [] : pick(ingredientSelectors);
+  let steps = pageSteps ? [] : pick(directionSelectors);
+  if ((!pageIng && !ingredients.length) || (!pageSteps && !steps.length)) {
     const listAfter = (heading) => {
       const h = [...doc.querySelectorAll('h1,h2,h3,h4,h5,strong,b')].find((e) => heading.test(elText(e).trim().replace(/:+$/, '')));
       if (!h) return [];
@@ -255,22 +265,22 @@ function heuristic(doc, pageUrl) {
       }
       return [];
     };
-    if (!ingredients.length) ingredients = listAfter(/^ingredients?$/i);
-    if (!steps.length) steps = listAfter(/^(directions?|instructions?|method|preparation|steps?)$/i);
+    if (!pageIng && !ingredients.length) ingredients = listAfter(/^ingredients?$/i);
+    if (!pageSteps && !steps.length) steps = listAfter(/^(directions?|instructions?|method|preparation|steps?)$/i);
   }
-  const og = attr(doc.querySelector('meta[property="og:image"]'), 'content');
-  const img = og ? absolute(og, pageUrl) : null;
   const desc = clean(attr(doc.querySelector('meta[property="og:description"]'), 'content') || attr(doc.querySelector('meta[name="description"]'), 'content'));
   const lm = labeledMeta(doc);
   const recipe = Recipe({
     title, description: desc, sourceUrl: pageUrl, sourceName: pageUrl ? hostOf(pageUrl) : null,
     prepMinutes: lm.prep, cookMinutes: lm.cook, totalMinutes: lm.total, servings: lm.servings,
-    ingredients: ingredients.map((t) => Ingredient({ text: t })), directions: steps.map((t) => Direction({ text: t, timerSeconds: timerSeconds(t) })),
+    ingredients: pageIng ?? ingredients.map((t) => Ingredient({ text: t })), directions: pageSteps ?? steps.map((t) => Direction({ text: t, timerSeconds: timerSeconds(t) })),
   });
   const w = [warn('recipe', 'This page has no standard recipe data, so we guessed from its layout. Please check every field.', Severity.WARNING)];
-  if (!ingredients.length) w.push(warn('ingredients', 'No ingredients were found.'));
-  if (!steps.length) w.push(warn('directions', 'No directions were found.'));
-  return { recipe, method: ImportMethod.HTML, confidence: Confidence.LOW, warnings: w, imageCandidates: img ? [img] : [] };
+  if (!recipe.ingredients.some((i) => !i.header)) w.push(warn('ingredients', 'No ingredients were found.'));
+  if (!recipe.directions.some((d) => !d.header)) w.push(warn('directions', 'No directions were found.'));
+  const pictures = rankImages(doc, [], pageUrl);
+  if (!pictures.length) w.push(warn('photo', 'No photo was found.', Severity.INFO));
+  return { recipe, method: ImportMethod.HTML, confidence: Confidence.LOW, warnings: w, imageCandidates: pictures };
 }
 
 function mergeMissing(base, fill) {
@@ -284,30 +294,57 @@ function mergeMissing(base, fill) {
   return { ...base, recipe: r, warnings, imageCandidates: [...new Set([...base.imageCandidates, ...fill.imageCandidates])], confidence: filled ? Confidence.MEDIUM : base.confidence };
 }
 
+/** Checks a data-block recipe against the visible page: fills gaps, prefers a fuller trustworthy page version, and reports suspected omissions. */
+function crossCheck(base, doc, pageUrl, page) {
+  const r = base.recipe;
+  const ing = Reconcile.ingredients(r.ingredients, page.ingredients);
+  const dir = Reconcile.directions(r.directions, page.steps);
+  let ingredients = ing.value, directions = dir.value;
+  const extra = [];
+  let guessed = false;
+  // last resort for a section that is still empty: the older selector/heading guesses
+  if (!ingredients.length || !directions.some((d) => !d.header)) {
+    const h = heuristic(doc, pageUrl, { ingredients: null, steps: null }).recipe;
+    if (!ingredients.length && h.ingredients.length) { ingredients = h.ingredients; guessed = true; }
+    if (!directions.some((d) => !d.header) && h.directions.length) { directions = h.directions; guessed = true; }
+  }
+  const filledIng = !r.ingredients.length && ingredients.length, filledDir = !r.directions.some((d) => !d.header) && directions.some((d) => !d.header);
+  if (filledIng || filledDir) guessed = true;
+  if (guessed) extra.push(warn('recipe', 'Some parts were guessed from the page layout. Please check them.', Severity.WARNING));
+  const lm = r.servings == null || (r.prepMinutes == null && r.cookMinutes == null && r.totalMinutes == null) ? labeledMeta(doc) : { prep: null, cook: null, total: null, servings: null };
+  const recipe = { ...r, ingredients, directions, prepMinutes: r.prepMinutes ?? lm.prep, cookMinutes: r.cookMinutes ?? lm.cook, totalMinutes: r.totalMinutes ?? lm.total, servings: r.servings ?? lm.servings };
+  const kept = base.warnings.filter((w) => !((w.field === 'ingredients' && ingredients.length && w.message.includes('had no')) || (w.field === 'directions' && directions.some((d) => !d.header) && w.message.includes('had no'))
+    || (w.field === 'servings' && recipe.servings != null) || (w.field === 'times' && effectiveTotal(recipe) != null)));
+  const changed = ing.changed || dir.changed || guessed;
+  const unplaced = [...new Set([...(base.unplaced || []), ...ing.unplaced, ...dir.unplaced])];
+  return { ...base, recipe, warnings: [...kept, ...ing.warnings, ...dir.warnings, ...extra], unplaced,
+    confidence: changed && base.confidence === Confidence.HIGH ? Confidence.MEDIUM : (ing.unplaced.length || dir.unplaced.length) ? Confidence.MEDIUM : base.confidence };
+}
+
 export function extract(html, pageUrl) {
   let doc;
   try { doc = parseHtml(html); } catch { return failed(pageUrl, 'The page could not be read.'); }
   const warnings = [];
+  let page;
+  try { page = pageScan(doc); } catch { page = { ingredients: null, steps: null }; }
   const ld = jsonLdRecipes(doc);
   let draft = null;
   if (ld.length) {
-    const size = (x) => (Array.isArray(x.recipeIngredient) ? x.recipeIngredient.length : Array.isArray(x.ingredients) ? x.ingredients.length : 0);
-    const best = ld.reduce((a, b) => (size(b) > size(a) ? b : a));
+    const score = (x) => ingredientLines(x).length * 2 + (x.recipeInstructions != null ? 1 : 0);
+    const best = ld.reduce((a, b) => (score(b) > score(a) ? b : a));
     draft = fromJsonLd(best, doc, pageUrl);
-    if (ld.length > 1) draft = { ...draft, warnings: [...draft.warnings, warn('recipe', `This page contains ${ld.length} recipes. We imported the most complete one; check that it's the one you wanted.`, Severity.INFO)] };
+    const distinct = new Set(ld.map((x) => clean(str(x.name)))).size;
+    if (distinct > 1) draft = { ...draft, warnings: [...draft.warnings, warn('recipe', `This page contains ${distinct} recipes. We imported the most complete one; check that it's the one you wanted.`, Severity.INFO)] };
   }
   if (!draft || (!draft.recipe.ingredients.length && !draft.recipe.directions.length)) {
     const micro = microdata(doc, pageUrl);
-    if (micro && (micro.recipe.ingredients.length || micro.recipe.directions.length)) draft = micro;
+    if (micro && (micro.recipe.ingredients.length || micro.recipe.directions.length)) draft = draft ? { ...mergeMissing(draft, micro), method: ImportMethod.MICRODATA } : micro;
   }
-  if (!draft || !draft.recipe.ingredients.length || !draft.recipe.directions.length) {
-    const heur = heuristic(doc, pageUrl);
-    draft = draft ? mergeMissing(draft, heur) : heur;
-  }
+  draft = !draft ? heuristic(doc, pageUrl, page) : crossCheck(draft, doc, pageUrl, page);
   if (blank(draft.recipe.title) || (!draft.recipe.ingredients.length && !draft.recipe.directions.length)) {
     warnings.push(warn('recipe', 'No recipe could be found on this page. It may need you to sign in, load more content, or block automatic access. You can paste the recipe text instead.', Severity.ERROR));
   }
-  return { ...draft, warnings: [...draft.warnings, ...warnings] };
+  return validate({ ...draft, unplaced: draft.unplaced || [], warnings: [...draft.warnings, ...warnings] });
 }
 
 export const parseDoc = (html) => parseHtml(html);
