@@ -1,7 +1,7 @@
 // macOS PDFKit probe. Draws the invented page (spec.json) with Apple's Quartz PDF engine (the engine that made the owner's real PDF),
 // opens it with PDFKit and runs EXACTLY the piece reader the iOS app ships (tools/swift/TextPieces.swift).
 // Output: probe.pdf and bridge.json ({ text, lines, pages }) in the shape the app's native bridge returns.
-//   swiftc -O tools/swift/TextPieces.swift tools/pdfkit-probe/main.swift -o probe && ./probe spec.json outdir
+//   swiftc -O tools/swift/TextPieces.swift tools/swift/PdfImages.swift tools/pdfkit-probe/main.swift -o probe && ./probe spec.json outdir
 import Foundation
 import CoreGraphics
 import CoreText
@@ -28,6 +28,26 @@ for it in items {
     CTLineDraw(line, ctx)
     ctx.restoreGState()
 }
+// two pictures on the page: a colourful PHOTO (no mask) and a banner-shaped ADVERT with a see-through mask, like the owner's Veg-All PDF has
+func makeImage(width: Int, height: Int, alpha: Bool, _ draw: (CGContext) -> Void) -> CGImage? {
+    let info = alpha ? CGImageAlphaInfo.premultipliedLast.rawValue : CGImageAlphaInfo.noneSkipLast.rawValue
+    guard let c = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: info) else { return nil }
+    draw(c)
+    return c.makeImage()
+}
+let photo = makeImage(width: 600, height: 450, alpha: false) { c in
+    for i in 0..<60 {
+        let t = CGFloat(i) / 60
+        c.setFillColor(CGColor(red: 0.9 - 0.5 * t, green: 0.4 + 0.4 * t, blue: 0.2 + 0.6 * t, alpha: 1))
+        c.fillEllipse(in: CGRect(x: 20 + CGFloat(i * 9).truncatingRemainder(dividingBy: 480), y: 20 + CGFloat(i * 17).truncatingRemainder(dividingBy: 330), width: 120, height: 100))
+    }
+}
+let advert = makeImage(width: 750, height: 300, alpha: true) { c in
+    c.setFillColor(CGColor(red: 0.8, green: 0.3, blue: 0.1, alpha: 0.5)); c.fill(CGRect(x: 0, y: 0, width: 750, height: 300))
+    c.setFillColor(CGColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 0.8)); c.fillEllipse(in: CGRect(x: 100, y: 50, width: 200, height: 200))
+}
+if let p = photo { ctx.draw(p, in: CGRect(x: 40, y: 560, width: 200, height: 150)) }
+if let a = advert { ctx.draw(a, in: CGRect(x: 300, y: 560, width: 250, height: 100)) }
 ctx.endPDFPage(); ctx.closePDF()
 
 guard let doc = PDFDocument(url: pdfURL), let page = doc.page(at: 0) else { print("pdfkit could not open the pdf"); exit(1) }
@@ -37,3 +57,14 @@ let answer: [String: Any] = ["text": text, "lines": pieces, "pages": doc.pageCou
 let json = try JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])
 try json.write(to: out.appendingPathComponent("bridge.json"))
 print("PDFKit: \(text.count) characters of text, \(pieces.count) pieces; wrote bridge.json")
+
+// the embedded pictures, taken out by the code the app ships
+let found = touchRecipeExtractPdfImages(doc, maxPages: 6, maxImages: 12)
+var summary: [[String: Any]] = []
+for (i, item) in found.enumerated() {
+    let b64 = item["image"] as? String ?? ""
+    if let bytes = Data(base64Encoded: b64) { try? bytes.write(to: out.appendingPathComponent("image-\(i).jpg")) }
+    summary.append(["width": item["width"] ?? 0, "height": item["height"] ?? 0, "page": item["page"] ?? 0, "hasMask": item["hasMask"] ?? false, "bytes": b64.count * 3 / 4])
+}
+try JSONSerialization.data(withJSONObject: summary, options: [.sortedKeys]).write(to: out.appendingPathComponent("images.json"))
+print("PDF images: \(found.count) found")

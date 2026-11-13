@@ -6,6 +6,7 @@ import * as Text from '../../www/js/engine/textparser.js';
 import * as R from '../../www/js/engine/rescue.js';
 import { pdfText } from '../../www/js/data/importer.js';
 import { vocabulary, fragmentRate } from '../../www/js/engine/wordheal.js';
+import { choose } from '../../www/js/engine/photopick.js';
 
 const bridge = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 console.log(`STAGE 1 (PDFKit): ${bridge.lines.length} pieces; garbled verdict: ${Text.looksGarbled(bridge.text)}`);
@@ -36,5 +37,19 @@ check(fragmentRate(read.text) === 0, 'stray single letters in the layout text');
 check(R.linesToReview(r).length === 0, 'lines are marked for review');
 const vocab = vocabulary(bridge.text); const bad = read.text.split(/\s+/).filter((t) => { const c = t.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''); return c && !c.split('-').every((p) => !p || /^[\d/]+$/.test(p) || vocab.has(p.toLowerCase())); });
 check(bad.length === 0, `words that are not whole words of PDFKit's own text: ${bad.join(' ')}`);
+// the pictures embedded in the PDF, as the native code took them out: the photo is chosen, the advert (banner shape + see-through mask) is not
+const imagesPath = process.argv[2].replace(/bridge\.json$/, 'images.json');
+const images = JSON.parse(fs.readFileSync(imagesPath, 'utf8'));
+console.log('\nEMBEDDED PICTURES: ' + JSON.stringify(images));
+check(images.length === 2, `two embedded pictures expected, found ${images.length}`);
+const cands = images.map((im, i) => ({ id: `pdf:${i}`, label: `Picture ${i + 1}`, source: 'pdf', order: i, width: im.width, height: im.height, hasMask: im.hasMask }));
+const pick = choose(cands);
+const photo = cands.find((c) => c.width === 600 && c.height === 450), ad = cands.find((c) => c.width === 750 && c.height === 300);
+check(!!photo && !!ad, 'the photo (600x450) and the advert (750x300) are both found with their true sizes');
+if (photo && ad) {
+  check(photo.hasMask === false, 'the photo has no mask'); check(ad.hasMask === true, 'the advert is reported with its see-through mask');
+  check(pick.selectedId === photo.id, `the photo is the recipe photo (selected ${pick.selectedId})`);
+  check(pick.candidates.find((c) => c.id === ad.id).rejected === 'banner', 'the advert is rejected as a banner');
+}
 if (problems.length) { console.log('\nPROBLEMS:\n - ' + problems.join('\n - ')); process.exit(1); }
 console.log('\nPDFKit probe: every word and section is right');

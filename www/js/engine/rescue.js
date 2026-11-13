@@ -6,6 +6,7 @@ import { ingredientLike, text as pageNodeText } from './pagescan.js';
 import { parse as parseText } from './textparser.js';
 import { select as sel } from './htmlparse.js';
 import { parse as parseDoc } from './htmlparse.js';
+import { storeFrame } from './photoframe.js';
 
 export const TITLE = 'f:title', PHOTO = 'f:photo', SERVINGS = 'f:servings', TIMES = 'f:times', NOTES = 'f:notes', DESCRIPTION = 'f:description', INGREDIENTS = 'f:ingredients', DIRECTIONS = 'f:directions';
 const HISTORY = 40;
@@ -86,7 +87,9 @@ export function setTime(s, which, text) {
   const key = which === 'prep' ? 'prepMinutes' : which === 'cook' ? 'cookMinutes' : 'totalMinutes';
   return edit(s, (r) => ({ ...r, [key]: m }));
 }
-export const setPhoto = (s, name) => edit(s, (r) => ({ ...r, photo: name }));
+export const setPhoto = (s, name) => edit(s, (r) => ({ ...r, photo: name, photoFrame: null }));   // a different picture starts with the default framing
+/** The framing of the photo (zoom and centre; null = default). The picture itself is never cut. */
+export const setPhotoFrame = (s, frame) => edit(s, (r) => ({ ...r, photoFrame: storeFrame(frame) }));
 
 export const editIngredient = (s, id, text) => edit(s, (r) => ({ ...r, ingredients: r.ingredients.map((i) => (i.id === id ? { ...i, text: text.trim() } : i)) }));
 export const editStep = (s, id, text) => edit(s, (r) => ({ ...r, directions: r.directions.map((d) => (d.id === id ? { ...d, text: text.trim(), timerSeconds: d.header ? null : timerSeconds(text) } : d)) }));
@@ -109,7 +112,7 @@ export function removeSelected(s) {
   if (!s.selection.length) return s;
   const sel = new Set(s.selection);
   const n = edit(s, (r) => ({ ...r,
-    title: sel.has(TITLE) ? '' : r.title, photo: sel.has(PHOTO) ? null : r.photo, servings: sel.has(SERVINGS) ? null : r.servings,
+    title: sel.has(TITLE) ? '' : r.title, photo: sel.has(PHOTO) ? null : r.photo, photoFrame: sel.has(PHOTO) ? null : r.photoFrame, servings: sel.has(SERVINGS) ? null : r.servings,
     prepMinutes: sel.has(TIMES) ? null : r.prepMinutes, cookMinutes: sel.has(TIMES) ? null : r.cookMinutes, totalMinutes: sel.has(TIMES) ? null : r.totalMinutes,
     notes: sel.has(NOTES) ? '' : r.notes, description: sel.has(DESCRIPTION) ? '' : r.description,
     ingredients: r.ingredients.filter((i) => !sel.has(i.id)), directions: r.directions.filter((d) => !sel.has(d.id)) }));
@@ -137,7 +140,7 @@ export function replaceSelected(s, text) {
 export function startFresh(s, keep) {
   const k = new Set(keep);
   const n = edit(s, (r) => ({ ...r,
-    title: k.has(TITLE) ? r.title : '', photo: k.has(PHOTO) ? r.photo : null, servings: k.has(SERVINGS) ? r.servings : null,
+    title: k.has(TITLE) ? r.title : '', photo: k.has(PHOTO) ? r.photo : null, photoFrame: k.has(PHOTO) ? r.photoFrame : null, servings: k.has(SERVINGS) ? r.servings : null,
     prepMinutes: k.has(TIMES) ? r.prepMinutes : null, cookMinutes: k.has(TIMES) ? r.cookMinutes : null, totalMinutes: k.has(TIMES) ? r.totalMinutes : null,
     notes: k.has(NOTES) ? r.notes : '', description: k.has(DESCRIPTION) ? r.description : '',
     ingredients: k.has(INGREDIENTS) ? r.ingredients : [], directions: k.has(DIRECTIONS) ? r.directions : [] }));

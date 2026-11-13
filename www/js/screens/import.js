@@ -4,7 +4,7 @@ import { ArtPage } from '../ui/art.js';
 import { Routes } from '../ui/nav.js';
 import { bigButton, sheet, say, textButton } from '../ui/widgets.js';
 import { Severity, Confidence } from '../engine/models.js';
-import { ImportFailure } from '../data/importer.js';
+import { ImportFailure, photoWarning } from '../data/importer.js';
 import { pickFile } from '../ui/shared.js';
 
 export function importScreen(params, ctx, nav) {
@@ -23,13 +23,18 @@ export function importScreen(params, ctx, nav) {
       if (!draft.recipe.title.trim() && !draft.recipe.ingredients.length && !draft.recipe.directions.length && draft.warnings.some((w) => w.severity === Severity.ERROR)) {
         setUi({ s: 'failed', message: draft.warnings.find((w) => w.severity === Severity.ERROR).message, retryable: input.type === 'url', offline: false, blocked: input.type === 'url' }); return;
       }
-      if (draft.dishPhotoBlob) { const n = await ctx.photos.saveBlob(draft.dishPhotoBlob); if (n) ctx.importSession.photoFile = n; }
-      if (!ctx.importSession.photoFile && draft.imageCandidates.length) {
-        setUi({ s: 'working', message: 'Fetching the photo…' });
-        ctx.importSession.photoFile = await ctx.importer.fetchPhoto(draft.imageCandidates);
+      // the recipe photo: what the source offered, judged by rules (adverts and banners are never chosen); the person can always change it
+      if (!draft.photos && draft.imageCandidates && draft.imageCandidates.length) {
+        setUi({ s: 'working', message: "Looking at the page's pictures…" });
+        draft = { ...draft, photos: await ctx.importer.webPhotos(draft.imageCandidates) };
         if (job.cancelled) return;
-        if (!ctx.importSession.photoFile) draft = { ...draft, warnings: [...draft.warnings, { field: 'photo', message: "The page's photo could not be downloaded. You can add your own.", severity: Severity.INFO }] };
+        const loaded = draft.photos.loaded ?? 0, tried = draft.photos.tried ?? 0;
+        const w = !loaded && tried ? { field: 'photo', message: "The page's pictures could not be downloaded. You can add your own.", severity: Severity.WARNING } : photoWarning(draft.photos);
+        if (w) draft = { ...draft, warnings: [...draft.warnings, w] };
       }
+      ctx.importSession.photos = draft.photos || null;
+      const picked = draft.photos && draft.photos.candidates.find((c) => c.id === draft.photos.selectedId);
+      if (picked) { const n = await ctx.photos.saveBlob(picked.blob); if (n) ctx.importSession.photoFile = n; }
       ctx.importSession.draft = draft;
       setUi({ s: 'done', draft });
     } catch (e) {

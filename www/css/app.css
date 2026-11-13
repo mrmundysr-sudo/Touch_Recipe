@@ -233,3 +233,14 @@ hr.div { border: 0; border-top: 1px solid var(--outline); opacity: .4; margin: 1
 .crop-stage { position: relative; touch-action: none; user-select: none; }
 .crop-box { position: absolute; border: 2px solid var(--tomato); box-shadow: 0 0 0 9999px rgba(0,0,0,.42); box-sizing: border-box; }
 .crop-handle { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: rgba(207,74,39,.9); border: 3px solid #fff; box-sizing: border-box; }
+
+/* the photo editor and picker (plain) */
+.pe-stage { position: relative; width: 100%; height: min(52vh, 420px); overflow: hidden; border-radius: 12px; background: #111; touch-action: none; cursor: grab; -webkit-user-select: none; user-select: none; }
+.pe-img { position: absolute; max-width: none; pointer-events: none; }
+.pe-frame { position: absolute; border: 2px solid #fff; border-radius: 6px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, .6); pointer-events: none; }
+.pe-zoom-row { display: flex; align-items: center; gap: 10px; } .pe-zoom { flex: 1; min-width: 0; height: 44px; }
+.pp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+.pp-thumb { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 2px solid var(--outline, #9C9079); border-radius: 12px; background: transparent; color: var(--on-surface, #2A2118); text-align: left; cursor: pointer; font: inherit; }
+.pp-thumb.selected { border-color: var(--primary, #1F4D3A); } .pp-thumb.rejected { opacity: .75; }
+.pp-thumb img { width: 100%; height: 100px; object-fit: contain; background: #222; border-radius: 8px; }
+.pp-cap { font-weight: 700; font-size: calc(14px * var(--ts)); } .pp-note { font-size: calc(12.5px * var(--ts)); color: var(--on-surface-var, #50443A); }

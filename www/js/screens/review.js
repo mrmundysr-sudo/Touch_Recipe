@@ -1,4 +1,5 @@
 // Port of ui/screens/ReviewScreen.kt: review, correct and save an import (or edit an existing recipe).
+import { photoFlow } from './photo.js';
 import { h, mount } from '../ui/dom.js';
 import { ArtPage, place, dp, sp } from '../ui/art.js';
 import { Routes } from '../ui/nav.js';
@@ -16,7 +17,7 @@ export function reviewScreen(params, ctx, nav) {
   const rowsOf = (list) => list.map((x) => ({ id: x.id, text: x.text, header: x.header }));
   function fromRecipe(r, w, conf, cands) {
     if (editId) originalPhoto = r.photo;
-    return { title: r.title, description: r.description, notes: r.notes, cuisine: r.cuisine ?? '', sourceText: r.sourceUrl ?? r.sourceName ?? '', sourceUrl: r.sourceUrl, photo: r.photo,
+    return { title: r.title, description: r.description, notes: r.notes, cuisine: r.cuisine ?? '', sourceText: r.sourceUrl ?? r.sourceName ?? '', sourceUrl: r.sourceUrl, photo: r.photo, photoFrame: r.photoFrame ?? null,
       ingredients: rowsOf(r.ingredients), directions: rowsOf(r.directions), prep: r.prepMinutes?.toString() ?? '', cook: r.cookMinutes?.toString() ?? '', total: r.totalMinutes?.toString() ?? '', servings: r.servings?.toString() ?? '',
       categories: new Set(r.categoryIds), rawSource: r.rawSource, warnings: w, confidence: conf, candidates: cands, candidateIndex: 0, showErrors: false, editingId: editId ? r.id : null,
       favorite: r.favorite, dirty: false, timers: new Map(r.directions.map((d) => [d.id, d.timerSeconds])), createdAt: r.createdAt };
@@ -44,7 +45,7 @@ export function reviewScreen(params, ctx, nav) {
     const url = isUrl ? src : (s.sourceUrl && s.sourceUrl.trim() && src && !isUrl && !s.sourceUrl.toLowerCase().includes(src.toLowerCase()) ? s.sourceUrl : null);
     let name = null;
     if (isUrl) { try { name = new URL(src).host.replace(/^www\./, '') || null; } catch { name = null; } } else name = src || null;
-    return Recipe({ ...(s.editingId ? { id: s.editingId } : {}), title: s.title.trim(), description: s.description.trim(), notes: s.notes.trim(), photo: s.photo,
+    return Recipe({ ...(s.editingId ? { id: s.editingId } : {}), title: s.title.trim(), description: s.description.trim(), notes: s.notes.trim(), photo: s.photo, photoFrame: s.photo ? (s.photoFrame ?? null) : null,
       sourceUrl: url ?? (isUrl ? src : s.sourceUrl), sourceName: name, cuisine: s.cuisine.trim() || null,
       prepMinutes: intOrNull(s.prep), cookMinutes: intOrNull(s.cook), totalMinutes: intOrNull(s.total), servings: intOrNull(s.servings),
       ingredients: s.ingredients.filter((i) => i.text.trim()).map((i) => Ingredient({ id: i.id, text: i.text.trim(), header: i.header })),
@@ -89,7 +90,7 @@ export function reviewScreen(params, ctx, nav) {
 
   // photo over the placeholder
   const photoHolder = place(h('div', { style: `border-radius:${dp(14)};overflow:hidden;pointer-events:none` }), page.target('photo').box);
-  function drawPhoto() { mount(photoHolder); if (s.photo) { const p = photoImg(ctx.photos, s.photo, { fallback: s.title, alt: 'Recipe photo. Tap to change.' }); p.style.cssText = 'position:absolute;inset:0'; photoHolder.append(p); } }
+  function drawPhoto() { mount(photoHolder); if (s.photo) { const p = photoImg(ctx.photos, s.photo, { fallback: s.title, alt: 'Recipe photo. Tap to change.', frame: s.photoFrame }); p.style.cssText = 'position:absolute;inset:0'; photoHolder.append(p); } }
   // title + source
   const titleStyle = `font-family:var(--display);font-weight:700;font-size:${sp(32)};color:var(--ink)`;
   const title = h('input', { type: 'text', value: s.title, 'data-testid': 'title-field', 'aria-label': 'Recipe title', placeholder: 'Recipe title', autocapitalize: 'words', enterkeyhint: 'next',
@@ -130,11 +131,9 @@ export function reviewScreen(params, ctx, nav) {
   dyn.append(photoHolder, titleBox, titleErr, sourceBox, badges, ingBox, dirBox, catBox);
 
   function photoMenu() {
-    sheet({ label: 'Recipe photo', content: (close) => h('div', { style: 'display:flex;flex-direction:column;gap:8px' }, h('h2', { class: 'sheet-title' }, 'Recipe photo'),
-      bigButton('Choose from photo library', async () => { close(false); const f = await pickFile({ accept: 'image/*' }); if (f) { const n = await ctx.photos.saveBlob(f); if (n) { edit((x) => ({ ...x, photo: n })); drawPhoto(); } else say("That photo couldn't be used."); } }),
-      bigButton('Take a photo', async () => { close(false); const f = await pickFile({ accept: 'image/*', capture: 'environment' }); if (f) { const n = await ctx.photos.saveBlob(f); if (n) { edit((x) => ({ ...x, photo: n })); drawPhoto(); } else say("That photo couldn't be used."); } }, { primary: false }),
-      s.candidates.length > 1 ? bigButton('Try another image from the page', async () => { close(false); const next = (s.candidateIndex + 1) % s.candidates.length; const file = await ctx.importer.fetchPhoto([s.candidates[next]]); if (file) { edit((x) => ({ ...x, photo: file, candidateIndex: next })); drawPhoto(); } else say("That image couldn't be downloaded."); }, { primary: false }) : null,
-      s.photo ? bigButton('Remove photo', () => { close(false); edit((x) => ({ ...x, photo: null })); drawPhoto(); }, { primary: false }) : null) });
+    const found = ctx.importSession.photos || null;   // what the import found (adverts and banners are listed apart, never chosen)
+    photoFlow(ctx, { photo: s.photo, frame: s.photoFrame, candidates: found ? found.candidates : [], selectedId: found ? found.selectedId : null,
+      onApply: ({ photo, frame }) => { edit((x) => ({ ...x, photo, photoFrame: photo ? frame : null })); ctx.importSession.photoChecked = true; drawPhoto(); } });
   }
 
   function detailsSheet() {

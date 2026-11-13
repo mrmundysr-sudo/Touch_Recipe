@@ -41,3 +41,6 @@ Same branch `ccr-ios-rescue-review-fix`. (1) macOS probe showed PDFKit's per-cha
 
 ## 2026-11-13 plain Recipe Rescue
 Same branch `ccr-ios-rescue-review-fix` (after `4977a52`). Recipe Rescue rebuilt plain with numbered lists; layout reader fixed for PDFKit-sized boxes (macOS probe findings). Not uploaded to TestFlight. See `docs/knowledge/reports/2026-11-13-plain-rescue-and-pdfkit.md`.
+
+## 2026-11-13 photos
+Same branch `ccr-ios-rescue-review-fix`. Recipe photo finding, choosing and framing built; PDF embedded-picture extraction added to the native bridge (needs the macOS probe and a device). Not uploaded to TestFlight. See `docs/knowledge/reports/2026-11-13-photos-and-lists.md`.

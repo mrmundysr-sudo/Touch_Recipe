@@ -83,8 +83,22 @@ public class TouchRecipeOcrPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "recognizeImage", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "recognizePdf", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "renderPdfPage", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "setOrientation", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "setOrientation", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "extractPdfImages", returnType: CAPPluginReturnPromise)
     ]
+
+    /// The pictures embedded in a PDF (JPEG, size, page, soft mask flag), taken out directly. The web layer decides which one, if any, is the recipe photo.
+    @objc func extractPdfImages(_ call: CAPPluginCall) {
+        guard let b64 = call.getString("pdf"), let data = Data(base64Encoded: b64, options: .ignoreUnknownCharacters), let doc = PDFDocument(data: data) else {
+            call.reject("That PDF could not be opened.")
+            return
+        }
+        let maxPages = call.getInt("maxPages") ?? 6
+        let maxImages = call.getInt("maxImages") ?? 12
+        DispatchQueue.global(qos: .userInitiated).async {
+            call.resolve(["images": touchRecipeExtractPdfImages(doc, maxPages: maxPages, maxImages: maxImages)])
+        }
+    }
 
     /// Lets the web layer allow landscape for one screen. `landscape: false` puts the app back to portrait (and turns the screen upright if it was sideways).
     @objc func setOrientation(_ call: CAPPluginCall) {
@@ -218,9 +232,9 @@ delegate = APP / "AppDelegate.swift"
 src = delegate.read_text()
 if "TouchRecipeOcrPlugin" not in src:
     if "import Vision" not in src:
-        src = src.replace("import Capacitor", "import Capacitor\nimport Vision\nimport PDFKit", 1)
+        src = src.replace("import Capacitor", "import Capacitor\nimport Vision\nimport PDFKit\nimport ImageIO", 1)
     # the shared piece reader (tools/swift/TextPieces.swift): same file the macOS probe compiles; its import lines are already at the top
-    shared = "\n".join(l for l in (ROOT / "tools" / "swift" / "TextPieces.swift").read_text().split("\n") if not l.startswith("import "))
+    shared = "\n".join(l for f in ("TextPieces.swift", "PdfImages.swift") for l in (ROOT / "tools" / "swift" / f).read_text().split("\n") if not l.startswith("import "))
     delegate.write_text(src.rstrip() + "\n" + SWIFT + "\n" + shared)
 story = APP / "Base.lproj" / "Main.storyboard"
 t = story.read_text()
@@ -228,6 +242,6 @@ if 'customClass="CAPBridgeViewController" customModule="Capacitor"' in t:
     t = t.replace('customClass="CAPBridgeViewController" customModule="Capacitor"', 'customClass="MainViewController" customModule="App" customModuleProvider="target"')
     story.write_text(t)
 assert "MainViewController" in story.read_text(), "Main.storyboard was not pointed at MainViewController"
-assert "TouchRecipeOcrPlugin" in delegate.read_text() and "func touchRecipeTextPieces" in delegate.read_text() and "setOrientation" in delegate.read_text(), "AppDelegate.swift was not patched"
+assert "TouchRecipeOcrPlugin" in delegate.read_text() and "func touchRecipeTextPieces" in delegate.read_text() and "setOrientation" in delegate.read_text() and "touchRecipeExtractPdfImages" in delegate.read_text(), "AppDelegate.swift was not patched"
 
 print("iOS project patched; AppIcon is opaque RGB 1024x1024; text-recognition bridge installed.")

@@ -1,6 +1,7 @@
 // Port of ui/components/*: snackbar (top, with Undo), bottom sheets, dialogs, buttons, chips, FitText,
 // the photo image with a safe placeholder and EditableRows (drag handles, move up/down, delete with undo).
 import { h, mount } from './dom.js';
+import { frameRect, sanitizeFrame } from '../engine/photoframe.js';
 import { newId } from '../engine/models.js';
 
 // ---------- snackbar: shown at the top, over the pages' decorative title space ----------
@@ -93,11 +94,23 @@ export function fitText(text, { minScale = 0.55, cls = '', style = '', lines = 1
   return el;
 }
 
-/** Recipe photo with a safe placeholder: missing or unreadable files never break layout. */
-export function photoImg(photos, name, { fallback = '', cls = '', alt = '' } = {}) {
+/**
+ * Recipe photo with a safe placeholder: missing or unreadable files never break layout. `frame` ({ zoom, cx, cy }, from the recipe) is the saved framing:
+ * the whole picture is kept and only drawn zoomed and panned inside this box, so the same framing fits any box shape. No frame = the plain centred cover.
+ */
+export function photoImg(photos, name, { fallback = '', cls = '', alt = '', frame = null } = {}) {
   const box = h('div', { class: 'photo ' + cls, role: alt ? 'img' : null, 'aria-label': alt || null },
-    h('span', { class: 'photo-fallback' }, (fallback.trim()[0] || '✦').toUpperCase()));
-  if (name) photos.url(name).then((u) => { if (u) { box.textContent = ''; box.append(h('img', { src: u, alt: '', draggable: 'false' })); } }).catch(() => {});
+    h('span', { class: 'photo-fallback' }, (fallback.trim()[0] || '\u2726').toUpperCase()));
+  const f = sanitizeFrame(frame);
+  if (name) photos.url(name).then((u) => {
+    if (!u) return;
+    const img = h('img', { src: u, alt: '', draggable: 'false' });
+    box.textContent = ''; box.append(img);
+    if (!f) return;
+    const place = () => { if (!img.naturalWidth || !box.clientWidth || !box.clientHeight) return; const r = frameRect(f, img.naturalWidth, img.naturalHeight, box.clientWidth, box.clientHeight); Object.assign(img.style, { inset: 'auto', maxWidth: 'none', objectFit: 'fill', width: `${r.w}px`, height: `${r.h}px`, left: `${r.left}px`, top: `${r.top}px` }); };
+    img.addEventListener('load', place); if (img.complete) place();
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(place).observe(box);
+  }).catch(() => {});
   return box;
 }
 

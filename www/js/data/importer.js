@@ -4,6 +4,7 @@
 import * as Text from '../engine/textparser.js';
 import * as Layout from '../engine/layout.js';
 import { healText, healPieces, fragmentRate } from '../engine/wordheal.js';
+import { choose, statsFromPixels } from '../engine/photopick.js';
 import * as Web from '../engine/webextract.js';
 import { ImportMethod, Confidence, Severity, warn } from '../engine/models.js';
 import { emptySource, pageText } from '../engine/rescue.js';
@@ -68,6 +69,15 @@ export class VisionOcr {
     if (!p) throw new OcrUnavailable("Text recognition isn't available on this device.");
     try { const r = await p.recognizePdf({ pdf: await blobToB64(blob), maxPages: 6, forceOcr }); return { ...pdfText(r), pages: r.pages || 0, picture: forceOcr }; } catch { throw new OcrUnavailable("That PDF could not be read."); }
   }
+  /** The pictures EMBEDDED in a PDF, taken out directly (not cut from a rendered page). Null when the native app cannot do it (then nothing is guessed from them). */
+  async extractPdfImages(blob) {
+    const p = plugin('TouchRecipeOcr'); if (!p) return null;
+    try {
+      const r = await p.extractPdfImages({ pdf: await blobToB64(blob), maxPages: 6, maxImages: 12 });
+      if (!r || !Array.isArray(r.images)) return null;
+      return r.images.map((i) => ({ blob: b64ToBlob(i.image, 'image/jpeg'), width: i.width, height: i.height, page: i.page, hasMask: !!i.hasMask }));
+    } catch { return null; }
+  }
 }
 
 /**
@@ -93,6 +103,30 @@ export function pdfText(r) {
     } catch { /* fall back to the plain text */ }
   }
   return { text: plain, extra: '', notes: [], method: 'plain', pieces: 0 };
+}
+
+/** What a picture is: its size and a reduced look at its colours. Null when it cannot be opened (a broken download is not a picture). */
+export async function analyzeImage(blob) {
+  try {
+    const bmp = await createImageBitmap(blob); const width = bmp.width, height = bmp.height; if (!width || !height) return null;
+    let stats = null;
+    try {
+      const k = Math.min(1, 48 / Math.max(width, height)); const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(width * k)); c.height = Math.max(1, Math.round(height * k));
+      const g = c.getContext('2d'); g.drawImage(bmp, 0, 0, c.width, c.height); const d = g.getImageData(0, 0, c.width, c.height).data; const argb = new Array(c.width * c.height);
+      for (let i = 0; i < argb.length; i++) argb[i] = (255 << 24) | (d[i * 4] << 16) | (d[i * 4 + 1] << 8) | d[i * 4 + 2];
+      stats = statsFromPixels(argb);
+    } catch { /* size alone is still useful */ }
+    return { width, height, stats };
+  } catch { return null; }
+}
+/** The note shown with the import for the photo outcome (null when nothing needs saying). */
+export function photoWarning(photos) {
+  if (!photos) return null;
+  if (photos.selectedId && photos.needsCheck) return warn('photo', 'A photo was chosen automatically. Check it, or choose another.', Severity.WARNING);
+  if (photos.reason === 'only-rejected') return warn('photo', 'A picture was found, but it looks like an advert or a banner, so it was not used as the recipe photo. You can add your own.', Severity.WARNING);
+  if (photos.reason === 'only-guesses') return warn('photo', 'No photo was found in the source. A guess from the page picture is offered when you choose a photo.', Severity.INFO);
+  if (photos.reason === 'none') return warn('photo', 'No photo was found in the source.', Severity.INFO);
+  return null;
 }
 
 /** One PDF page as a picture (native), or null when the bridge is missing. */
@@ -181,6 +215,19 @@ export class ImportService {
     for (const c of candidates.slice(0, 3)) { const b = await this.fetcher.fetchBytes(c); if (b) { const n = await this.photos.saveBlob(b); if (n) return n; } }
     return null;
   }
+  /** The pictures of a web page, looked at one by one (up to six, three at a time). A download that fails or is not a picture is skipped; the rest are still considered. */
+  async webPhotos(urls) {
+    const list = (urls || []).slice(0, 6); const found = [];
+    for (let k = 0; k < list.length; k += 3) {
+      const batch = await Promise.all(list.slice(k, k + 3).map(async (u, j) => {
+        const order = k + j; const blob = await this.fetcher.fetchBytes(u); if (!blob) return null;
+        const a = await analyzeImage(blob); if (!a) return null;
+        return { id: `web:${order}`, label: order === 0 ? "The page's main picture" : `Picture ${order + 1} from the page`, source: 'web', order, blob, ...a };
+      }));
+      found.push(...batch.filter(Boolean));
+    }
+    const photos = choose(found); photos.tried = list.length; photos.loaded = found.length; return photos;
+  }
   ocrDraft(text) {
     if (!text.trim()) throw new ImportFailure('No text could be found. Try a sharper, well-lit photo, or use Paste or Type Recipe.', { retryable: true });
     return Text.parse(text, ImportMethod.OCR);
@@ -196,7 +243,8 @@ export class ImportService {
           kept.push(await this.originals.saveFile(files[i], 'jpg'));
           onStatus('Straightening the page…');
           const c = await Img.cleanedPage(files[i]); cleaned.push(await this.originals.saveFile(c.blob, 'jpg'));
-          if (!dish) { onStatus('Looking for a photo of the dish…'); dish = await Img.dishPhoto(files[i]); }
+          // the page is straightened FIRST, then searched for the printed dish photo (the table around a photographed page would otherwise be taken for a picture)
+          if (!dish) { onStatus('Looking for a photo of the dish…'); dish = await Img.dishPhoto(c.found ? c.blob : files[i]) || (c.found ? await Img.dishPhoto(files[i]) : null); }
         } catch { /* keeping the original is best effort */ }
       }
     }
@@ -204,6 +252,10 @@ export class ImportService {
     let dishFile = null; if (dish && this.originals) { try { dishFile = await this.originals.saveFile(dish.blob, 'jpg'); } catch { /* ignore */ } }
     const out = this.withSource(d, { kind: 'IMAGE', files: kept, cleaned, text: parts.join('\n\n'), dishPhoto: dishFile });
     if (dish) out.dishPhotoBlob = dish.blob;
+    // the photo printed on the photographed or scanned page is OFFERED as the cover; the person adjusts or approves it
+    const a = dish ? await analyzeImage(dish.blob) : null;
+    out.photos = choose(dish ? [{ id: 'page', label: 'The photo found on the page', source: 'page', blob: dish.blob, width: a ? a.width : 0, height: a ? a.height : 0, stats: a ? a.stats : null }] : []);
+    const pw = photoWarning(out.photos); if (pw) out.warnings = [...out.warnings, pw];
     return out;
   }
   async fromPdf(file, onStatus) {
@@ -213,24 +265,40 @@ export class ImportService {
     const read = this.ocrDraft(r.text);
     const d0 = (r.notes?.length || r.cautions?.length) ? { ...read, warnings: [...read.warnings, ...(r.notes || []).map((n) => warn('recipe', n, Severity.INFO)), ...(r.cautions || []).map((n) => warn('recipe', n, Severity.WARNING))] } : read;
     let name = null; if (this.originals) { try { name = await this.originals.saveFile(file, 'pdf'); } catch { /* ignore */ } }
-    // the first page as a picture: kept, cleaned, and searched for the printed dish photo
-    let cleaned = [], dishFile = null, dishBlob = null;
+    // every page up to four is kept as a picture for the Original tab (never changed)
+    let cleaned = [], firstPage = null;
     if (this.originals) {
       try {
-        // every page up to four is kept as a picture for the Original tab; the dish photo is looked for on the first
         const pages = Math.max(1, Math.min(r.pages || 1, 4));
         for (let i = 0; i < pages; i++) {
           const pg = await renderPdfPage(file, i);
           if (!pg) { if (i === 0) break; continue; }
+          if (i === 0) firstPage = pg;
           cleaned.push(await this.originals.saveFile(pg, 'jpg'));
-          if (i === 0) { onStatus('Looking for a photo of the dish…'); const dish = await Img.dishPhoto(pg); if (dish) { dishBlob = dish.blob; dishFile = await this.originals.saveFile(dish.blob, 'jpg'); } }
         }
       } catch { /* optional */ }
     }
+    // the recipe photo: the pictures EMBEDDED in the PDF, taken out directly. A picture guessed from the rendered page is never used on its own: on a printed web page it is
+    // usually an advertisement (the owner's Veg-All PDF has one drawn over the recipe).
+    onStatus('Looking for the recipe photo…');
+    const embedded = this.ocr.extractPdfImages ? await this.ocr.extractPdfImages(file) : null;
+    const cands = [];
+    if (embedded) {
+      for (let i = 0; i < embedded.length; i++) {
+        const e = embedded[i]; const a = await analyzeImage(e.blob); const w = a ? a.width : e.width, hh = a ? a.height : e.height;
+        const scan = w * hh >= 1.0e6 && w / hh >= 0.6 && w / hh <= 0.9 && !e.hasMask;   // a whole scanned page, not a photo on it
+        if (scan) { const dish = await Img.dishPhoto(e.blob); if (dish) { const da = await analyzeImage(dish.blob); cands.push({ id: `scan:${i}`, label: 'The photo found on the scanned page', source: 'page', blob: dish.blob, width: da ? da.width : 0, height: da ? da.height : 0, stats: da ? da.stats : null }); } continue; }
+        cands.push({ id: `pdf:${i}`, label: `Picture ${i + 1} in the PDF (${w} \u00d7 ${hh})`, source: 'pdf', order: i, blob: e.blob, width: w, height: hh, hasMask: e.hasMask, stats: a ? a.stats : null });
+      }
+    } else if (firstPage) {
+      const dish = await Img.dishPhoto(firstPage);
+      if (dish) { const da = await analyzeImage(dish.blob); cands.push({ id: 'guess:0', label: 'A guess from the page picture', note: 'Guessed, not taken from the PDF: check it', source: 'guess', noAuto: true, blob: dish.blob, width: da ? da.width : 0, height: da ? da.height : 0, stats: da ? da.stats : null }); }
+    }
+    const photos = choose(cands);
     // which route read the file, kept with the original so a screenshot of the Original tab shows it
     const readNote = r.picture ? 'a picture of each page (the PDF\'s own text looked damaged)' : r.method === 'positions' ? `the PDF\'s own text with positions (${r.pieces} pieces)` : 'the PDF\'s own text, without positions';
-    const d = this.withSource(d0, { kind: 'PDF', readNote: `Read from ${readNote}.`, files: name ? [name] : [], cleaned, text: r.extra ? `${r.text}\n\n--- Another recipe on the same page ---\n\n${r.extra}` : r.text, dishPhoto: dishFile });
-    if (dishBlob) d.dishPhotoBlob = dishBlob;
+    const d = this.withSource(d0, { kind: 'PDF', readNote: `Read from ${readNote}.`, files: name ? [name] : [], cleaned, text: r.extra ? `${r.text}\n\n--- Another recipe on the same page ---\n\n${r.extra}` : r.text, dishPhoto: null });
+    d.photos = photos; const pw = photoWarning(photos); if (pw) d.warnings = [...d.warnings, pw];
     return r.pages >= 6 ? { ...d, warnings: [...d.warnings, warn('recipe', 'Only the first 6 pages were read.', Severity.INFO)] } : d;
   }
   /** A PDF made by a browser can carry a damaged text layer ("Southern \"ied Chicken", "Di!iculty"): if so, read the pages by OCR and use that when it is as complete. */

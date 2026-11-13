@@ -13,6 +13,7 @@ import { pickFile } from '../ui/shared.js';
 import { cropSheet } from './crop.js';
 import { allowLandscape, isWideScreen } from '../ui/orientation.js';
 import { numberedList } from '../ui/numbered.js';
+import { photoFlow, photoPickerSheet } from './photo.js';
 
 /** Starts a rescue draft from an import draft (or edits an existing one), stored privately so it survives leaving the app. */
 export const draftFromImport = (d) => R.newDraft({ recipe: d.recipe, source: d.source || R.emptySource(), imageCandidates: d.imageCandidates || [], findings: validate(d).warnings || [] });
@@ -49,15 +50,17 @@ export function rescueScreen(params, ctx, nav) {
   const stepHistory = (f) => { restore = lastCaret; act(f); };
 
   // ---------- photo ----------
+  /** The pictures to choose from: what the import found (while it is still in this session) and the dish photo kept with the original. */
+  async function photoChoices() {
+    const found = ctx.importSession.photos; const list = found ? found.candidates.slice() : []; let selectedId = found ? found.selectedId : null;
+    const src = st.draft.source;
+    if (!found && src.dishPhoto) { const blob = await drafts.file(src.dishPhoto); if (blob) list.push({ id: 'kept-dish', label: 'The photo found on the page', source: 'page', blob, width: 0, height: 0, note: '' }); }
+    return { list, selectedId };
+  }
   async function photoMenu() {
-    const r = recipe(); const src = st.draft.source;
-    const set = async (blob) => { const n = blob && await ctx.photos.saveBlob(blob); n ? act((s) => R.setPhoto(s, n)) : say("That photo couldn't be used."); };
-    sheet({ label: 'Recipe photo', content: (close) => h('div', { class: 'sheet-col' }, h('h2', { class: 'sheet-title' }, 'Recipe photo'),
-      src.dishPhoto ? bigButton('Use the dish photo found on the page', async () => { close(false); set(await drafts.file(src.dishPhoto)); }) : null,
-      hasImg() ? bigButton('Cut a photo out of the original…', () => { close(false); cutFromOriginal(); }, { primary: false }) : null,
-      bigButton('Choose from photo library', async () => { close(false); const f = await pickFile({ accept: 'image/*' }); if (f) set(f); }, { primary: false }),
-      bigButton('Take a photo', async () => { close(false); const f = await pickFile({ accept: 'image/*', capture: 'environment' }); if (f) set(f); }, { primary: false }),
-      r.photo ? bigButton('Remove photo', () => { close(false); act((s) => R.setPhoto(s, null)); }, { primary: false }) : null) });
+    const r = recipe(); const { list, selectedId } = await photoChoices();
+    photoFlow(ctx, { photo: r.photo, frame: r.photoFrame, candidates: list, selectedId, onCut: hasImg() ? () => cutFromOriginal() : null,
+      onApply: ({ photo, frame }) => { ctx.importSession.photoChecked = true; act((s) => R.setPhotoFrame(photo === s.draft.recipe.photo ? s : R.setPhoto(s, photo), frame)); } });
   }
   async function cutFromOriginal(file = null) {
     const name = file || (st.draft.source.cleaned.find(Boolean) || st.draft.source.files.find((f) => !/\.pdf$/i.test(f))); if (!name) return;
@@ -126,8 +129,11 @@ export function rescueScreen(params, ctx, nav) {
     const notes = h('textarea', { class: 'rr-field rr-notes-field', rows: '4', 'data-testid': 'rr-notes' }); notes.value = r.notes || '';
     notes.addEventListener('change', () => field((s) => R.setNotes(s, notes.value)));
     out.push(group('Notes', notes));
-    out.push(h('div', { class: 'rr-group' }, h('span', { class: 'rr-label' }, 'Photo'), r.photo ? photoImg(ctx.photos, r.photo, { cls: 'rr-photo', alt: 'Recipe photo' }) : null,
-      h('div', { class: 'rr-row' }, bigButton(r.photo ? 'Change photo' : 'Add photo', photoMenu, { primary: false, testid: 'rescue-photo' }))));
+    const found = ctx.importSession.photos; const unchecked = !!(found && found.selectedId && found.needsCheck && r.photo && !ctx.importSession.photoChecked);
+    out.push(h('div', { class: 'rr-group', 'data-testid': 'rr-photo-group' }, h('span', { class: 'rr-label' }, 'Photo'),
+      unchecked ? h('div', { class: 'sp-warn', 'data-testid': 'photo-check' }, 'This photo was chosen automatically. Check it, adjust it, or choose another.') : null,
+      r.photo ? photoImg(ctx.photos, r.photo, { cls: 'rr-photo', alt: 'Recipe photo', frame: r.photoFrame }) : null,
+      h('div', { class: 'rr-row' }, r.photo ? bigButton('Adjust photo', photoMenu, { primary: false, testid: 'rescue-photo' }) : bigButton('Add photo', photoMenu, { primary: false, testid: 'rescue-photo' }), r.photo ? bigButton('Change photo…', async () => { const { list, selectedId } = await photoChoices(); photoPickerSheet(ctx, { candidates: list, selectedId, current: r.photo, onCut: hasImg() ? () => cutFromOriginal() : null, onNone: () => act((s) => R.setPhoto(s, null)), onPick: ({ name }) => { ctx.importSession.photoChecked = true; act((s) => R.setPhoto(s, name)); photoFlow(ctx, { photo: name, frame: null, onApply: ({ photo, frame }) => act((s) => R.setPhotoFrame(s, frame)) }); } }); }, { primary: false, testid: 'rescue-photo-change' }) : null)));
     const qs = st.draft.helpNotes;
     if (qs.length) out.push(h('div', { class: 'rr-group' }, h('span', { class: 'rr-label' }, 'Questions for the family'), ...qs.map((n) => h('div', { class: 'rr-q', style: n.resolved ? 'opacity:.55' : '' }, h('span', { class: 'rr-q-text' }, n.text),
       h('button', { class: 'sp-mini', type: 'button', 'aria-label': n.resolved ? 'Reopen' : 'Mark answered', onclick: () => act((s) => R.resolveHelp(s, n.id, !n.resolved)) }, n.resolved ? '↺' : '✓'),

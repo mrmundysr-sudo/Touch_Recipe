@@ -2,7 +2,11 @@
 // icons and tracking pixels are left out; several good candidates are kept so the user can switch.
 import { tagOf, attrOf, parentsOf, select } from './htmlparse.js';
 
-const junk = /logo|icon|avatar|gravatar|sprite|spacer|pixel|blank|placeholder|loading|spinner|badge|banner|advert|\/ads?\/|doubleclick|emoji|smil(?:e|ies)|button|share|social|pinterest|facebook|twitter|instagram|youtube|rating|star|print|author|profile|1x1|data:image/i;
+// Filename words that mark a picture that is NOT the dish. Whole words only: "Honey-Mustard-Chicken.jpg" contains "star" and "Sharing-Pie" contains "share",
+// and the old substring test threw such photos away (a picture the page really had was reported as missing).
+const JUNK_WORDS = new Set(['logo', 'icon', 'avatar', 'gravatar', 'sprite', 'spacer', 'pixel', 'blank', 'placeholder', 'loading', 'spinner', 'badge', 'banner', 'advert', 'ad', 'doubleclick', 'emoji', 'smile', 'smilies', 'button', 'share', 'social', 'pinterest', 'facebook', 'twitter', 'instagram', 'youtube', 'rating', 'star', 'print', 'author', 'profile', '1x1']);
+export const junkWord = (name) => name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).some((t) => JUNK_WORDS.has(t) || (t.length > 3 && JUNK_WORDS.has(t.replace(/(?:ies|es|s)$/, ''))) || (t.endsWith('ies') && JUNK_WORDS.has(`${t.slice(0, -3)}y`)));
+const junk = { test: (last) => junkWord(last) || /\/ads?\//i.test(last) || /^data:image/i.test(last) };
 const notPhoto = /\.(?:svg|gif|ico)(?:[?#].*)?$/i;
 const badContainer = /comment|sidebar|related|author|avatar|advert|sponsor|social|share|footer|nav|menu|widget|newsletter|popup|modal|breadcrumb|logo/i;
 
@@ -54,5 +58,7 @@ export function rankImages(doc, structured, pageUrl) {
     if (!Number.isNaN(w) && !Number.isNaN(h) && (w / h > 3.2 || h / w > 2.6)) continue;                 // banners and strips
     const before = out.size; add(imageUrl(img)); if (out.size > before) taken++;
   }
+  // <picture><source srcset> inside the recipe's own scope: some pages put the real photo only there
+  for (const scope of scopes) for (const src of scope.querySelectorAll('picture source')) { if (out.size >= 10) break; const v = attrOf(src, 'srcset') || attrOf(src, 'data-srcset'); if (v.trim()) { const u = fromSrcset(v); if (u) add(u); } }
   return [...out].slice(0, 10);
 }

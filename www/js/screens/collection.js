@@ -16,7 +16,7 @@ export function recipeCard(ctx, r, cats, onOpen) {
   const card = h('div', { class: 'rcard', role: 'button', tabindex: '0', 'data-testid': `recipe-card:${r.id}`,
     'aria-label': `${r.title.trim() || 'Untitled recipe'}. ${meta}. ${names.join(', ')}${r.favorite ? '. Favorite' : ''}`,
     onclick: onOpen, onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } } },
-    photoImg(ctx.photos, r.photo, { fallback: r.title }),
+    photoImg(ctx.photos, r.photo, { fallback: r.title, frame: r.photoFrame }),
     h('div', { class: 'info' }, h('div', { class: 't' }, r.title.trim() || 'Untitled recipe'), names.length ? h('div', { class: 'c' }, names.join(' · ')) : null, meta ? h('div', { class: 'm' }, meta) : null),
     fav);
   return card;

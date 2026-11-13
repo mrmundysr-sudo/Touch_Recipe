@@ -1,5 +1,6 @@
 // Port of ui/screens/DetailScreen.kt.
 import { h, mount, minutesLabel } from '../ui/dom.js';
+import { photoFlow } from './photo.js';
 import { ScrollPage } from '../ui/page.js';
 import { Routes } from '../ui/nav.js';
 import { bigButton, sheet, fitText, photoImg, say, undoable, confirmDialog, rowsEditorSheet, EditRow } from '../ui/widgets.js';
@@ -19,7 +20,7 @@ export function detailScreen(params, ctx, nav) {
   const art = { el: page.el, destroy: null };
 
   const step = (d) => { const r = recipe(); const base = r?.servings ?? st.servings ?? 4; st.servings = Math.min(99, Math.max(1, (st.servings ?? base) + d)); render(); };
-  const setPhoto = async (name) => { const r = recipe(); if (r) await ctx.repo.saveRecipe({ ...r, photo: name }); };
+  const setPhoto = async (name, frame = null) => { const r = recipe(); if (r) await ctx.repo.saveRecipe({ ...r, photo: name, photoFrame: name ? frame : null }); };
   const startCook = (r) => { if (!r.directions.some((d) => !d.header)) say('Add directions first, then Cook Mode can guide you.'); else nav.go(Routes.COOK, { id: r.id, servings: st.servings }); };
   const toGrocery = (r) => { if (!r.ingredients.some((i) => !i.header)) say('This recipe has no ingredients yet.'); else groceryAddSheet(ctx, r, st.servings, () => nav.go(Routes.GROCERY)); };
 
@@ -43,10 +44,8 @@ export function detailScreen(params, ctx, nav) {
       } });
   }
   function photoMenu(r) {
-    sheet({ label: 'Recipe photo', content: (close) => h('div', { style: 'display:flex;flex-direction:column;gap:8px' }, h('h2', { class: 'sheet-title' }, 'Recipe photo'),
-      bigButton('Choose from photo library', async () => { close(false); const f = await pickFile({ accept: 'image/*' }); if (f) { const n = await ctx.photos.saveBlob(f); n ? setPhoto(n) : say("That photo couldn't be used."); } }),
-      bigButton('Take a photo', async () => { close(false); const f = await pickFile({ accept: 'image/*', capture: 'environment' }); if (f) { const n = await ctx.photos.saveBlob(f); n ? setPhoto(n) : say("That photo couldn't be used."); } }, { primary: false }),
-      r.photo ? bigButton('Remove photo', () => { close(false); setPhoto(null); }, { primary: false }) : null) });
+    // choose, replace or re-frame the photo; the framing is saved with the recipe and can be adjusted again any time
+    photoFlow(ctx, { photo: r.photo, frame: r.photoFrame, candidates: [], onApply: ({ photo, frame }) => setPhoto(photo, frame) });
   }
   let hasOriginal = false; ctx.drafts?.forRecipe(id).then((o) => { hasOriginal = !!o; });
   function moreMenu(r) {
@@ -70,7 +69,7 @@ export function detailScreen(params, ctx, nav) {
     const src = r.sourceName ?? r.sourceUrl;
     const heart = h('button', { type: 'button', class: 'sp-mini', 'aria-label': r.favorite ? 'Remove from favorites' : 'Add to favorites', 'aria-pressed': String(r.favorite), 'data-art': 'favorite', 'data-testid': `heart-glyph:${r.favorite ? 'on' : 'off'}`, style: 'color:var(--tomato);font-size:28px', onclick: () => ctx.repo.setFavorite(r.id, !r.favorite) }, r.favorite ? '♥' : '♡');
     const more = h('button', { type: 'button', class: 'sp-mini', 'aria-label': 'More options', 'data-testid': 'detail-more', style: 'font-size:28px', onclick: () => moreMenu(r) }, '⋯');
-    const ph = r.photo ? photoImg(ctx.photos, r.photo, { fallback: r.title, alt: `Photo of ${r.title}`, cls: 'sp-photo' }) : null;
+    const ph = r.photo ? photoImg(ctx.photos, r.photo, { fallback: r.title, alt: `Photo of ${r.title}`, cls: 'sp-photo', frame: r.photoFrame }) : null;
     if (ph) { ph.setAttribute('role', 'button'); ph.style.cursor = 'pointer'; ph.dataset.art = 'photo'; ph.addEventListener('click', () => photoMenu(r)); }
     const meta = [['Prep', minutesLabel(r.prepMinutes)], ['Cook', minutesLabel(r.cookMinutes)], ['Total', minutesLabel(effectiveTotal(r))]];
     const ingNodes = !r.ingredients.length ? [h('div', { class: 'sp-warn' }, 'No ingredients yet. Tap “Edit ingredients” to add some.')] : r.ingredients.map((ing) => {

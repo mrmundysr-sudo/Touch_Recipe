@@ -77,7 +77,7 @@ export function plannerScreen(params, ctx, nav) {
       box(d.label, fitText(SHORT[Planner.fromIso(date).getDay()], { minScale: 0.8, style: `font-weight:700;font-size:${sp(24)};color:var(--forest);text-align:center;max-width:100%` }), center).firstChild.dataset.testid = `day-label:${i}`;
       box(d.date, fitText(Planner.dateLabel(date), { style: `font-weight:600;font-size:${sp(21)};color:var(--ink);text-align:center;max-width:100%` }), center).firstChild.dataset.testid = `day-date:${i}`;
       const pb = box(d.photo, null, `border-radius:${dp(12)};overflow:hidden;`);
-      if (r) { const ph = photoImg(ctx.photos, r.photo, { fallback: r.title }); ph.style.cssText = 'position:absolute;inset:0'; pb.append(ph); } else pb.append(h('div', { style: `width:100%;text-align:center;font-size:${sp(52)};color:rgba(181,138,60,.8)` }, '＋'));
+      if (r) { const ph = photoImg(ctx.photos, r.photo, { fallback: r.title, frame: r.photoFrame }); ph.style.cssText = 'position:absolute;inset:0'; pb.append(ph); } else pb.append(h('div', { style: `width:100%;text-align:center;font-size:${sp(52)};color:rgba(181,138,60,.8)` }, '＋'));
       const tb = box(d.title, fitText(r?.title ?? 'Nothing planned', { minScale: 0.5, style: `font-family:var(--display);font-weight:${r ? 700 : 400};font-size:${sp(28)};color:${r ? 'var(--ink)' : 'rgba(42,33,24,.55)'};max-width:100%` }), `padding-left:${dp(10)};padding-right:${dp(64)};`);
       tb.firstChild.dataset.testid = `day-title:${i}`;
       box(d.cook, fitText(minutesLabel(r?.cookMinutes ?? (r ? effectiveTotal(r) : null)) ?? '—', { style: `font-weight:600;font-size:${sp(21)};color:var(--ink);text-align:center;max-width:100%` }), center);

@@ -53,7 +53,7 @@ export async function boot({ backend = new IdbBackend(), storage = globalThis.lo
   const drafts = new DraftStore(backend);
   const importer = new ImportService({ photos, originals: drafts });
   let appInfo = null; try { appInfo = await plugin('App')?.getInfo?.(); } catch { /* browser */ }
-  const ctx = { repo, prefs, photos, drafts, art, backend, importer, appInfo, week: weekState, importSession: { draft: null, photoFile: null, clear() { this.draft = null; this.photoFile = null; } }, pending: { share: null } };
+  const ctx = { repo, prefs, photos, drafts, art, backend, importer, appInfo, week: weekState, importSession: { draft: null, photoFile: null, photos: null, clear() { this.draft = null; this.photoFile = null; this.photos = null; } }, pending: { share: null } };
   const root = document.getElementById('app');
   const host = h('div', { id: 'host', style: 'position:absolute;inset:0' });
   root.append(host);

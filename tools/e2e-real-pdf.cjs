@@ -18,6 +18,14 @@ const { execFileSync } = require('child_process');
   const { serve } = await import('./serve.mjs'); const srv = await serve(0); const port = srv.address().port;
   const browser = await chromium.launch(); const ok = (m) => console.log('ok  -', m);
   const calls = []; const errors = [];
+  // stand-in for the native extractPdfImages: poppler lists and extracts the PDF's embedded pictures; a picture that has a soft mask is reported hasMask (like the Swift code)
+  const embeddedImages = () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tr-img-'));
+    const list = execFileSync('pdfimages', ['-list', pdf], { encoding: 'utf8' }).split('\n').slice(2).map((l) => l.trim().split(/\s+/)).filter((c) => c.length > 10);
+    execFileSync('pdfimages', ['-png', pdf, path.join(dir, 'img')]);
+    const files = fs.readdirSync(dir).sort(); const masks = new Set(list.filter((c) => c[2] === 'smask').map((c) => `${c[10]} ${c[11]}`));
+    return list.map((c, i) => ({ c, i })).filter(({ c }) => c[2] === 'image').map(({ c, i }) => ({ image: fs.readFileSync(path.join(dir, files[i])).toString('base64'), width: +c[3], height: +c[4], page: +c[0] - 1, hasMask: masks.has(`${c[10]} ${c[11]}`) }));
+  };
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tr-pdf-'));
   execFileSync('pdftoppm', ['-jpeg', '-r', '130', '-f', '1', '-l', '1', pdf, path.join(tmp, 'page')]);
   const pageJpeg = fs.readdirSync(tmp).filter((f) => f.endsWith('.jpg')).map((f) => fs.readFileSync(path.join(tmp, f)).toString('base64'))[0];
@@ -30,10 +38,11 @@ const { execFileSync } = require('child_process');
       calls.push(`${method}${args.forceOcr ? ':picture' : ''}`);
       if (method === 'recognizePdf') { if (args.forceOcr) throw new Error('picture reading was requested'); return bridgeAnswer(pdf); }
       if (method === 'renderPdfPage') return { image: pageJpeg };
+      if (method === 'extractPdfImages') return { images: embeddedImages() };
       throw new Error('unsupported');
     });
     await page.addInitScript(() => { window.Capacitor = { isNativePlatform: () => false, isPluginAvailable: (n) => n === 'TouchRecipeOcr', Plugins: { TouchRecipeOcr: {
-      recognizePdf: (a) => window.__bridge('recognizePdf', { forceOcr: !!a.forceOcr }), renderPdfPage: () => window.__bridge('renderPdfPage', {}), recognizeImage: () => Promise.reject(new Error('no photo in this test')) } } }; });
+      recognizePdf: (a) => window.__bridge('recognizePdf', { forceOcr: !!a.forceOcr }), renderPdfPage: () => window.__bridge('renderPdfPage', {}), extractPdfImages: () => window.__bridge('extractPdfImages', {}), recognizeImage: () => Promise.reject(new Error('no photo in this test')) } } }; });
     await page.goto(`http://localhost:${port}/`); await page.waitForFunction(() => window.__app, null, { timeout: 15000 });
     await page.evaluate((t) => { window.__app.ctx.prefs.welcomeSeen = true; window.__app.ctx.prefs.setTheme(t); }, theme); await page.waitForTimeout(1000);
 
@@ -45,17 +54,22 @@ const { execFileSync } = require('child_process');
       const { ctx, nav } = window.__app;
       const d = await ctx.importer.import({ type: 'pdf', file }, () => {});
       ctx.importSession.draft = d; nav.go('rescue', {});
-      return { title: d.recipe.title, ing: d.recipe.ingredients.map((i) => i.text), dir: d.recipe.directions.map((x) => x.text), notes: d.recipe.notes, sourceKind: d.source.kind, files: d.source.files.length, cleaned: d.source.cleaned.length, text: d.source.text };
+      return { photos: { selected: d.photos.selectedId, reason: d.photos.reason, cands: d.photos.candidates.map((c) => [c.id, c.rejected, c.width, c.height, !!c.hasMask]), warn: (d.warnings.find((w) => w.field === 'photo') || {}).message || null }, dishBlob: !!d.dishPhotoBlob, title: d.recipe.title, ing: d.recipe.ingredients.map((i) => i.text), dir: d.recipe.directions.map((x) => x.text), notes: d.recipe.notes, sourceKind: d.source.kind, files: d.source.files.length, cleaned: d.source.cleaned.length, text: d.source.text };
     }, b64);
     await page.waitForTimeout(1500);
     assert.deepEqual(draft.ing, expected.ingredients, `${theme}: parsed ingredients`); assert.deepEqual(draft.dir, expected.directions, `${theme}: parsed directions`);
     assert.equal(draft.title, expected.title); ok(`${theme}: the app's import of the real PDF gives the exact title, ingredients and directions`);
+    // the PDF's only picture is the advertisement: it is NOT the recipe photo (the old code cut it off the page picture and used it)
+    assert.equal(draft.photos.selected, null, `${theme}: no recipe photo is chosen`); assert.equal(draft.photos.reason, 'only-rejected'); assert.equal(draft.dishBlob, false, 'nothing was cut off the page picture');
+    assert.equal(draft.photos.cands.length, 1); assert.deepEqual(draft.photos.cands[0].slice(1), ['banner', 750, 300, true], `${theme}: the advert is found with its true size and mask, and rejected as a banner`);
+    assert.match(draft.photos.warn, /advert or a banner/); ok(`${theme}: the PDF's only picture (an advert, 750 x 300, with a mask) is found and NOT used as the recipe photo; the person is told`);
     assert.ok(!calls.some((x) => x.includes('picture')), 'picture reading never requested'); ok(`${theme}: the PDF's own text was read; picture reading was never asked for (${calls.join(', ')})`);
 
     // STAGE 4: what the plain Recipe Rescue screen actually shows (our side: numbered lists)
     const tid = (id) => page.locator(`[data-testid="${id}"]`);
     const texts = (id) => page.locator(`[data-testid="${id}-text"]`).evaluateAll((els) => els.map((e) => e.value));
     const nums = (id) => page.locator(`[data-testid="${id}-num"]`).allTextContents();
+    assert.equal(await page.locator('.rr-photo').count(), 0, `${theme}: no photo is shown on the recipe`); assert.match(await tid('rescue-photo').textContent(), /Add photo/);
     assert.equal(await tid('rr-title').inputValue(), expected.title, `${theme}: the title on screen`);
     assert.equal(await tid('rr-servings').inputValue(), String(expected.servings));
     assert.deepEqual(await texts('ing'), expected.ingredients, `${theme}: the ingredient entries are exactly the parsed ingredients`);
