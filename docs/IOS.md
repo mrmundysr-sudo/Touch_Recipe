@@ -43,19 +43,24 @@ Prerequisite on Apple's side: an App Store Connect app record for `com.mundymorn
 - `node tools/e2e.cjs` — 36 UI checks in a phone-size browser, zero console errors.
 - `ios-check.yml` — unsigned macOS build: project generation, patching, compile for the iOS Simulator (including the Swift bridge), launch, and a CI-only tour of every screen.
 
-## Work needed for parity with the Android functional update (2026-11)
+## Parity with the Android functional update (2026-11): status
 
-The iOS app was not changed by the 2026-11 update. To bring it level, port in this order (each has Kotlin tests whose cases can be copied into the Node tests):
+Ported to `www/` and verified by `npm test` (126 tests; the real-page benchmark runs in CI) and the browser end-to-end checks (`tools/e2e.cjs`, `tools/e2e-rescue.cjs`). The native Swift additions compile only on the macOS runner (`ios-check.yml`).
 
-| Android piece | Port to | Notes |
-|---|---|---|
-| `core/importer/PageScan.kt`, `Reconcile.kt`, `ImportValidator.kt`, `ImageCandidates.kt`; changes in `WebRecipeExtractor.kt` and `TextRecipeParser.kt` | `www/js/engine/` | Pure logic; jsoup calls map to DOM calls as in the existing port. Same corpus benchmark and floors (`RealPageBenchmarkTest`). |
-| `core/importer/LayoutReader.kt` | `www/js/engine/` | Needs line positions from the native bridge: PDFKit selections per line, Vision observations with bounding boxes. |
-| `core/rescue/Rescue.kt`, `core/image/PageImages.kt` | `www/js/engine/` | Pure logic; image analysis runs on a canvas `ImageData`. |
-| `data/DraftStore.kt`, `OriginalStore` | Capacitor Filesystem | Files, not IndexedDB rows, so large originals stay out of the database. |
-| `data/PageImageTools.kt` | canvas (perspective warp needs a small homography routine) or a native helper in `tools/patch_ios.py` | |
-| `ui/art/ScrollPage.kt` and the four rebuilt screens, `RescueScreen.kt`, `CropTool.kt` | `www/js/screens/`, `www/css/app.css` | Landscape must be allowed for Recipe Rescue only. |
-| PDF embedded pictures | native bridge | PDFKit does not expose page images directly; rendering the page and using the dish-photo finder is the fallback. |
+| Android piece | iOS status |
+|---|---|
+| Importer repair: PageScan, Reconcile, ImportValidator, ImageCandidates, repaired text parser | Ported 1:1 (`www/js/engine/`), same test cases, benchmark within ~0.4 points of Android |
+| Recipe Rescue (select, send, replace, Smart Paste, Start Fresh, undo/redo, family questions) | Ported (`screens/rescue.js`); phone layout uses two tabs (Recipe / Original) |
+| Unfinished recipes, kept originals, View the original, removal and orphan clean-up | Ported (`data/drafts.js`, IndexedDB v2 stores `drafts`, `originals`; `screens/unfinished.js`) |
+| Straightening, brightness, dish-photo cut-out, manual crop | Ported with canvas (`data/imagetools.js`, `screens/crop.js`); drag four handles, or "Find the photo for me" |
+| PDF first page as picture + dish photo | New native method `renderPdfPage` in `tools/patch_ios.py` (PDFKit) |
+| Detail and Cook Mode as continuous scrolling pages | Done (`ui/page.js`, art slots `page_11`, `page_13`) |
+| Grocery list, Import Review | **Not rebuilt.** Grocery already scrolls as one list inside its artwork panel; Review is a form. Both unchanged and working. |
 
-Nothing here needs a new signing workflow. No TestFlight or App Store submission was started.
-
+### Known limits on iOS
+- `LayoutReader` (column-aware reading order) is ported but not fed: the native bridge returns text, not line positions, so two-column cookbook scans may read in page order. Rescue's Original tab is the remedy.
+- No in-app live browsing of a recipe page (cross-origin frames cannot be read in a WKWebView); use Share/Copy, then paste, or open the page in Safari.
+- "Open the PDF" uses a blob link and may not open in the web view; the cleaned page picture is shown instead.
+- Drafts and originals are not part of the backup ZIP yet (same as Android).
+- Recipe Rescue is portrait (the app is portrait-only on iPhone).
+- Swift changes were not compiled locally.

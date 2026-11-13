@@ -23,3 +23,6 @@
 
 ## Completion requirements
 Record development branch/HEAD SHA, base branch/SHA, PR, workflow/run result, artifact, actual tests, known limitations and next step. Do not merge, release or publish without explicit owner approval.
+
+## 2026-11-13 iOS update
+`ccr-c5e79198-7pqe4i` now carries the iOS functional update on top of the Android 1.2.0 work. `claude/ios-testflight` is untouched. See `docs/knowledge/reports/2026-11-13-ios-functional-update.md`.
