@@ -57,15 +57,19 @@ private func pdfImage(_ stream: CGPDFStreamRef, _ dict: CGPDFDictionaryRef, widt
     }
 }
 
+/// The callback of CGPDFDictionaryApplyBlock cannot capture anything, so the entries are handed back through a box (passing `&array` would hand over the array's buffer, not the array).
+private final class XObjectBox { var items: [(CGPDFStreamRef, CGPDFDictionaryRef)] = [] }
+
 private func collect(_ xobjects: CGPDFDictionaryRef, page: Int, depth: Int, limit: Int, into out: inout [[String: Any]]) {
-    var found: [(CGPDFStreamRef, CGPDFDictionaryRef)] = []
+    let box = XObjectBox()
     CGPDFDictionaryApplyBlock(xobjects, { _, object, info in
         var stream: CGPDFStreamRef? = nil
-        if CGPDFObjectGetValue(object, .stream, &stream), let st = stream, let d = CGPDFStreamGetDictionary(st) {
-            info!.assumingMemoryBound(to: [(CGPDFStreamRef, CGPDFDictionaryRef)].self).pointee.append((st, d))
+        if CGPDFObjectGetValue(object, .stream, &stream), let st = stream, let d = CGPDFStreamGetDictionary(st), let raw = info {
+            Unmanaged<XObjectBox>.fromOpaque(raw).takeUnretainedValue().items.append((st, d))
         }
         return true
-    }, &found)
+    }, Unmanaged.passUnretained(box).toOpaque())
+    let found = box.items
     for (stream, dict) in found {
         if out.count >= limit { return }
         let subtype = pdfName(dict, "Subtype")
