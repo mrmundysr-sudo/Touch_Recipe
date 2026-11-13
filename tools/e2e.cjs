@@ -88,7 +88,7 @@ const assert = require('assert');
   assert.ok((await page.locator('[data-testid^="ingredient:"]').first().innerText()).includes('2 1/4 cups') || (await page.locator('[data-testid^="ingredient:"]').first().innerText()).includes('2 1/4')); ok('ingredient amounts scale');
   await tap('cook'); await page.waitForTimeout(500); assert.equal(await route(), 'cook'); ok('cook mode opens');
   assert.ok(await page.locator('[data-testid=timer-add]').count() && !(await page.locator('[data-testid=timer-button]').count())); ok('a step with no timer shows only a small "Add a timer" link');
-  assert.ok(await page.locator('[data-testid=cook-ingredients]').count() && !(await page.locator('[data-testid=step-list]').count())); ok('lower panel lists ingredients, not the steps again');
+  assert.ok(await page.locator('[data-testid=cook-ingredients]').count() && (await page.locator('[data-testid^="jump:"]').count()) >= 2); ok('Cook Mode is one scrolling page: current step, ingredients and every step');
   assert.ok((await page.locator('[data-testid^="cook-ing:"]').first().innerText()).includes('2 1/4')); ok('cook ingredient amounts follow the servings chosen on the recipe (6)');
   await page.locator('[data-testid^="cook-ing:"]').first().click(); await page.waitForTimeout(300);
   assert.ok(await page.evaluate((i) => window.__app.ctx.repo.recipe(i).ingredients[0].checked, id)); ok('ticking an ingredient in Cook Mode updates the recipe');

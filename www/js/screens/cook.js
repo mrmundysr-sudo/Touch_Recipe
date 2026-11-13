@@ -1,8 +1,8 @@
 // Port of ui/screens/CookScreen.kt: step-by-step Cook Mode with a wall-clock timer that survives leaving the screen.
 import { h, mount } from '../ui/dom.js';
-import { ArtPage, place, dp, sp } from '../ui/art.js';
+import { ScrollPage } from '../ui/page.js';
 import { Routes } from '../ui/nav.js';
-import { dialog, photoImg } from '../ui/widgets.js';
+import { dialog, photoImg, bigButton } from '../ui/widgets.js';
 import * as Q from '../engine/quantity.js';
 import * as T from '../engine/timer.js';
 import { notifier, keepAwake } from '../data/notify.js';
@@ -48,16 +48,9 @@ export function cookScreen(params, ctx, nav) {
     if (T.timerConfigured(ui.timer) && !T.timerRunning(ui.timer) && T.remaining(ui.timer, clock()) === 0 && ui.timer.remainingMs === 0) { vm.reset(); scheduleAlarm(vm.startPause()); } else toggleTimer();
   };
 
-  const art = ArtPage(ctx.art, 'cook', { title: 'Cook Mode', prefs: ctx.prefs, onTarget: (t) => {
-    if (!ui) { if (t === 'back') nav.backOr(Routes.HUB); return; }
-    switch (t) {
-      case 'back': nav.backOr(Routes.DETAIL, { id }); break;
-      case 'prev': vm.prev(); break;
-      case 'next': if (vm.next()) dialog({ title: 'All steps done', text: 'Nice cooking! Finish this session, or stay and review the steps.', confirm: 'Finish', cancel: 'Keep reviewing', onConfirm: () => { vm.finish(); notifier.cancel(id); nav.backOr(Routes.DETAIL, { id }); } }); break;
-    }
-  } });
-  const { content, page } = art;
-  const dyn = h('div'); content.append(dyn);
+  const page = ScrollPage({ title: 'Cook Mode', slot: 'page_13', testid: 'cook', onBack: () => { if (!ui) nav.backOr(Routes.HUB); else nav.backOr(Routes.DETAIL, { id }); } });
+  const art = { el: page.el, destroy: null, stage: { parentElement: page.el } };
+  const goNext = () => { if (vm.next()) dialog({ title: 'All steps done', text: 'Nice cooking! Finish this session, or stay and review the steps.', confirm: 'Finish', cancel: 'Keep reviewing', onConfirm: () => { vm.finish(); notifier.cancel(id); nav.backOr(Routes.DETAIL, { id }); } }); };
   const live = { clock: null, timerText: null, label: null };
 
   function durationDialog() {
@@ -71,70 +64,61 @@ export function cookScreen(params, ctx, nav) {
     dlg = dialog({ title: 'Step timer', content: content2, confirm: 'Set', onConfirm: () => { const total = (parseInt(min.value, 10) || 0) * 60 + (parseInt(sec.value, 10) || 0); vm.setDuration(total > 0 ? total : null); notifier.cancel(id); } });
   }
 
-  let ingScroll = 0;
-  const ingBox = h('div');
-  function drawIngredients() {
-    if (!ui) return;
-    const u = ui;
-    const old = ingBox.querySelector('[data-testid=cook-ingredients]'); if (old) ingScroll = old.scrollTop;
+  function ingredientsSection(u) {
     const ingredients = ctx.repo.recipe(id)?.ingredients ?? u.recipe.ingredients;
     const factor = Q.factor(u.recipe.servings, params.servings);
-    const step = u.steps[Math.min(Math.max(u.index, 0), u.steps.length - 1)];
-    const list = h('div', { class: 'scroll-y fade-bottom ia', 'data-testid': 'cook-ingredients', style: 'flex:1;min-height:0' },
-      !ingredients.length ? h('div', { style: `padding-top:8px;font-size:${sp(24)};opacity:.7` }, 'This recipe has no ingredients listed.') : null,
-      ingredients.map((ing) => {
-        if (ing.header) return h('div', { role: 'heading', 'aria-level': '3', style: `padding-top:8px;font-weight:700;color:var(--forest);font-size:${sp(26)}` }, ing.text);
+    return h('section', { class: 'sp-sec', 'data-testid': 'cook-ingredients', 'data-art-slot': 'cook_ingredients' }, h('h2', { class: 'sp-h2' }, 'Ingredients'),
+      !ingredients.length ? h('div', { class: 'sp-warn' }, 'This recipe has no ingredients listed.') : null,
+      ...ingredients.map((ing) => {
+        if (ing.header) return h('div', { role: 'heading', 'aria-level': '3', style: 'padding-top:8px;font-weight:700;color:var(--forest)' }, ing.text);
         const shown = Q.scale(ing.text, factor);
         const toggle = () => ctx.repo.updateIngredients(id, (l) => l.map((x) => (x.id === ing.id ? { ...x, checked: !x.checked } : x)));
-        return h('div', { role: 'checkbox', tabindex: '0', 'aria-checked': String(ing.checked), 'aria-label': shown, 'data-testid': `cook-ing:${ing.id}`, class: 'row-line', style: 'min-height:48px;cursor:pointer',
-          onclick: toggle, onkeydown: (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); } } },
+        return h('div', { role: 'checkbox', tabindex: '0', 'aria-checked': String(ing.checked), 'aria-label': shown, 'data-testid': `cook-ing:${ing.id}`, class: 'sp-line', style: 'cursor:pointer', onclick: toggle, onkeydown: (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); } } },
           h('div', { style: `width:26px;height:26px;flex:none;border-radius:6px;border:2px solid var(--forest);background:${ing.checked ? 'var(--forest)' : 'transparent'};color:var(--cream);display:flex;align-items:center;justify-content:center;font-weight:700` }, ing.checked ? '✓' : ''),
-          h('div', { style: `font-size:${sp(25)};line-height:${sp(30)};${ing.checked ? 'text-decoration:line-through' : ''}` }, shown));
+          h('div', { style: ing.checked ? 'text-decoration:line-through;opacity:.7' : '' }, shown));
       }));
-    mount(ingBox, h('div', { style: 'height:100%;display:flex;flex-direction:column' },
-      h('div', { role: 'heading', 'aria-level': '2', style: `font-family:var(--display);font-weight:700;font-size:${sp(34)};color:var(--forest)` }, 'Ingredients'),
-      step.image ? photoImg(ctx.photos, step.image, { alt: `Photo for step ${u.index + 1}`, cls: 'step-photo' }) : null, list));
-    list.scrollTop = ingScroll;
   }
+  const drawIngredients = () => { if (!ui || !alive) return; const old = page.body.querySelector('[data-testid=cook-ingredients]'); if (old) old.replaceWith(ingredientsSection(ui)); };
 
   function render() {
-    mount(dyn);
     live.clock = live.label = null;
-    if (missing) {
-      const m = h('div', { style: 'display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:24px;color:var(--ink)' },
-        h('div', { style: `font-family:var(--display);font-size:${sp(44)};font-weight:700` }, 'Nothing to cook yet'),
-        h('div', { style: `font-size:${sp(26)}` }, 'This recipe has no directions. Add some in the recipe, then Cook Mode can guide you step by step.'));
-      place(m, page.region('top')); dyn.append(m); return;
-    }
+    if (missing) { mount(page.body, h('div', { class: 'sp-warn' }, h('strong', null, 'Nothing to cook yet. '), 'This recipe has no directions. Add some in the recipe, then Cook Mode can guide you step by step.')); return; }
     if (!ui) return;
     const u = ui, step = u.steps[Math.min(Math.max(u.index, 0), u.steps.length - 1)];
-    art.stage.parentElement.setAttribute('aria-label', `Cook Mode: ${u.recipe.title}`);
-    const chip = place(h('div', { role: 'text', 'aria-label': `Step ${u.index + 1} of ${u.steps.length}`, style: 'display:flex;align-items:center;justify-content:center;pointer-events:none' }), page.region('stepchip'));
-    chip.append(h('div', { class: 'fit', style: `font-weight:700;font-size:${sp(26)};color:var(--ink);text-align:center` }, `Step ${u.index + 1} of ${u.steps.length}`));
-    // the timer appears only when the step has one (or the cook adds one)
+    page.setTitle(u.recipe.title.trim() || 'Cook Mode');
     let timerRow;
     if (T.timerConfigured(u.timer)) {
-      live.label = h('span', { 'data-testid': 'timer-label', style: `font-family:var(--display);font-weight:600;font-size:${sp(30)}` });
-      live.clock = h('span', { 'data-testid': 'clock-face', style: `margin-left:${dp(16)};font-weight:700;font-size:${sp(36)};font-variant-numeric:tabular-nums` });
-      timerRow = h('div', null,
-        h('div', { class: 'row-line', style: 'gap:0;flex-wrap:wrap' },
-          h('button', { type: 'button', 'data-testid': 'timer-button', style: `min-height:48px;border:0;border-radius:${dp(18)};background:#CF4A27;color:#FFF4E0;padding:${dp(8)} ${dp(22)};cursor:pointer`, onclick: pressTimer }, live.label),
-          live.clock,
-          h('button', { class: 'text-btn', type: 'button', 'data-testid': 'timer-change', style: `color:var(--forest);font-size:${sp(22)}`, onclick: durationDialog }, 'Change')),
-        u.timerStep !== u.index ? h('div', { style: `color:var(--forest);font-weight:600;font-size:${sp(22)}` }, `(timer from step ${u.timerStep + 1})`) : null);
-    } else timerRow = h('button', { class: 'text-btn', type: 'button', 'data-testid': 'timer-add', style: `color:var(--forest);font-weight:600;font-size:${sp(24)};padding:0`, onclick: durationDialog }, '⏱ Add a timer');
+      live.label = h('span', { 'data-testid': 'timer-label', style: 'font-weight:700' });
+      live.clock = h('span', { 'data-testid': 'clock-face', style: 'margin-left:14px;font-weight:700;font-size:30px;font-variant-numeric:tabular-nums' });
+      timerRow = h('div', null, h('div', { class: 'row-line', style: 'gap:0;flex-wrap:wrap;align-items:center' },
+        h('button', { type: 'button', 'data-testid': 'timer-button', style: 'min-height:48px;border:0;border-radius:14px;background:#CF4A27;color:#FFF4E0;padding:8px 20px;cursor:pointer;font-size:17px', onclick: pressTimer }, live.label), live.clock,
+        h('button', { class: 'text-btn', type: 'button', 'data-testid': 'timer-change', style: 'color:var(--forest)', onclick: durationDialog }, 'Change')),
+        u.timerStep !== u.index ? h('div', { style: 'color:var(--forest);font-weight:600' }, `(timer from step ${u.timerStep + 1})`) : null);
+    } else timerRow = h('button', { class: 'text-btn', type: 'button', 'data-testid': 'timer-add', style: 'color:var(--forest);font-weight:600;padding:0', onclick: durationDialog }, '⏱ Add a timer');
     const progress = u.completed.size / u.steps.length;
-    const top = place(h('div', { style: `padding:${dp(100)} ${dp(22)} ${dp(16)};display:flex;flex-direction:column;color:var(--ink);overflow:hidden` },
-      h('div', { style: `font-weight:600;font-size:${sp(24)};color:var(--forest);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden` }, u.recipe.title.trim() || 'Recipe'),
-      h('div', { class: 'row-line', style: 'gap:0' }, h('div', { 'data-testid': 'step-number', style: `font-family:var(--display);font-weight:700;font-size:${sp(80)};color:var(--tomato);line-height:1.1` }, String(u.index + 1)),
-        u.completed.has(u.index) ? h('div', { 'data-testid': 'step-done', style: `margin-left:8px;color:var(--forest);font-weight:700;font-size:${sp(28)}` }, '✓ done') : null),
-      h('div', { class: 'scroll-y ia', 'data-testid': 'step-text', style: `font-size:${sp(38)};line-height:${sp(50)};flex:0 1 auto;min-height:0` }, step.text),
-      h('div', { style: `height:${dp(8)}` }), timerRow,
-      h('div', { role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.round(progress * 100)), 'aria-label': `${u.completed.size} of ${u.steps.length} steps completed`, 'data-testid': 'cook-progress',
-        style: `margin-top:${dp(6)};height:8px;border-radius:4px;background:var(--cream-deep);overflow:hidden;flex:none` }, h('div', { style: `height:100%;width:${progress * 100}%;background:var(--tomato)` }))), page.region('top'));
-    const bottom = place(h('div', { style: `padding:${dp(10)} ${dp(18)};color:var(--ink);overflow:hidden` }, ingBox), page.region('bottom'));
-    dyn.append(chip, top, bottom);
-    drawIngredients(); tick();
+    const last = u.index >= u.steps.length - 1;
+    // the current step stays pinned at the top while the whole recipe scrolls underneath
+    const card = h('div', { class: 'sp-line', style: 'position:sticky;top:0;z-index:3;flex-direction:column;background:var(--surface,#FBF4E6);box-shadow:0 4px 12px rgba(0,0,0,.12)', 'data-testid': 'cook-card', 'data-art-slot': 'cook_step' },
+      h('div', { role: 'text', 'aria-label': `Step ${u.index + 1} of ${u.steps.length}`, style: 'font-weight:700;color:var(--forest)' }, `Step ${u.index + 1} of ${u.steps.length}`),
+      h('div', { class: 'row-line', style: 'gap:0;align-items:center' }, h('div', { 'data-testid': 'step-number', style: 'font-family:var(--display);font-weight:700;font-size:48px;color:var(--tomato);line-height:1.1' }, String(u.index + 1)),
+        u.completed.has(u.index) ? h('div', { 'data-testid': 'step-done', style: 'margin-left:8px;color:var(--forest);font-weight:700' }, '✓ done') : null),
+      h('div', { 'data-testid': 'step-text', style: 'font-size:calc(24px * var(--ts));line-height:1.35' }, step.text), timerRow,
+      h('div', { role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.round(progress * 100)), 'aria-label': `${u.completed.size} of ${u.steps.length} steps completed`, 'data-testid': 'cook-progress', style: 'height:8px;border-radius:4px;background:var(--cream-deep);overflow:hidden;width:100%' }, h('div', { style: `height:100%;width:${progress * 100}%;background:var(--tomato)` })),
+      h('div', { class: 'sheet-row', style: 'width:100%' }, bigButton('Previous', () => vm.prev(), { primary: false, disabled: u.index === 0, testid: 'cook-prev' }), bigButton(last ? 'Finish cooking' : 'Next step', goNext, { testid: 'cook-next' })));
+    for (const [k, fn] of [['prev', () => vm.prev()], ['next', goNext]]) { const b = card.querySelector(k === 'prev' ? '[data-testid=cook-prev]' : '[data-testid=cook-next]'); b.dataset.art = k; }
+    // every step is listed so the whole method can be read by scrolling; tap one to jump to it
+    let n = 0;
+    const steps = h('section', { class: 'sp-sec', 'data-art-slot': 'cook_steps', 'data-testid': 'step-list' }, h('h2', { class: 'sp-h2' }, 'All steps'),
+      ...ctx.repo.getRecipe(id).directions.map((d) => {
+        if (d.header) return h('div', { role: 'heading', 'aria-level': '3', style: 'font-weight:700;color:var(--forest);padding-top:6px' }, d.text);
+        const i = n++;
+        return h('button', { type: 'button', class: `sp-line${i === u.index ? ' selected' : ''}`, style: 'text-align:left;width:100%;cursor:pointer', 'aria-current': i === u.index ? 'step' : null, 'data-testid': `jump:${i}`, onclick: () => vm.jump(i) },
+          h('strong', { style: 'flex:none;min-width:2ch' }, `${i + 1}.`), h('span', null, d.text), u.completed.has(i) ? h('span', { 'aria-label': 'done', style: 'margin-left:auto;color:var(--forest)' }, '✓') : null);
+      }));
+    const keep = page.body.scrollTop;
+    mount(page.body, card, ingredientsSection(u), steps);
+    page.body.scrollTop = keep;
+    tick();
   }
 
   function tick() {

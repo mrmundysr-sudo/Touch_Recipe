@@ -5,7 +5,7 @@ name: iOS build check
 
 on:
   push:
-    branches: ['claude/ios-**']
+    branches: ['claude/ios-**', 'ccr-**']
   workflow_dispatch:
 
 permissions:
@@ -29,10 +29,21 @@ jobs:
           node-version: '20'
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app
+      - name: Fetch the real-page benchmark corpus (recipe-scrapers test data, MIT, pinned commit; not stored in this repository)
+        run: |
+          set -euo pipefail
+          git init -q "$RUNNER_TEMP/recipe-scrapers" && cd "$RUNNER_TEMP/recipe-scrapers"
+          git remote add origin https://github.com/hhursev/recipe-scrapers.git
+          git fetch -q --depth 1 origin 00b529730a619da361facc7d0b94f0dd26bd517f
+          git checkout -q FETCH_HEAD && git log -1 --format='corpus commit %H %ci'
+          echo "TR_CORPUS_DIR=$RUNNER_TEMP/recipe-scrapers/tests/test_data" >> "$GITHUB_ENV"
+        continue-on-error: true
       - name: Install, test, generate and patch the iOS project (same steps as the portfolio launcher)
         run: |
+          set -o pipefail
           npm install
-          npm test
+          npm test 2>&1 | tee "$RUNNER_TEMP/npm-test.log"
+          grep -E "REAL-PAGE BENCHMARK|^# (tests|pass|fail|skipped)" "$RUNNER_TEMP/npm-test.log" | tee -a "$GITHUB_STEP_SUMMARY" || true
           npx cap add ios
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install pillow

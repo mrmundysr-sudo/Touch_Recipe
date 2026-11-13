@@ -1,6 +1,6 @@
 // Port of ui/screens/DetailScreen.kt.
 import { h, mount, minutesLabel } from '../ui/dom.js';
-import { ArtPage, place, dp, sp } from '../ui/art.js';
+import { ScrollPage } from '../ui/page.js';
 import { Routes } from '../ui/nav.js';
 import { bigButton, sheet, fitText, photoImg, say, undoable, confirmDialog, rowsEditorSheet, EditRow } from '../ui/widgets.js';
 import { Ingredient, Direction } from '../engine/models.js';
@@ -14,27 +14,14 @@ export function detailScreen(params, ctx, nav) {
   const id = params.id;
   const st = (params.__vm ||= { servings: ctx.repo.recipe(id)?.servings ?? null });
   const recipe = () => ctx.repo.recipe(id);
-  const art = ArtPage(ctx.art, 'detail', { title: 'Recipe', prefs: ctx.prefs, onTarget: (t) => onTarget(t) });
-  const { content, page } = art;
-  const dyn = h('div'); content.append(dyn);
+  // One continuous page: photo, title, times, ingredients and directions scroll together, nothing is clipped or nested.
+  const page = ScrollPage({ title: 'Recipe', slot: 'page_11', testid: 'detail', onBack: () => nav.backOr(Routes.COLLECTION) });
+  const art = { el: page.el, destroy: null };
 
   const step = (d) => { const r = recipe(); const base = r?.servings ?? st.servings ?? 4; st.servings = Math.min(99, Math.max(1, (st.servings ?? base) + d)); render(); };
   const setPhoto = async (name) => { const r = recipe(); if (r) await ctx.repo.saveRecipe({ ...r, photo: name }); };
-
-  function onTarget(t) {
-    const r = recipe(); if (!r) { if (t === 'back') nav.backOr(Routes.COLLECTION); return; }
-    switch (t) {
-      case 'back': nav.backOr(Routes.COLLECTION); break;
-      case 'favorite': ctx.repo.setFavorite(r.id, !r.favorite); break;
-      case 'cook': if (!r.directions.some((d) => !d.header)) say('Add directions first, then Cook Mode can guide you.'); else nav.go(Routes.COOK, { id: r.id, servings: st.servings }); break;
-      case 'grocery': if (!r.ingredients.some((i) => !i.header)) say('This recipe has no ingredients yet.'); else groceryAddSheet(ctx, r, st.servings, () => nav.go(Routes.GROCERY)); break;
-      case 'photo': photoMenu(r); break;
-      case 'ingredients_head': ingEditor(r); break;
-      case 'directions_head': dirEditor(r); break;
-      case 'serv_dec': step(-1); break;
-      case 'serv_inc': step(1); break;
-    }
-  }
+  const startCook = (r) => { if (!r.directions.some((d) => !d.header)) say('Add directions first, then Cook Mode can guide you.'); else nav.go(Routes.COOK, { id: r.id, servings: st.servings }); };
+  const toGrocery = (r) => { if (!r.ingredients.some((i) => !i.header)) say('This recipe has no ingredients yet.'); else groceryAddSheet(ctx, r, st.servings, () => nav.go(Routes.GROCERY)); };
 
   function ingEditor(r) {
     const factor = Q.factor(r.servings, st.servings);
@@ -72,73 +59,55 @@ export function detailScreen(params, ctx, nav) {
         const removed = await ctx.repo.deleteRecipe(r.id); nav.backOr(Routes.COLLECTION); if (removed) undoable(`Deleted “${removed.title}”`, () => ctx.repo.restoreRecipe(removed)); }, true); }, { primary: false, testid: 'delete-recipe' })) });
   }
 
+  const act = (label, id, onclick, primary = false, extra = {}) => h('button', { type: 'button', class: 'big-btn ' + (primary ? 'primary' : 'outline'), 'data-art': id, 'data-testid': `act-${id}`, onclick, ...extra }, label);
   function render() {
     const r = recipe(); const cats = ctx.repo.categories();
-    mount(dyn);
-    if (!r) { const m = h('div', { style: 'display:flex;align-items:center;justify-content:center;text-align:center;color:var(--ink)' }, 'This recipe is no longer in your collection.'); place(m, page.region('title')); dyn.append(m); return; }
-    art.setDescribe((t) => null);
+    if (!r) { mount(page.body, h('div', { class: 'sp-warn' }, 'This recipe is no longer in your collection.')); return; }
+    page.setTitle(r.title.trim() || 'Recipe');
     const factor = Q.factor(r.servings, st.servings);
     const serv = st.servings ?? r.servings;
-    // photo window under the back/heart controls
-    const pb = place(h('div', { style: `border-radius:${dp(18)};overflow:hidden;pointer-events:none` }), page.target('photo').box);
-    const ph = photoImg(ctx.photos, r.photo, { fallback: r.title, alt: r.photo ? `Photo of ${r.title}` : '' }); ph.style.cssText = 'position:absolute;inset:0';
-    pb.append(ph);
-    if (!r.photo) pb.append(h('div', { style: `position:absolute;left:0;right:0;top:50%;padding-top:${dp(110)};text-align:center;color:var(--cream);font-weight:600;font-size:${sp(24)}` }, 'Tap to add a photo'));
-    dyn.append(pb);
-    // favorite heart drawn over the art heart
-    const heart = place(h('div', { 'aria-hidden': 'true', 'data-testid': `heart-glyph:${r.favorite ? 'on' : 'off'}`, style: `border-radius:50%;background:#FBF4E6;display:flex;align-items:center;justify-content:center;color:var(--tomato);font-size:${sp(50)};pointer-events:none` }, r.favorite ? '♥' : '♡'), page.target('favorite').box);
-    dyn.append(heart);
-    const more = place(h('button', { type: 'button', 'aria-label': 'More options', 'data-testid': 'detail-more', style: `border-radius:50%;border:0;background:rgba(251,244,230,.92);color:var(--ink);font-size:${sp(40)}`, onclick: () => moreMenu(r) }, '⋯'), { x: 0.44, y: 0.012, w: 0.14, h: 0.045 });
-    dyn.append(more);
-
-    // title, categories, description, source
     const names = r.categoryIds.map((cid) => cats.find((c) => c.id === cid)?.name).filter(Boolean);
     const src = r.sourceName ?? r.sourceUrl;
-    const titleBox = place(h('div', { class: 'scroll-y', style: 'color:var(--ink)' },
-      fitText(r.title.trim() || 'Untitled recipe', { lines: 3, minScale: 0.5, style: `font-family:var(--display);font-weight:700;font-size:${sp(46)};line-height:${sp(52)};color:var(--ink)` }),
-      names.length ? h('div', { style: `color:var(--forest);font-size:${sp(21)};font-weight:600` }, names.join(' · ')) : null,
-      r.description.trim() ? h('div', { style: `font-size:${sp(21)};line-height:${sp(27)};display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden` }, r.description) : null,
-      src ? h('div', { role: r.sourceUrl ? 'link' : null, tabindex: r.sourceUrl ? '0' : null, style: `color:var(--forest);font-size:${sp(20)};text-decoration:underline;min-height:32px;padding:4px 0`, onclick: () => { if (r.sourceUrl && !openLink(r.sourceUrl)) say('No app could open that link.'); } }, `Source: ${src}`) : null,
-      r.notes.trim() ? h('div', { style: `font-size:${sp(20)};line-height:${sp(26)}` }, `Notes: ${r.notes}`) : null), page.region('title'));
-    dyn.append(titleBox);
-    // times and servings
-    const vals = [minutesLabel(r.prepMinutes), minutesLabel(r.cookMinutes), minutesLabel(effectiveTotal(r)), serv != null ? String(serv) : null];
-    const labels = ['Prep time', 'Cook time', 'Total time', 'Servings'];
-    vals.forEach((v, i) => dyn.append(place(h('div', { role: 'text', 'aria-label': `${labels[i]}: ${v ?? 'not set'}`, style: 'display:flex;align-items:center;color:var(--ink);pointer-events:none' },
-      fitText(v ?? '—', { minScale: 0.6, style: `font-family:var(--body);font-weight:600;font-size:${sp(24)};color:var(--ink);max-width:100%` })), page.region('meta' + i))));
-    dyn.append(place(h('div', { 'aria-live': 'polite', 'aria-label': `Servings: ${serv ?? 'not set'}`, style: 'display:flex;align-items:center;justify-content:center;pointer-events:none' },
-      fitText(serv != null ? String(serv) : '—', { style: `font-size:${sp(34)};font-weight:700;color:var(--ink);text-align:center;max-width:100%` })), page.region('servings_value')));
-    dyn.querySelector('[aria-live]').dataset.testid = 'servings-value';
-    // ingredients
-    const ingList = h('div', { class: 'scroll-y fade-bottom', 'data-testid': 'ingredient-list', style: 'height:100%' });
-    if (!r.ingredients.length) ingList.append(h('div', { style: `color:rgba(42,33,24,.7);font-size:${sp(22)}` }, 'No ingredients yet. Tap “Ingredients” to add some.'));
-    r.ingredients.forEach((ing) => {
-      if (ing.header) { ingList.append(h('div', { role: 'heading', 'aria-level': '3', style: `font-weight:700;color:var(--forest);font-size:${sp(24)};padding-top:6px` }, ing.text)); return; }
+    const heart = h('button', { type: 'button', class: 'sp-mini', 'aria-label': r.favorite ? 'Remove from favorites' : 'Add to favorites', 'aria-pressed': String(r.favorite), 'data-art': 'favorite', 'data-testid': `heart-glyph:${r.favorite ? 'on' : 'off'}`, style: 'color:var(--tomato);font-size:28px', onclick: () => ctx.repo.setFavorite(r.id, !r.favorite) }, r.favorite ? '♥' : '♡');
+    const more = h('button', { type: 'button', class: 'sp-mini', 'aria-label': 'More options', 'data-testid': 'detail-more', style: 'font-size:28px', onclick: () => moreMenu(r) }, '⋯');
+    const ph = r.photo ? photoImg(ctx.photos, r.photo, { fallback: r.title, alt: `Photo of ${r.title}`, cls: 'sp-photo' }) : null;
+    if (ph) { ph.setAttribute('role', 'button'); ph.style.cursor = 'pointer'; ph.dataset.art = 'photo'; ph.addEventListener('click', () => photoMenu(r)); }
+    const meta = [['Prep', minutesLabel(r.prepMinutes)], ['Cook', minutesLabel(r.cookMinutes)], ['Total', minutesLabel(effectiveTotal(r))]];
+    const ingNodes = !r.ingredients.length ? [h('div', { class: 'sp-warn' }, 'No ingredients yet. Tap “Edit ingredients” to add some.')] : r.ingredients.map((ing) => {
+      if (ing.header) return h('div', { role: 'heading', 'aria-level': '3', style: 'font-weight:700;color:var(--forest);padding-top:6px' }, ing.text);
       const shown = Q.scale(ing.text, factor);
-      ingList.append(h('div', { role: 'checkbox', tabindex: '0', 'aria-checked': String(ing.checked), 'aria-label': shown, 'data-testid': `ingredient:${ing.id}`, class: 'row-line',
-        style: 'min-height:48px;padding:2px 0;color:var(--ink);cursor:pointer',
+      return h('div', { role: 'checkbox', tabindex: '0', 'aria-checked': String(ing.checked), 'aria-label': shown, 'data-testid': `ingredient:${ing.id}`, class: 'sp-line', style: 'cursor:pointer',
         onclick: () => ctx.repo.updateIngredients(id, (l) => l.map((x) => (x.id === ing.id ? { ...x, checked: !x.checked } : x))),
         onkeydown: (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); e.target.click(); } } },
         h('div', { style: `width:26px;height:26px;flex:none;border-radius:6px;border:2px solid var(--forest);background:${ing.checked ? 'var(--forest)' : 'transparent'};color:var(--cream);display:flex;align-items:center;justify-content:center;font-weight:700` }, ing.checked ? '✓' : ''),
-        h('div', { style: `font-size:${sp(25)};line-height:${sp(30)};${ing.checked ? 'text-decoration:line-through' : ''}` }, shown)));
+        h('div', { style: ing.checked ? 'text-decoration:line-through;opacity:.7' : '' }, shown));
     });
-    dyn.append(place(h('div'), page.region('ingredients')));
-    dyn.lastChild.append(ingList);
-    // directions with automatic numbering
-    const dirList = h('div', { class: 'scroll-y fade-bottom', 'data-testid': 'direction-list', style: 'height:100%' });
-    if (!r.directions.length) dirList.append(h('div', { style: `color:rgba(42,33,24,.7);font-size:${sp(22)}` }, 'No directions yet. Tap “Directions” to add some.'));
     let n = 0;
-    r.directions.forEach((d) => {
-      if (d.header) { dirList.append(h('div', { role: 'heading', 'aria-level': '3', style: `font-weight:700;color:var(--forest);font-size:${sp(24)};padding-top:6px` }, d.text)); return; }
+    const dirNodes = !r.directions.length ? [h('div', { class: 'sp-warn' }, 'No directions yet. Tap “Edit directions” to add some.')] : r.directions.map((d) => {
+      if (d.header) return h('div', { role: 'heading', 'aria-level': '3', style: 'font-weight:700;color:var(--forest);padding-top:6px' }, d.text);
       n++;
-      dirList.append(h('div', { style: 'display:flex;align-items:flex-start;padding:3px 0;color:var(--ink)' },
-        h('div', { style: 'width:32px;height:32px;flex:none;border-radius:50%;background:var(--forest);color:var(--cream);font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center' }, String(n)),
-        h('div', { style: `margin-left:10px;padding-right:${dp(70)};font-size:${sp(24)};line-height:${sp(30)}` }, d.text)));
+      return h('div', { class: 'sp-line', style: 'align-items:flex-start' }, h('div', { style: 'width:32px;height:32px;flex:none;border-radius:50%;background:var(--forest);color:var(--cream);font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:4px' }, String(n)), h('div', { style: 'padding:4px 0' }, d.text));
     });
-    dyn.append(place(h('div'), page.region('directions')));
-    dyn.lastChild.append(dirList);
+    const keep = page.body.scrollTop;
+    mount(page.body,
+      h('div', { class: 'sp-bar', style: 'position:static;justify-content:flex-end;padding:0' }, heart, more),
+      ph, !ph ? bigButton('Add a photo', () => photoMenu(r), { primary: false, testid: 'detail-photo' }) : null,
+      h('div', null, h('h2', { class: 'sp-h2', style: 'font-size:calc(30px * var(--ts));color:var(--ink)', 'data-testid': 'detail-title' }, r.title.trim() || 'Untitled recipe'),
+        names.length ? h('div', { style: 'color:var(--forest);font-weight:600' }, names.join(' · ')) : null,
+        r.description.trim() ? h('p', { style: 'margin:6px 0 0' }, r.description) : null,
+        src ? h('div', { role: r.sourceUrl ? 'link' : null, tabindex: r.sourceUrl ? '0' : null, style: 'color:var(--forest);text-decoration:underline;min-height:32px;padding:4px 0', onclick: () => { if (r.sourceUrl && !openLink(r.sourceUrl)) say("The link couldn't be opened."); } }, `Source: ${src}`) : null,
+        r.notes.trim() ? h('p', { style: 'margin:6px 0 0' }, `Notes: ${r.notes}`) : null),
+      h('div', { class: 'sheet-row' }, ...meta.map(([l, v]) => h('div', { role: 'text', 'aria-label': `${l} time: ${v ?? 'not set'}`, class: 'sp-line', style: 'flex-direction:column;align-items:center;text-align:center;min-height:0' }, h('span', { style: 'font-size:13px;opacity:.7' }, l), h('strong', null, v ?? '—')))),
+      h('div', { class: 'sp-line', style: 'justify-content:space-between;align-items:center' }, h('strong', null, 'Servings'),
+        h('div', { style: 'display:flex;align-items:center;gap:6px' }, h('button', { type: 'button', class: 'sp-mini', 'aria-label': 'Fewer servings', 'data-art': 'serv_dec', onclick: () => step(-1) }, '−'),
+          h('strong', { 'aria-live': 'polite', 'aria-label': `Servings: ${serv ?? 'not set'}`, 'data-testid': 'servings-value', style: 'min-width:2ch;text-align:center;font-size:22px' }, serv != null ? String(serv) : '—'),
+          h('button', { type: 'button', class: 'sp-mini', 'aria-label': 'More servings', 'data-art': 'serv_inc', onclick: () => step(1) }, '+'))),
+      h('div', { class: 'sheet-row' }, act('Start Cook Mode', 'cook', () => startCook(r), true), act('Add to grocery list', 'grocery', () => toGrocery(r))),
+      h('section', { class: 'sp-sec', 'data-art-slot': 'ingredients', 'data-testid': 'ingredient-list' }, h('button', { class: 'sp-h2', type: 'button', style: 'text-align:left;background:none;border:0;padding:0', 'data-art': 'ingredients_head', onclick: () => ingEditor(r) }, 'Ingredients ✎'), ...ingNodes),
+      h('section', { class: 'sp-sec', 'data-art-slot': 'directions', 'data-testid': 'direction-list' }, h('button', { class: 'sp-h2', type: 'button', style: 'text-align:left;background:none;border:0;padding:0', 'data-art': 'directions_head', onclick: () => dirEditor(r) }, 'Directions ✎'), ...dirNodes));
+    page.body.scrollTop = keep;
   }
   render();
-  art.destroy = live(ctx, art.el, render);
+  art.destroy = live(ctx, page.el, render);
   return art;
 }

@@ -68,6 +68,12 @@ export class VisionOcr {
   }
 }
 
+/** One PDF page as a picture (native), or null when the bridge is missing. */
+export async function renderPdfPage(blob, page = 0) {
+  const p = plugin('TouchRecipeOcr'); if (!p) return null;
+  try { const r = await p.renderPdfPage({ pdf: await blobToB64(blob), page, maxEdge: 2000 }); return r.image ? b64ToBlob(r.image, 'image/jpeg') : null; } catch { return null; }
+}
+
 /** Downscales and re-encodes an image (honouring EXIF rotation) so recognition is fast and the payload small. */
 export async function prepareImage(blob, maxEdge = 2200) {
   const bmp = await createImageBitmap(blob, { imageOrientation: 'from-image' });
@@ -179,7 +185,20 @@ export class ImportService {
     try { onStatus('Reading the PDF…'); r = await this.ocr.recognizePdf(file); r = await this.preferCleanText(file, r, onStatus); } catch (e) { throw new ImportFailure((e.message || 'That PDF could not be opened.') + ' You can still use Paste or Type Recipe.', { retryable: true }); }
     const d0 = this.ocrDraft(r.text);
     let name = null; if (this.originals) { try { name = await this.originals.saveFile(file, 'pdf'); } catch { /* ignore */ } }
-    const d = this.withSource(d0, { kind: 'PDF', files: name ? [name] : [], text: r.text });
+    // the first page as a picture: kept, cleaned, and searched for the printed dish photo
+    let cleaned = [], dishFile = null, dishBlob = null;
+    if (this.originals) {
+      try {
+        const pg = await renderPdfPage(file, 0);
+        if (pg) {
+          onStatus('Looking for a photo of the dish…');
+          cleaned = [await this.originals.saveFile(pg, 'jpg')];
+          const dish = await Img.dishPhoto(pg); if (dish) { dishBlob = dish.blob; dishFile = await this.originals.saveFile(dish.blob, 'jpg'); }
+        }
+      } catch { /* optional */ }
+    }
+    const d = this.withSource(d0, { kind: 'PDF', files: name ? [name] : [], cleaned, text: r.text, dishPhoto: dishFile });
+    if (dishBlob) d.dishPhotoBlob = dishBlob;
     return r.pages >= 6 ? { ...d, warnings: [...d.warnings, warn('recipe', 'Only the first 6 pages were read.', Severity.INFO)] } : d;
   }
   /** A PDF made by a browser can carry a damaged text layer ("Southern \"ied Chicken", "Di!iculty"): if so, read the pages by OCR and use that when it is as complete. */

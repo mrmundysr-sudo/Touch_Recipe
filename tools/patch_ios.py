@@ -73,7 +73,8 @@ public class TouchRecipeOcrPlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "TouchRecipeOcr"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "recognizeImage", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "recognizePdf", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "recognizePdf", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "renderPdfPage", returnType: CAPPluginReturnPromise)
     ]
 
     private func recognize(_ image: CGImage) -> String {
@@ -129,6 +130,33 @@ public class TouchRecipeOcrPlugin: CAPPlugin, CAPBridgedPlugin {
                 parts.append(text)
             }
             call.resolve(["text": parts.joined(separator: "\n\n"), "pages": count])
+        }
+    }
+
+    /// One PDF page as a JPEG, so the app can show it, clean it and look for the dish photo on it.
+    @objc func renderPdfPage(_ call: CAPPluginCall) {
+        guard let b64 = call.getString("pdf"),
+              let data = Data(base64Encoded: b64, options: .ignoreUnknownCharacters),
+              let doc = PDFDocument(data: data) else {
+            call.reject("That PDF could not be opened.")
+            return
+        }
+        let index = call.getInt("page") ?? 0
+        let edge = call.getDouble("maxEdge") ?? 2000.0
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard index >= 0, index < doc.pageCount, let page = doc.page(at: index) else {
+                call.reject("That page does not exist.")
+                return
+            }
+            let box = page.bounds(for: .mediaBox)
+            let scale = edge / max(Double(box.width), Double(box.height))
+            let size = CGSize(width: Double(box.width) * scale, height: Double(box.height) * scale)
+            let rendered = page.thumbnail(of: size, for: .mediaBox)
+            guard let jpeg = rendered.jpegData(compressionQuality: 0.9) else {
+                call.reject("The page could not be drawn.")
+                return
+            }
+            call.resolve(["image": jpeg.base64EncodedString()])
         }
     }
 }
