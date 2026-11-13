@@ -206,7 +206,13 @@ hr.div { border: 0; border-top: 1px solid var(--outline); opacity: .4; margin: 1
 .rr-original { white-space: pre-wrap; overflow-wrap: anywhere; font-size: max(16px, calc(16px * var(--ts))); line-height: 1.6; padding: 4px 2px; -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 .rr-q { display: flex; align-items: center; gap: 6px; } .rr-q-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 /* the numbered lists: one number per entry, the number beside its text */
-.nl { display: flex; flex-direction: column; gap: 14px; }
+.nl { display: flex; flex-direction: column; }
+.nl-rows { display: flex; flex-direction: column; gap: 14px; }
+.nl-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.nl-btn { min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--outline, #9C9079); background: transparent; color: var(--primary, #1F4D3A); font: inherit; font-weight: 700; font-size: calc(14px * var(--ts)); cursor: pointer; }
+.nl-btn:disabled { opacity: .4; cursor: default; }
+.nl-pick { flex: none; width: 28px; height: 28px; margin-top: 12px; }
+.nl-row.picked .nl-text { border-color: var(--primary, #1F4D3A); border-width: 2px; }
 .nl-row { display: flex; gap: 12px; align-items: flex-start; }
 .nl-num { flex: none; width: 2.6em; padding-top: 14px; text-align: right; font-weight: 700; color: var(--on-surface-var, #50443A); font-variant-numeric: tabular-nums; }
 .nl-body { flex: 1; min-width: 0; }

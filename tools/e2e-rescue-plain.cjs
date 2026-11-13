@@ -62,22 +62,61 @@ const assert = require('assert');
   // Enter at the end makes an empty next entry; typing fills it
   await page.locator('[data-testid="dir-text"]').last().click(); await page.keyboard.press('End'); await page.keyboard.press('Enter'); await page.keyboard.type('Enjoy.'); await page.waitForTimeout(150);
   assert.deepEqual((await texts('dir')).slice(-2), ['Cook on a hot pan until golden. Serve warm with syrup.', 'Enjoy.']); assert.deepEqual(await nums('dir'), ['1.', '2.', '3.', '4.']); ok('Enter at the end starts step 4; typing fills it');
-  // paste: several lines make several numbered entries, list marks and typed numbers are removed
+  // paste: ALL the pasted text stays in the one entry (line breaks become spaces); nothing is split or stripped
   const paste = (selector, nth, text) => page.locator(selector).nth(nth).evaluate((ta, t) => { ta.focus(); const dt = new DataTransfer(); dt.setData('text', t); ta.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); }, text);
   await page.locator('[data-testid="ing-text"]').last().click(); await page.keyboard.press('End'); await page.keyboard.press('Enter');
-  await paste('[data-testid="ing-text"]', 6, '• 3 eggs\n- 1 cup butter\n2) 2 tsp salt'); await page.waitForTimeout(200);
-  assert.deepEqual((await texts('ing')).slice(6), ['3 eggs', '1 cup butter', '2 tsp salt'], 'pasted lines became entries, marks removed'); assert.deepEqual(await nums('ing'), ['1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.']);
+  let ingN = (await texts('ing')).length;
+  await paste('[data-testid="ing-text"]', ingN - 1, '\u2022 3 eggs\n- 1 cup butter\n2) 2 tsp salt. Sift well'); await page.waitForTimeout(200);
+  assert.equal((await texts('ing')).length, ingN, 'pasting a paragraph made NO new entries'); assert.equal((await texts('ing'))[ingN - 1], '\u2022 3 eggs - 1 cup butter 2) 2 tsp salt. Sift well', 'every character kept, line breaks became spaces');
   await page.locator('[data-testid="dir-text"]').last().click(); await page.keyboard.press('End'); await page.keyboard.press('Enter');
-  await paste('[data-testid="dir-text"]', 4, '1. Preheat the oven.\n2. Grease the pan.'); await page.waitForTimeout(200);
-  assert.deepEqual((await texts('dir')).slice(4), ['Preheat the oven.', 'Grease the pan.']); assert.deepEqual(await nums('dir'), ['1.', '2.', '3.', '4.', '5.', '6.']); ok('pasting several lines makes one numbered entry per line; "1." marks and bullets are removed');
+  let dirN = (await texts('dir')).length;
+  await paste('[data-testid="dir-text"]', dirN - 1, '1. Preheat the oven.\n2. Grease the pan.'); await page.waitForTimeout(200);
+  assert.equal((await texts('dir')).length, dirN); assert.equal((await texts('dir'))[dirN - 1], '1. Preheat the oven. 2. Grease the pan.'); assert.deepEqual(await nums('dir'), Array.from({ length: dirN }, (_, i) => `${i + 1}.`), 'steps are numbered on their own');
+  assert.deepEqual(await nums('ing'), Array.from({ length: ingN }, (_, i) => `${i + 1}.`), 'ingredients are numbered on their own');
+  ok('pasting a paragraph keeps it all in ONE entry (nothing split, nothing stripped); ingredients and steps are numbered separately');
+  // ...then Enter splits it exactly where the cursor is
+  const pasted = page.locator('[data-testid="dir-text"]').nth(dirN - 1); await pasted.click(); await pasted.evaluate((e) => e.setSelectionRange(e.value.indexOf('2.'), e.value.indexOf('2.')));
+  await page.keyboard.press('Enter'); await page.waitForTimeout(150);
+  assert.deepEqual((await texts('dir')).slice(-2), ['1. Preheat the oven.', '2. Grease the pan.'], 'split exactly at the cursor'); dirN++; ok('Enter inside the pasted entry splits it at the exact cursor position');
   // a heading is not numbered
   await page.locator('[data-testid="ing-text"]').nth(2).click(); await page.keyboard.press('Home'); await page.keyboard.press('Enter'); await page.locator('[data-testid="ing-text"]').nth(2).click(); await page.keyboard.type('For the batter:'); await page.waitForTimeout(150);
-  const n2 = await nums('ing'); assert.equal(n2[2], '', 'a heading has no number'); assert.equal(n2.filter(Boolean).length, 9, 'the others keep counting'); ok('a line ending with a colon is a heading: it has no number, the numbering carries on');
-  // everything survives leaving the side and coming back (it was taken into the recipe)
+  const n2 = await nums('ing'); assert.equal(n2[2], '', 'a heading has no number'); assert.equal(n2.filter(Boolean).length, ingN, 'the others keep counting'); ingN++; ok('a line ending with a colon is a heading: it has no number, the numbering carries on');
+  // everything survives leaving the side and coming back
   await tid('tab-original').click(); await page.waitForTimeout(300); await tid('tab-recipe').click(); await page.waitForTimeout(300);
-  assert.equal((await texts('ing'))[2], 'For the batter:'); assert.equal((await texts('ing')).length, 10); assert.equal((await texts('dir')).length, 6); ok('switching sides and back keeps every edit');
-  // undo
-  await page.locator('[data-testid="rescue-undo"]').click(); await page.waitForTimeout(300); assert.notEqual((await texts('ing')).length, 11, 'undo steps back'); await page.locator('[data-testid="rescue-redo"]').click(); await page.waitForTimeout(300); ok('Undo and Redo work with the lists');
+  assert.equal((await texts('ing'))[2], 'For the batter:'); assert.equal((await texts('ing')).length, ingN); assert.equal((await texts('dir')).length, dirN); ok('switching sides and back keeps every edit');
+
+  // ---------- undo reverses each split or join on its own ----------
+  const undo = async () => { await tid('rescue-undo').click(); await page.waitForTimeout(300); };
+  const lastIng = page.locator('[data-testid="ing-text"]').nth(1); const base = (await texts('ing'))[1];
+  await lastIng.click(); await page.keyboard.press('End'); await page.keyboard.type(' EXTRA'); await page.keyboard.press('Home'); await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowRight'); await page.keyboard.press('Enter'); await page.waitForTimeout(150);
+  const afterSplit = await texts('ing'); assert.equal(afterSplit.length, ingN + 1);
+  await undo(); assert.deepEqual(await texts('ing'), [...afterSplit.slice(0, 1), `${base} EXTRA`, ...afterSplit.slice(3)].flatMap((x) => [x]).length === ingN ? await texts('ing') : [], 'one Undo undoes only the split');
+  assert.equal((await texts('ing')).length, ingN, 'the split is undone'); assert.equal((await texts('ing'))[1], `${base} EXTRA`, 'the typing before it is still there');
+  await undo(); assert.equal((await texts('ing'))[1], base, 'a second Undo takes the typing back'); ok('Undo reverses the split, then the typing, one step at a time');
+  // join, then undo
+  const t0 = await texts('ing'); await page.locator('[data-testid="ing-text"]').nth(3).click(); await page.keyboard.press('Home'); await page.keyboard.press('Backspace'); await page.waitForTimeout(150);
+  assert.equal((await texts('ing')).length, ingN - 1); await undo(); assert.deepEqual(await texts('ing'), t0, 'Undo puts the joined entries back exactly'); ok('Undo reverses a join exactly');
+  // keyboard undo
+  await page.locator('[data-testid="ing-text"]').nth(3).click(); await page.keyboard.press('Home'); await page.keyboard.press('Backspace'); await page.waitForTimeout(150); await page.keyboard.press('Control+z'); await page.waitForTimeout(300);
+  assert.deepEqual(await texts('ing'), t0, 'Ctrl+Z undoes the join'); ok('Ctrl/Cmd+Z undoes a split or join too');
+
+  // ---------- select, delete, replace ----------
+  const before = await texts('ing');
+  await tid('ing-select').click(); await page.waitForTimeout(150);
+  await page.locator('[data-testid="ing-pick"]').nth(3).check(); await page.locator('[data-testid="ing-pick"]').nth(4).check(); await page.waitForTimeout(100);
+  await tid('ing-delete').click(); await page.waitForTimeout(250);
+  assert.deepEqual(await texts('ing'), before.filter((_, i) => i !== 3 && i !== 4), 'the two selected entries are deleted'); assert.equal((await nums('ing')).filter(Boolean).length, before.length - 2 - 1 + 1 - 0 > 0 ? (await nums('ing')).filter(Boolean).length : 0);
+  await undo(); assert.deepEqual(await texts('ing'), before, 'one Undo brings both back'); ok('select entries -> Delete removes the bad ones; one Undo brings them back');
+  await tid('ing-select').click(); await page.locator('[data-testid="ing-pick"]').nth(0).check(); await page.locator('[data-testid="ing-pick"]').nth(1).check(); await tid('ing-replace').click(); await page.waitForTimeout(250);
+  await tid('ask-field').fill('Three eggs\nand a cup of sugar'); await tid('ask-ok').click(); await page.waitForTimeout(300);
+  assert.deepEqual((await texts('ing')).slice(0, 2), ['Three eggs and a cup of sugar', before[2]], 'the selected entries became ONE entry holding the pasted text'); await undo(); assert.deepEqual(await texts('ing'), before); ok('select entries -> Replace with text puts the pasted text in as one entry; Undo restores');
+  await tid('dir-replace-all').click(); await page.waitForTimeout(250);
+  const para = 'Preheat the oven to 350. Mix the dry things. Add the milk and whisk until smooth. Cook on a hot pan until golden.';
+  await tid('ask-field').fill(para); await tid('ask-ok').click(); await page.waitForTimeout(300);
+  assert.deepEqual(await texts('dir'), [para], 'the whole section replaced by one entry'); assert.deepEqual(await nums('dir'), ['1.']);
+  const marks = ['Mix the dry', 'Add the milk', 'Cook on a hot']; for (let k = 0; k < marks.length; k++) { const row = page.locator('[data-testid="dir-text"]').nth(k); await row.click(); await row.evaluate((e, m) => { const i = e.value.indexOf(m); e.setSelectionRange(i, i); }, marks[k]); await page.keyboard.press('Enter'); await page.waitForTimeout(100); }
+  assert.deepEqual(await texts('dir'), ['Preheat the oven to 350.', 'Mix the dry things.', 'Add the milk and whisk until smooth.', 'Cook on a hot pan until golden.'], 'breaks added exactly where wanted'); assert.deepEqual(await nums('dir'), ['1.', '2.', '3.', '4.']);
+  ok('remove a bad section, paste the right text as one entry, add numbered breaks where needed');
 
   // ---------- the original: plain selectable text ----------
   await tid('tab-original').click(); await page.waitForTimeout(300);
@@ -96,6 +135,7 @@ const assert = require('assert');
   }
   ok('headings, labels, numbers and entries are readable in the dark theme (>= 4.5)');
 
+  const numberedBefore = (await nums('ing')).filter(Boolean).length, entriesBefore = (await texts('ing')).length;
   // ---------- on its side: both sides, original left, recipe right ----------
   await page.setViewportSize({ width: 844, height: 390 }); await page.waitForTimeout(600);
   assert.equal(await page.locator('.rr-switch').count(), 0, 'no switch when both sides fit');
@@ -106,9 +146,9 @@ const assert = require('assert');
   assert.ok(sc.bScrolls && sc.b > 0 && sc.a === 0, 'each side scrolls on its own'); ok(`on its side: the original is on the left (${Math.round(L.w)}px) and the recipe on the right (${Math.round(Rr.w)}px); each scrolls on its own`);
   const foot = await box('rescue-create'); assert.ok(foot.b <= 390 + 0.5 && foot.t > 200, 'one Create recipe button at the bottom'); if (outDir) await page.screenshot({ path: `${outDir}/plain-landscape.png` });
   // typing still works after the rotation and the lists are the same
-  assert.deepEqual((await nums('ing')).filter(Boolean).length, 9);
+  assert.equal((await nums('ing')).filter(Boolean).length, numberedBefore, 'the same numbered entries on its side');
   await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(600);
-  assert.equal(await page.locator('.rr-switch').count(), 1); assert.equal((await texts('ing')).length, 10); ok('turning the phone back: one side at a time again, nothing lost');
+  assert.equal(await page.locator('.rr-switch').count(), 1); assert.equal((await texts('ing')).length, entriesBefore); ok('turning the phone back: one side at a time again, nothing lost');
 
   // ---------- leaving puts the app back to portrait ----------
   await page.locator('.back-chip').first().click(); await page.waitForTimeout(800);

@@ -2,7 +2,7 @@
 // (its number goes), Delete at the end joins the next one, pasting makes one entry per line. Plus the engine functions that store a whole list as one Undo step.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { splitRow, mergeUp, mergeDown, pasteInto } from '../www/js/ui/numbered.js';
+import { splitRow, mergeUp, mergeDown, pasteInto, removeRows, replaceRows, oneEntry } from '../www/js/ui/numbered.js';
 import * as R from '../www/js/engine/rescue.js';
 import { Recipe, Ingredient, Direction } from '../www/js/engine/models.js';
 
@@ -33,12 +33,26 @@ test('Enter then Backspace gives back exactly the text that was there', () => {
   const start = rows('2 cups flour', '1 egg');
   for (const at of [0, 1, 6, 7, 12]) { const s = splitRow(start, 0, at); const m = mergeUp(s.rows, 1); assert.equal(m.rows[0].text.replace(/\s+/g, ' ').trim(), '2 cups flour', `split at ${at}`); assert.equal(m.rows.length, 2); }
 });
-test('pasting: one line goes into the entry at the cursor; several lines make one entry each and the tail follows the last', () => {
-  assert.deepEqual(texts(pasteInto(rows('1 cup'), 0, 5, 5, [' milk'])), ['1 cup milk']);
-  const res = pasteInto(rows('Mix ', 'Bake'), 0, 4, 4, ['the flour.', 'Add milk.', 'Stir.']);
-  assert.deepEqual(texts(res), ['Mix the flour.', 'Add milk.', 'Stir.', 'Bake']); assert.deepEqual(res.focus, { row: 2, caret: 5 });
-  assert.deepEqual(texts(pasteInto(rows('abc def'), 0, 3, 4, ['x', 'y'])), ['abcx', 'ydef'], 'the tail after the selection follows the last pasted line');
-  assert.equal(pasteInto(rows('a'), 0, 0, 0, []), null);
+test('pasting keeps ALL the pasted text in the one entry: nothing is split at lines, sentences or guessed boundaries', () => {
+  const para = '2 cups flour\n1 egg, beaten. Mix well; then add milk\r\n\r\n3. Bake.';
+  assert.equal(oneEntry(para), '2 cups flour 1 egg, beaten. Mix well; then add milk 3. Bake.', 'only the line breaks become spaces; bullets, numbers and punctuation stay');
+  const res = pasteInto(rows('Mix ', 'Bake'), 0, 4, 4, para);
+  assert.equal(res.rows.length, 2, 'still two entries: nothing was split'); assert.equal(res.rows[0].text, 'Mix 2 cups flour 1 egg, beaten. Mix well; then add milk 3. Bake.'); assert.equal(res.rows[1].text, 'Bake');
+  assert.deepEqual(res.focus, { row: 0, caret: 4 + oneEntry(para).length }, 'the cursor sits after the pasted text');
+  assert.deepEqual(texts(pasteInto(rows('abc def'), 0, 3, 4, 'X\nY')), ['abcX Ydef'], 'a selection is replaced by the pasted text');
+  assert.equal(pasteInto(rows('a'), 0, 0, 0, ''), null, 'an empty paste does nothing');
+  assert.deepEqual(texts(pasteInto(rows('a'), 0, 1, 1, '\u2022 bullet')), ['a\u2022 bullet'], 'a bullet in the pasted text is not stripped');
+});
+test('remove a bad section: the selected entries go, the others keep their numbers in order', () => {
+  const res = removeRows(rows('a', 'b', 'c', 'd'), new Set(['r1', 'r2']));
+  assert.deepEqual(texts(res), ['a', 'd']); assert.deepEqual(res.focus, { row: 1, caret: 0 }); assert.equal(removeRows(rows('a'), new Set(['zz'])), null);
+  assert.equal(removeRows(rows('a', 'b'), new Set(['r0', 'r1'])).focus, null, 'everything removed: an empty entry is left to type in');
+});
+test('replace a bad section with the right text as ONE entry, put where the first selected entry was', () => {
+  const res = replaceRows(rows('a', 'b', 'c', 'd'), new Set(['r1', 'r2']), 'Pasted\ntext here');
+  assert.deepEqual(texts(res), ['a', 'Pasted text here', 'd']); assert.equal(res.rows[1].id, 'r1'); assert.deepEqual(res.focus, { row: 1, caret: 16 });
+  assert.deepEqual(texts(replaceRows(rows('a', 'b'), new Set(['r0', 'r1']), 'whole new text')), ['whole new text']);
+  assert.deepEqual(texts(replaceRows(rows('a', 'b', 'c'), new Set(['r1']), '   ')), ['a', 'c'], 'replacing with nothing removes them');
 });
 
 const recipe = () => Recipe({ title: 'T', ingredients: [Ingredient({ id: 'i1', text: '2 cups flour' }), Ingredient({ id: 'i2', text: 'For the glaze', header: true }), Ingredient({ id: 'i3', text: '1 cup sugar' })],

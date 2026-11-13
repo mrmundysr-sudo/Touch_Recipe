@@ -19,10 +19,10 @@ export const draftFromImport = (d) => R.newDraft({ recipe: d.recipe, source: d.s
 
 export function rescueScreen(params, ctx, nav) {
   const drafts = ctx.drafts;
-  let st = null, tab = 'recipe', lastWide = null, alive = true, saveTimer = null;
+  let st = null, tab = 'recipe', lastWide = null, alive = true, saveTimer = null, lastCaret = null, restore = null;
   const editors = new Set();
   const page = ScrollPage({ title: 'Recipe Rescue', testid: 'rescue', slot: null, onBack: () => leave() });
-  const undoBtn = iconBtn('Undo', '↶', () => act(R.undo), ''); const redoBtn = iconBtn('Redo', '↷', () => act(R.redo), '');
+  const undoBtn = iconBtn('Undo', '↶', () => stepHistory(R.undo), ''); const redoBtn = iconBtn('Redo', '↷', () => stepHistory(R.redo), '');
   undoBtn.dataset.testid = 'rescue-undo'; redoBtn.dataset.testid = 'rescue-redo';
   page.head.querySelector('.sp-actions').append(undoBtn, redoBtn);
 
@@ -39,6 +39,14 @@ export function rescueScreen(params, ctx, nav) {
   const recipe = () => st.draft.recipe;
   const hasImg = () => R.allFiles(st.draft.source).some((f) => !/\.pdf$/i.test(f));
   const wideNow = () => isWideScreen(window.innerWidth, window.innerHeight);
+  /** A box to paste text into (for "Replace with text"). The text is handed back exactly as typed or pasted. */
+  const askText = ({ title, hint = '', ok = 'OK', onOk }) => sheet({ label: title, tall: true, content: (close) => {
+    const f = h('textarea', { class: 'rr-field', rows: '8', 'aria-label': title, placeholder: hint, 'data-testid': 'ask-field' });
+    return h('div', { class: 'sheet-col' }, h('h2', { class: 'sheet-title' }, title), h('p', { class: 'sheet-note' }, hint), f,
+      h('div', { class: 'sheet-row' }, bigButton('Cancel', () => close(), { primary: false }), bigButton(ok, () => { close(false); onOk(f.value); }, { testid: 'ask-ok' })));
+  } });
+  /** Undo / Redo: afterwards the cursor goes back to where it was (the nearest entry when that entry is gone). */
+  const stepHistory = (f) => { restore = lastCaret; act(f); };
 
   // ---------- photo ----------
   async function photoMenu() {
@@ -107,8 +115,11 @@ export function rescueScreen(params, ctx, nav) {
       textField('Prep minutes', r.prepMinutes ?? '', (v) => field((s) => R.setTime(s, 'prep', v)), { testid: 'rr-prep', inputmode: 'numeric' }),
       textField('Cook minutes', r.cookMinutes ?? '', (v) => field((s) => R.setTime(s, 'cook', v)), { testid: 'rr-cook', inputmode: 'numeric' })));
     const flagged = (kind) => (t) => (t.trim() && !R.isHeadingText(t) ? R.reviewReason(t, kind) : null);
-    const ing = numberedList({ rows: R.ingredientRows(r), label: 'Ingredient', testid: 'ing', placeholder: 'Paste or type the ingredients. Enter starts the next one.', clean: (text) => R.ingredientLines(text).map((l) => l.replace(/^\d{1,2}\s*[.)]\s+(?=\S)/, '')), review: flagged('ing'), onChange: (rows) => field((s) => R.setIngredientRows(s, rows)) });
-    const dir = numberedList({ rows: R.stepRows(r), label: 'Step', testid: 'dir', placeholder: 'Paste or type the steps. Enter starts the next one.', clean: R.stepLines, review: flagged('dir'), onChange: (rows) => field((s) => R.setStepRows(s, rows)) });
+    const common = { ask: askText, notify: (label) => undoable(label, () => stepHistory(R.undo)), onUndo: () => stepHistory(R.undo), onRedo: () => stepHistory(R.redo) };
+    const at = (id) => (restore && restore.list === id ? { row: restore.row, caret: restore.caret } : null);
+    const ing = numberedList({ ...common, rows: R.ingredientRows(r), label: 'Ingredient', testid: 'ing', placeholder: 'Paste or type the ingredients. Enter starts the next one.', review: flagged('ing'), onChange: (rows) => field((s) => R.setIngredientRows(s, rows)), onCaret: (c) => { lastCaret = { list: 'ing', ...c }; }, focus: at('ing') });
+    const dir = numberedList({ ...common, rows: R.stepRows(r), label: 'Step', testid: 'dir', placeholder: 'Paste or type the steps. Enter starts the next one.', review: flagged('dir'), onChange: (rows) => field((s) => R.setStepRows(s, rows)), onCaret: (c) => { lastCaret = { list: 'dir', ...c }; }, focus: at('dir') });
+    restore = null;
     editors.add(ing); editors.add(dir);
     out.push(h('div', { class: 'rr-group' }, h('span', { class: 'rr-label' }, 'Ingredients'), ing.el));
     out.push(h('div', { class: 'rr-group' }, h('span', { class: 'rr-label' }, 'Steps'), dir.el));
