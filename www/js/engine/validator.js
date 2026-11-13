@@ -19,6 +19,10 @@ export function validate(d) {
   if (ings.length === 1 && steps.length >= 2) add('ingredients', 'Only one ingredient was found, which is unusual. Compare with the original.');
   if (ings.length >= 5 && !ings.some((i) => leadingQty.test(i.text))) add('ingredients', 'None of the ingredients has an amount. The amounts may not have been captured.');
 
+  // ingredient lines that ended up at the top of the directions: name them so the owner can see exactly which ones to move
+  const lead = []; for (const x of steps) { const t = x.text.trim(); if (leadingQty.test(t) && t.length < 120 && !/[.!?]$/.test(t) && !/^\d+\s*[.)]\s/.test(t)) lead.push(t); else break; }
+  if (lead.length >= 2) add('directions', `The first ${lead.length} directions look like ingredients (starting "${lead[0].slice(0, 40)}"). Move them to the ingredients.`);
+
   const last = steps.length ? steps[steps.length - 1].text.trim() : null;
   if (last && last.split(' ').length >= 4 && dangling.test(last)) add('directions', 'The last direction seems to stop mid-sentence. Some text may be missing.');
   if (steps.length && steps.every((x) => x.text.length < 4)) add('directions', 'Some directions look incomplete. Compare with the original page.');

@@ -49,6 +49,32 @@ const SIZES = [[390, 844], [375, 667], [320, 568]];
     await page.context().close();
   }
 
+  // ---------- Review & Save: nothing clipped, ingredients and steps classified correctly ----------
+  {
+    const { page, errors } = await open(390, 844);
+    const res = await page.evaluate(async () => {
+      const { ctx, nav } = window.__app;
+      const ing = ['1 pound Ground Beef (93% lean or leaner)', '4 medium red, yellow or green bell peppers', '1/2 cup minced onion', '2 teaspoons minced garlic', '1 can (14-1/2 ounces) diced tomatoes with green peppers and onions, drained'];
+      const text = ['Classic Beef-Stuffed Peppers With Rice And Tomatoes For A Weeknight Family Dinner', 'Ingredients:', ...ing.map((l) => `• ${l}`), 'Cooking:', '1. Preheat the oven to 475°F and grease a baking dish.', '2. Brown the beef with the onion and garlic for 4 minutes, then stir in the tomatoes.'].join('\n');
+      const d = await ctx.importer.import({ type: 'text', text, sourceUrl: 'https://www.example-beef-council.org/recipes/recipe/55603/classic-beef-stuffed-peppers-with-rice' });
+      ctx.importSession.draft = d; nav.go('review', {});
+      return { ing: d.recipe.ingredients.length, dir: d.recipe.directions.length };
+    });
+    check(res.ing === 5 && res.dir === 2, `Review: 5 ingredients and 2 steps imported (${JSON.stringify(res)})`);
+    await page.waitForTimeout(1500);
+    await page.locator('[data-testid=source-field]').fill('https://www.example-beef-council.org/recipes/recipe/55603/classic-beef-stuffed-peppers-with-rice-and-tomatoes'); await page.waitForTimeout(300);
+    const m = await page.evaluate(() => {
+      const clip = (e) => e.scrollHeight > e.clientHeight + 1 || e.scrollWidth > e.clientWidth + 1;
+      const t = document.querySelector('[data-testid=title-field]'), s = document.querySelector('[data-testid=source-field]');
+      return { title: t && clip(t), source: s && clip(s), rows: [...document.querySelectorAll('[data-testid="ing-rows"] .row-input')].map((e) => clip(e)), n: document.querySelectorAll('[data-testid="ing-rows"] .row-input').length, dirs: document.querySelectorAll('[data-testid="dir-rows"] .row-input').length };
+    });
+    check(m.title === false && m.source === false, `Review: the long title and source are fully visible (${JSON.stringify({ t: m.title, s: m.source })})`);
+    check(m.n === 5 && m.dirs === 2 && m.rows.every((c) => !c), `Review: ${m.n} ingredient rows and ${m.dirs} steps, none cut off`);
+    if (outDir) await page.screenshot({ path: `${outDir}/review-390.png` });
+    check(errors.length === 0, `Review: no page errors ${errors.join('; ')}`);
+    await page.context().close();
+  }
+
   // ---------- Grocery list: amounts stay with their names, long names are not clipped ----------
   {
     const { page, errors } = await open(390, 844);
@@ -90,7 +116,7 @@ const SIZES = [[390, 844], [375, 667], [320, 568]];
     const lastRow = await page.locator('[data-testid="ing-row"]').last().evaluate((e) => { const r = e.getBoundingClientRect(); return { b: r.bottom, t: r.top }; });
     check(rows >= 14 && lastRow.b <= create.t - 4 && lastRow.t >= 0, `Rescue ${tag}: the last of ${rows} ingredient rows can be brought fully above the Create button`);
     const lastTa = page.locator('[data-testid="ing-text"]').last(); await lastTa.click(); await page.keyboard.press('End'); await page.keyboard.type(' X');
-    check((await lastTa.inputValue()).endsWith(' X'), `Rescue ${tag}: the last ingredient row can be tapped and edited`);
+    const lv = await lastTa.inputValue(); check(lv.endsWith(' X'), `Rescue ${tag}: the last ingredient row can be tapped and edited (${JSON.stringify(lv.slice(-20))})`);
     await page.evaluate(() => document.activeElement.blur());
 
     if (w !== 390) { await page.context().close(); continue; }

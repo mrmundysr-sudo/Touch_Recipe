@@ -93,19 +93,34 @@ export function reviewScreen(params, ctx, nav) {
   function drawPhoto() { mount(photoHolder); if (s.photo) { const p = photoImg(ctx.photos, s.photo, { fallback: s.title, alt: 'Recipe photo. Tap to change.', frame: s.photoFrame }); p.style.cssText = 'position:absolute;inset:0'; photoHolder.append(p); } }
   // title + source
   const titleStyle = `font-family:var(--display);font-weight:700;font-size:${sp(32)};color:var(--ink)`;
-  const title = h('input', { type: 'text', value: s.title, 'data-testid': 'title-field', 'aria-label': 'Recipe title', placeholder: 'Recipe title', autocapitalize: 'words', enterkeyhint: 'next',
-    style: `width:100%;border:0;background:transparent;${titleStyle}`, oninput: (e) => { edit((x) => ({ ...x, title: e.target.value })); if (s.showErrors) renderErrors(); } });
+  const title = h('textarea', { rows: '1', value: s.title, 'data-testid': 'title-field', 'aria-label': 'Recipe title', placeholder: 'Recipe title', autocapitalize: 'words', enterkeyhint: 'next',
+    style: `width:100%;border:0;background:transparent;resize:none;overflow:hidden;overflow-wrap:anywhere;line-height:1.05;${titleStyle}`, onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } },
+    oninput: (e) => { edit((x) => ({ ...x, title: e.target.value })); if (s.showErrors) renderErrors(); refit(title, 0.55); } });
   const titleBox = place(h('div', { style: `display:flex;align-items:center;padding-left:${dp(14)};padding-right:${dp(48)};border-radius:${dp(14)}` }, title), page.region('title'));
   const titleErr = place(h('div', { 'aria-hidden': 'true', style: `border:3px solid var(--error);border-radius:${dp(14)};display:none;pointer-events:none` }), page.region('title'));
-  const source = h('input', { type: 'url', value: s.sourceText, 'data-testid': 'source-field', 'aria-label': 'Source', placeholder: 'Source (website or cookbook)', autocapitalize: 'none', enterkeyhint: 'next',
-    style: `width:100%;border:0;background:transparent;font-size:${sp(28)};color:var(--ink)`, oninput: (e) => edit((x) => ({ ...x, sourceText: e.target.value })) });
+  const source = h('textarea', { rows: '1', inputmode: 'url', spellcheck: 'false', value: s.sourceText, 'data-testid': 'source-field', 'aria-label': 'Source', placeholder: 'Source (website or cookbook)', autocapitalize: 'none', enterkeyhint: 'next',
+    style: `width:100%;border:0;background:transparent;resize:none;overflow:hidden;overflow-wrap:anywhere;line-height:1.1;font-size:${sp(28)};color:var(--ink)`, onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } },
+    oninput: (e) => { edit((x) => ({ ...x, sourceText: e.target.value })); refit(source, 0.4); } });
   const sourceBox = place(h('div', { style: `display:flex;align-items:center;padding:0 ${dp(10)}` }, source), page.region('source'));
+  /** A long title or link wraps onto a second line and, if it still does not fit its box, the type shrinks (down to 55%) instead of being cut off. */
+  function fitField(el, floor = 0.55) {
+    el.style.fontSize = ''; el.style.height = '100%';
+    const base = parseFloat(getComputedStyle(el).fontSize); let size = base;
+    for (let i = 0; i < 24 && el.scrollHeight > el.clientHeight + 1 && size > base * floor; i++) { size *= 0.93; el.style.fontSize = `${size}px`; }
+  }
+  /** While editing, a field that had to shrink opens up over its neighbours at full size so the whole text can be read and changed. */
+  const refit = (el, floor) => { if (document.activeElement === el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } else fitField(el, floor); };
+  const openOnFocus = (el, floor) => { el.addEventListener('focus', () => { el.style.fontSize = ''; el.style.position = 'absolute'; el.style.left = '0'; el.style.right = '0'; el.style.top = '0'; el.style.height = 'auto'; el.style.zIndex = '6'; el.style.background = 'var(--cream, #FBF4E6)'; el.style.overflow = 'visible'; el.style.height = `${el.scrollHeight}px`; });
+    el.addEventListener('blur', () => { ['position', 'left', 'right', 'top', 'zIndex', 'background', 'overflow'].forEach((k) => { el.style[k] = ''; }); el.style.overflow = 'hidden'; fitField(el, floor); }); };
+  openOnFocus(title, 0.55); openOnFocus(source, 0.4);
+  requestAnimationFrame(() => { fitField(title); fitField(source, 0.4); });
   function renderErrors() { const bad = s.showErrors && !s.title.trim(); titleErr.style.display = bad ? 'block' : 'none'; title.placeholder = bad ? 'Title needed' : 'Recipe title'; }
 
   const badge = (label, messages, rect, extra = {}) => {
     if (!messages.length) return null;
     const b = h('button', { type: 'button', 'aria-label': `Needs a look: ${label}`, 'data-testid': `warn:${label}`, style: 'width:48px;height:48px;border:0;background:transparent;display:flex;align-items:center;justify-content:center;padding:0',
-      onclick: () => dialog({ title: `Check: ${label}`, content: h('div', null, messages.map((m) => h('p', null, `• ${m}`))), confirm: 'OK', noCancel: true }) },
+      onclick: () => dialog({ title: `Check: ${label}`, content: h('div', null, messages.map((m) => h('p', null, `• ${m}`))), confirm: label === 'ingredients' || label === 'directions' ? `Show the ${label}` : 'OK', cancel: 'Close', noCancel: !(label === 'ingredients' || label === 'directions'),
+        onConfirm: () => { if (label === 'ingredients' || label === 'directions') (label === 'ingredients' ? ingEd : dirEd).el.querySelector('.row-input')?.focus({ preventScroll: false }); } }) },
       h('span', { style: 'width:28px;height:28px;border-radius:50%;background:#FFE08A;border:2px solid #8A5A00;color:#5A3A00;font-weight:800;display:flex;align-items:center;justify-content:center' }, '!'));
     place(b, rect); Object.assign(b.style, { position: 'absolute', ...extra }); return b;
   };

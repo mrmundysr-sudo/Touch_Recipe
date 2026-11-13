@@ -134,7 +134,7 @@ hr.div { border: 0; border-top: 1px solid var(--outline); opacity: .4; margin: 1
 .row-item.dragging { z-index: 5; box-shadow: 0 8px 20px rgba(0, 0, 0, .3); }
 .row-handle { width: 40px; height: 44px; display: flex; align-items: center; justify-content: center; color: var(--wood); font-size: calc(22px * var(--ts)); touch-action: none; flex: none; }
 .row-num { width: 26px; height: 26px; border-radius: 50%; background: var(--forest); color: var(--cream); font-size: calc(13px * var(--ts)); font-weight: 700; display: flex; align-items: center; justify-content: center; margin-right: 8px; flex: none; }
-.row-input { flex: 1; min-width: 0; border: 0; background: transparent; font-size: calc(16px * var(--ts)); padding: 12px 4px; color: var(--ink); }
+.row-input { flex: 1; min-width: 0; border: 0; background: transparent; resize: none; overflow: hidden; overflow-wrap: anywhere; font-family: inherit; line-height: 1.25; font-size: calc(16px * var(--ts)); padding: 12px 4px; color: var(--ink); }
 .row-input.header { font-weight: 700; }
 .row-moves { display: flex; flex-direction: column; flex: none; }
 .row-moves .mini { width: 32px; height: 22px; border: 0; background: transparent; color: var(--wood); font-size: calc(11px * var(--ts)); padding: 0; }

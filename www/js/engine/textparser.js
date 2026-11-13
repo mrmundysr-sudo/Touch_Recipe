@@ -7,7 +7,7 @@ import { validate } from './validator.js';
 // a heading may carry a count or the scale buttons of a recipe card: "Ingredients (12)", "Ingredients 1x 2x 3x", "Ingredients: 10"
 const HEAD_TAIL = '(?:\\s*\\(?\\d{1,3}\\)?|(?:\\s+\\d(?:/\\d)?\\s?x)+|\\s+(?:us customary|metric|scale|cook mode)(?:\\s.*)?)?';
 const ingHeader = new RegExp('^\\W*(ingredients?|what you.?ll need|you will need|for the .*)\\W*' + HEAD_TAIL + '\\W*$', 'i');
-const dirHeader = new RegExp('^\\W*(directions?|instructions?|method|preparation|steps?|procedure|how to make( it)?)\\W*' + HEAD_TAIL + '\\W*$', 'i');
+const dirHeader = new RegExp('^\\W*(cooking(?: directions?| instructions?| steps?)?(?=\\s*:)|directions?|instructions?|method|preparation|steps?|procedure|how to make( it)?)\\W*' + HEAD_TAIL + '\\W*$', 'i');
 const noteHeader = /^\W*(notes?|tips?|substitutions?|variations?|cook'?s notes?)\W*:?\s*$/i;
 // any leading marks (bullets, tick boxes, circled numbers, private-use glyphs) that are not text, a digit, a fraction or a bracket
 const bullet = /^[^\p{L}\p{Nd}(\[¼½¾⅓⅔⅛⅜⅝⅞]+/u;
@@ -39,6 +39,7 @@ const COUNT_LINE = /^\W*ingredients?\s*:\s*\d{1,3}\W*$/i;      // "Ingredients: 
 const SUBMITTED = /^\W*submitted by\s+(\S.{0,60}?)(?:\s+\d{1,3})?\s*$/i;   // a trailing number is the page's review count, not part of the name
 const EDITOR_NOTE = /^\W*editor'?s? note\s*:?\s*(.*)$/i;
 const AMOUNT_ONLY = /^\W*\d{1,3}(?:[./]\d{1,3})?\W*$/;
+const TIP_LINE = /^\W*((?:cook(?:ing|'s|s)|chef'?s?)? ?tips?)\s*:\s*(\S.*)$/i;
 const COURSE_LINE = /^\W*(course|category)\s*[:\-]?\s*(\S.{0,40}?)(?=\s+(?:prep(?:aration)?|cook(?:ing)?|total|ready in|serv(?:es|ings?)|yield|makes)\b|$)(.*)$/i;
 const META_EACH = /(prep(?:aration)?(?: time)?|cook(?:ing)?(?: time)?|total(?: time)?|ready in|serv(?:es|ings?)|yield|makes)\s*[:\-]?\s*(.*?)(?=\s+(?:prep(?:aration)?(?: time)?|cook(?:ing)?(?: time)?|total(?: time)?|ready in|serv(?:es|ings?)|yield|makes)\b|$)/gi;
 
@@ -116,6 +117,12 @@ function mergeWrapped(items) {
 
 const maxBy = (arr, f) => { let best = arr[0], bs = -Infinity; for (const x of arr) { const v = f(x); if (v > bs) { bs = v; best = x; } } return best; };
 const ingLike = (l) => looksLikeIngredient(l) || ingredientLike(l.replace(bullet, ''));
+/** True when a line (read under an Ingredients heading) is where the method starts: a numbered step, or a long line that is not an ingredient line. */
+const isStepStart = (l) => {
+  const t = l.replace(bullet, '').trim();
+  if (stepNum.test(t) && !qtyStart.test(t.replace(stepNum, ''))) return true;
+  return !ingLike(l) && t.length > 40;
+};
 const subHeader = (l) => l.length < 50 && (l.endsWith(':') || (/^for /i.test(l) && l.split(' ').length <= 4 && !/[\d,]/.test(l)));
 const stepChars = (b) => b.filter(stepLike).reduce((n, l) => n + l.length, 0);
 
@@ -164,6 +171,9 @@ export function parse(raw, method = ImportMethod.TEXT, sourceUrl = null, titleHi
       const by = /^by\s+(\S[^:]{1,40})$/i.exec(line);
       if (by && sections.pre.length <= 2 && !/\d/.test(line)) { author = by[1].trim(); continue; }
     }
+    // "Cooking Tip: Cooking times are for fresh beef." is a note, not a step
+    const tip = TIP_LINE.exec(line);
+    if (tip && current !== 'ing' && current !== 'pre') { sections.note.push(`${tip[1].replace(/\b\w/g, (c) => c.toUpperCase())}: ${tip[2].trim()}`); continue; }
     const mm = metaRe.exec(line);
     if (mm && mm[2].trim() && line.length < 140 && (current !== 'dir' || STRICT_META.test(line))) {
       // one line may carry several values: "Servings: 36  Prep time: 20 minutes  Cook time: 11 minutes"
@@ -232,10 +242,12 @@ export function parse(raw, method = ImportMethod.TEXT, sourceUrl = null, titleHi
     const title = pre.find((l) => !looksLikeIngredient(l) && l.length < 100);
     const body = pre.filter((l) => l !== title);
     sections.pre = title !== undefined ? [title] : [];
-    for (const l of body) (looksLikeIngredient(l) && l.length < 120 ? sections.ing : sections.dir).push(l);
+    for (const l of body) (ingLike(l) && !isStepStart(l) && l.length < 120 ? sections.ing : sections.dir).push(l);
   } else if (sawIngHeader && !sawDirHeader && sections.dir.length === 0) {
     const ing = sections.ing;
-    const split = ing.findIndex((l) => !looksLikeIngredient(l) && l.length > 40);
+    // No Directions heading: the steps start at the first line that reads like a step. A line with a quantity in front is an ingredient
+    // even when it has no unit word ("4 medium red, yellow or green bell peppers"); a numbered line is a step.
+    const split = ing.findIndex((l) => isStepStart(l));
     if (split > 0) { const tail = ing.splice(split); sections.dir.push(...tail); }
   }
 

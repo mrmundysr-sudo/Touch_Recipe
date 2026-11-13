@@ -119,6 +119,8 @@ export function photoImg(photos, name, { fallback = '', cls = '', alt = '', fram
  * rows: [{id,text,header}] ; callbacks onRows(newRows) onDelete(row,index). Returns {el, focusLast()}.
  * Drag handle reorders (pointer events); the up/down buttons and Enter-to-add-next-row serve everyone else.
  */
+/** Rows wrap onto as many lines as the text needs; nothing is cut off. */
+const growRow = (t) => { t.style.height = 'auto'; t.style.height = `${t.scrollHeight}px`; };
 export function editableRows({ rows, onRows, onDelete, numbered = false, hint, showErrors = false, newRow, tag = 'rows', compact = false, fontSize = null, lineHeight = null }) {
   const list = h('div', { class: 'rows' + (compact ? ' compact' : ''), 'data-testid': tag });
   const state = { rows };
@@ -130,10 +132,10 @@ export function editableRows({ rows, onRows, onDelete, numbered = false, hint, s
     const kids = state.rows.map((row, index) => {
       const num = row.header ? 0 : ++n;
       const invalid = showErrors && !row.text.trim();
-      const input = h('input', {
-        class: 'row-input' + (row.header ? ' header' : ''), type: 'text', value: row.text, style: fontSize ? `font-size:${fontSize};${lineHeight ? 'line-height:' + lineHeight : ''}` : null, autocapitalize: 'sentences', enterkeyhint: 'next',
+      const input = h('textarea', {
+        class: 'row-input' + (row.header ? ' header' : ''), rows: '1', value: row.text, style: fontSize ? `font-size:${fontSize};${lineHeight ? 'line-height:' + lineHeight : ''}` : null, autocapitalize: 'sentences', enterkeyhint: 'next',
         placeholder: invalid ? `${hint} (can't be empty)` : hint, 'aria-label': (numbered ? `Step ${num}` : `Item ${index + 1}`) + (row.header ? ', section title' : ''), 'data-row': String(index),
-        oninput: (e) => { state.rows[index] = { ...state.rows[index], text: e.target.value }; onRows(state.rows); },
+        oninput: (e) => { state.rows[index] = { ...state.rows[index], text: e.target.value }; onRows(state.rows); growRow(e.target); },
         onkeydown: (e) => {
           if (e.key === 'Enter') { e.preventDefault(); if (index === state.rows.length - 1) { const nr = newRow(); focusId = nr.id; set([...state.rows, nr]); } else list.querySelectorAll('.row-input')[index + 1]?.focus(); }
         },
@@ -152,6 +154,8 @@ export function editableRows({ rows, onRows, onDelete, numbered = false, hint, s
       return rowEl;
     });
     mount(list, kids);
+    list.querySelectorAll('.row-input').forEach((t) => { t.value = state.rows[Number(t.dataset.row)].text; });
+    requestAnimationFrame(() => list.querySelectorAll('.row-input').forEach(growRow));
     if (focusId) { const i = state.rows.findIndex((r) => r.id === focusId); focusId = null; if (i >= 0) { const inp = list.querySelectorAll('.row-input')[i]; inp?.focus(); inp?.scrollIntoView({ block: 'nearest' }); } }
   }
   function startDrag(e, index, rowEl) {

@@ -34,3 +34,4 @@
 | K-030 | Rescue / iOS | Zoom and pan are verified with synthetic pointer events in Chromium, not with real fingers on WKWebView. Pinch uses pointer events with `touch-action:none` on an overlay; if iOS reports the touches differently the +/− and Fit buttons still work. Needs a device pass. |
 | K-031 | Rescue | The reported "Create recipe covers the last ingredient rows" did not reproduce in Chromium; the pane now ends with 120px of space. Not confirmed on a device. |
 | K-032 | Parity | Course field, colon-less times, can-size grocery parsing, cup roll-up, Cook Mode layout and Rescue zoom/pan exist only in the iOS web app; the Kotlin app is unchanged. |
+| K-033 | Parity / import | The "quantity line is an ingredient", "Cooking:" heading, tip-to-notes and Review text-wrapping changes exist only in the iOS web app. The peppers fix was reproduced from the recipe's text structure, not the exact page HTML; run the real URL on a device. |
