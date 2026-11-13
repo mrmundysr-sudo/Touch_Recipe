@@ -6,6 +6,7 @@ import { initSnack, initOverlays } from './ui/widgets.js';
 import { Repository } from './data/repo.js';
 import { IdbBackend } from './data/idb.js';
 import { PhotoStore } from './data/photos.js';
+import { DraftStore } from './data/drafts.js';
 import { Prefs, TextSize } from './data/prefs.js';
 import * as Planner from './engine/planner.js';
 import { splashScreen, hubScreen, drawerScreen } from './screens/hub.js';
@@ -17,9 +18,10 @@ export const routes = {
   [Routes.COLLECTION]: collectionScreen, [Routes.DETAIL]: detailScreen,
 };
 export async function registerLateRoutes() {
-  const mods = await Promise.allSettled([import('./screens/cook.js'), import('./screens/import.js'), import('./screens/review.js'), import('./screens/planner.js'), import('./screens/grocery.js'), import('./screens/utility.js')]);
-  const [cook, imp, review, planner, grocery, util] = mods.map((m) => (m.status === 'fulfilled' ? m.value : {}));
+  const mods = await Promise.allSettled([import('./screens/cook.js'), import('./screens/import.js'), import('./screens/review.js'), import('./screens/planner.js'), import('./screens/grocery.js'), import('./screens/utility.js'), import('./screens/rescue.js'), import('./screens/unfinished.js')]);
+  const [cook, imp, review, planner, grocery, util, rescue, unf] = mods.map((m) => (m.status === 'fulfilled' ? m.value : {}));
   Object.assign(routes, {
+    ...(rescue.rescueScreen ? { [Routes.RESCUE]: rescue.rescueScreen } : {}), ...(unf.unfinishedScreen ? { [Routes.UNFINISHED]: unf.unfinishedScreen, [Routes.ORIGINAL]: unf.originalScreen } : {}),
     ...(cook.cookScreen ? { [Routes.COOK]: cook.cookScreen } : {}), ...(imp.importScreen ? { [Routes.IMPORT]: imp.importScreen } : {}), ...(review.reviewScreen ? { [Routes.REVIEW]: review.reviewScreen } : {}),
     ...(planner.plannerScreen ? { [Routes.PLANNER]: planner.plannerScreen } : {}), ...(grocery.groceryScreen ? { [Routes.GROCERY]: grocery.groceryScreen } : {}),
     ...(util.settingsScreen ? { [Routes.SETTINGS]: util.settingsScreen, [Routes.CATEGORIES]: util.categoriesScreen, [Routes.BACKUP]: util.backupScreen, [Routes.THEMES]: util.themesScreen, [Routes.HELP]: util.helpScreen, [Routes.TOOLS]: util.toolsScreen, [Routes.PRINT]: util.printScreen } : {}),
@@ -48,13 +50,16 @@ export async function boot({ backend = new IdbBackend(), storage = globalThis.lo
   const photos = new PhotoStore(backend);
   const art = await new ArtLoader('art/').init();
   const weekState = { v: Planner.weekStart(Planner.today(), prefs.sundayStart ? 0 : 1), subs: new Set(), get value() { return this.v; }, set(x) { this.v = x; this.subs.forEach((f) => f()); }, subscribe(f) { this.subs.add(f); return () => this.subs.delete(f); } };
-  const importer = new ImportService({ photos });
+  const drafts = new DraftStore(backend);
+  const importer = new ImportService({ photos, originals: drafts });
   let appInfo = null; try { appInfo = await plugin('App')?.getInfo?.(); } catch { /* browser */ }
-  const ctx = { repo, prefs, photos, art, backend, importer, appInfo, week: weekState, importSession: { draft: null, photoFile: null, clear() { this.draft = null; this.photoFile = null; } }, pending: { share: null } };
+  const ctx = { repo, prefs, photos, drafts, art, backend, importer, appInfo, week: weekState, importSession: { draft: null, photoFile: null, clear() { this.draft = null; this.photoFile = null; } }, pending: { share: null } };
   const root = document.getElementById('app');
   const host = h('div', { id: 'host', style: 'position:absolute;inset:0' });
   root.append(host);
   initOverlays(root); initSnack(root);
+  // originals kept for recipes that no longer exist (deleted earlier, undo window long gone) are removed
+  try { const keep = new Set(repo.recipes().map((r) => r.id)); for (const o of await drafts.allLinked()) if (!keep.has(o.recipeId)) await drafts.unlink(o.recipeId); } catch (e) { console.error(e); }
   await registerLateRoutes();
   const nav = new Nav(host, routes, ctx);
   ctx.nav = nav;

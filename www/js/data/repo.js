@@ -16,6 +16,20 @@ export class MemoryBackend {
   constructor(initial = null) { this.data = initial; }
   async load() { return this.data ? clone(this.data) : null; }
   async save(state) { this.data = clone(state); }
+  // drafts, originals and photos (same contract as IdbBackend)
+  drafts = new Map(); originals = new Map(); photoMap = new Map();
+  async putDraft(id, d) { this.drafts.set(id, clone(d)); }
+  async getDraft(id) { return this.drafts.has(id) ? clone(this.drafts.get(id)) : null; }
+  async deleteDraft(id) { this.drafts.delete(id); }
+  async draftIds() { return [...this.drafts.keys()]; }
+  async putOriginal(n, b) { this.originals.set(n, b); }
+  async getOriginal(n) { return this.originals.get(n) ?? null; }
+  async deleteOriginal(n) { this.originals.delete(n); }
+  async originalNames() { return [...this.originals.keys()]; }
+  async putPhoto(n, b) { this.photoMap.set(n, b); }
+  async getPhoto(n) { return this.photoMap.get(n) ?? null; }
+  async deletePhoto(n) { this.photoMap.delete(n); }
+  async photoNames() { return [...this.photoMap.keys()]; }
 }
 
 export class Repository {

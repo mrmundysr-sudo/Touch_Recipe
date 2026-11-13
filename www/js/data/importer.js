@@ -4,6 +4,8 @@
 import * as Text from '../engine/textparser.js';
 import * as Web from '../engine/webextract.js';
 import { ImportMethod, Confidence, Severity, warn } from '../engine/models.js';
+import { emptySource, pageText } from '../engine/rescue.js';
+import * as Img from './imagetools.js';
 
 export class ImportFailure extends Error {
   constructor(userMessage, { retryable = false, offline = false, blocked = false } = {}) { super(userMessage); this.userMessage = userMessage; this.retryable = retryable; this.offline = offline; this.blocked = blocked; }
@@ -79,7 +81,9 @@ const urlRegex = /https?:\/\/[^\s<>"']+/i;
 const socialHosts = ['tiktok.com', 'instagram.com', 'facebook.com', 'fb.watch', 'fb.com'];
 
 export class ImportService {
-  constructor({ fetcher = new HttpPageFetcher(), ocr = new VisionOcr(), photos } = {}) { this.fetcher = fetcher; this.ocr = ocr; this.photos = photos; }
+  constructor({ fetcher = new HttpPageFetcher(), ocr = new VisionOcr(), photos, originals = null, clock = () => Date.now() } = {}) { this.fetcher = fetcher; this.ocr = ocr; this.photos = photos; this.originals = originals; this.clock = clock; }
+  /** Keeps the original of an import (the page text, pictures or PDF) so it can be looked at later; never required for the import to work. */
+  withSource(draft, source) { return { ...draft, source: { ...emptySource(), capturedAt: this.clock(), ...source } }; }
 
   classify(text) {
     const t = text.trim();
@@ -91,7 +95,7 @@ export class ImportService {
   async import(input, onStatus = () => {}) {
     switch (input.type) {
       case 'url': return this.fromUrl(input.url, onStatus);
-      case 'text': return Text.parse(input.text);
+      case 'text': return this.withSource(Text.parse(input.text), { kind: 'TEXT', text: input.text.slice(0, 2_000_000) });
       case 'image': return this.fromImages([input.file], onStatus);
       case 'pdf': return this.fromPdf(input.file, onStatus);
       case 'file': return this.fromFile(input, onStatus);
@@ -134,7 +138,7 @@ export class ImportService {
         }
       }
       if (/just a moment/i.test(r.body) && !draft.recipe.ingredients.length) throw new ImportFailure('This site asked for a browser check, so the recipe couldn\'t be read. Open the page in your browser, copy the recipe text, and use Paste or Type Recipe.', { blocked: true });
-      return { ...draft, recipe: { ...draft.recipe, sourceUrl: draft.recipe.sourceUrl ?? r.finalUrl } };
+      return this.withSource({ ...draft, recipe: { ...draft.recipe, sourceUrl: draft.recipe.sourceUrl ?? r.finalUrl } }, { kind: 'WEB', url: r.finalUrl, text: pageText(r.body) });
     }
     if (r.kind === 'blocked') throw new ImportFailure(`${r.message} Open the page in your browser, copy the recipe text, and use Paste or Type Recipe — your original link will be kept if you paste it in the source field.`, { blocked: true });
     throw new ImportFailure(r.message, { retryable: true, offline: !!r.offline });
@@ -149,19 +153,33 @@ export class ImportService {
     return Text.parse(text, ImportMethod.OCR);
   }
   async fromImages(files, onStatus) {
-    const parts = [];
+    const parts = [], kept = [], cleaned = []; let dish = null;
     for (let i = 0; i < files.length; i++) {
       onStatus(`Reading text from the photo${files.length > 1 ? ` ${i + 1} of ${files.length}` : ''}…`);
       let img; try { img = await prepareImage(files[i]); } catch { throw new ImportFailure('That image could not be opened.'); }
       try { parts.push(await this.ocr.recognizeImage(img)); } catch (e) { if (e instanceof OcrUnavailable) throw new ImportFailure((e.message || 'Text recognition failed.') + ' You can still use Paste or Type Recipe.', { retryable: true }); throw e; }
+      if (this.originals) {
+        try {
+          kept.push(await this.originals.saveFile(files[i], 'jpg'));
+          onStatus('Straightening the page…');
+          const c = await Img.cleanedPage(files[i]); cleaned.push(await this.originals.saveFile(c.blob, 'jpg'));
+          if (!dish) { onStatus('Looking for a photo of the dish…'); dish = await Img.dishPhoto(files[i]); }
+        } catch { /* keeping the original is best effort */ }
+      }
     }
-    return this.ocrDraft(parts.join('\n\n'));
+    const d = this.ocrDraft(parts.join('\n\n'));
+    let dishFile = null; if (dish && this.originals) { try { dishFile = await this.originals.saveFile(dish.blob, 'jpg'); } catch { /* ignore */ } }
+    const out = this.withSource(d, { kind: 'IMAGE', files: kept, cleaned, text: parts.join('\n\n'), dishPhoto: dishFile });
+    if (dish) out.dishPhotoBlob = dish.blob;
+    return out;
   }
   async fromPdf(file, onStatus) {
     onStatus('Opening the PDF…');
     let r;
     try { onStatus('Reading the PDF…'); r = await this.ocr.recognizePdf(file); r = await this.preferCleanText(file, r, onStatus); } catch (e) { throw new ImportFailure((e.message || 'That PDF could not be opened.') + ' You can still use Paste or Type Recipe.', { retryable: true }); }
-    const d = this.ocrDraft(r.text);
+    const d0 = this.ocrDraft(r.text);
+    let name = null; if (this.originals) { try { name = await this.originals.saveFile(file, 'pdf'); } catch { /* ignore */ } }
+    const d = this.withSource(d0, { kind: 'PDF', files: name ? [name] : [], text: r.text });
     return r.pages >= 6 ? { ...d, warnings: [...d.warnings, warn('recipe', 'Only the first 6 pages were read.', Severity.INFO)] } : d;
   }
   /** A PDF made by a browser can carry a damaged text layer ("Southern \"ied Chicken", "Di!iculty"): if so, read the pages by OCR and use that when it is as complete. */
@@ -179,8 +197,8 @@ export class ImportService {
     if (mime === 'application/pdf' || name.endsWith('.pdf')) return this.fromPdf(f.file, onStatus);
     if (mime.startsWith('image/') || /\.(jpe?g|png|heic|heif|webp)$/.test(name)) return this.fromImages([f.file], onStatus);
     if (f.file.size > 5_000_000) throw new ImportFailure('That file is too large.');
-    if (mime.includes('html') || name.endsWith('.html') || name.endsWith('.htm')) return Web.extract(await f.file.text(), null);
-    if (mime.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.md')) return Text.parse(await f.file.text());
+    if (mime.includes('html') || name.endsWith('.html') || name.endsWith('.htm')) { const html = await f.file.text(); return this.withSource(Web.extract(html, null), { kind: 'WEB', text: pageText(html) }); }
+    if (mime.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.md')) { const t = await f.file.text(); return this.withSource(Text.parse(t), { kind: 'TEXT', text: t.slice(0, 2_000_000) }); }
     throw new ImportFailure("This file type isn't supported yet. Supported: PDF, images, text and web pages.");
   }
 }

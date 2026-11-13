@@ -54,6 +54,7 @@ export function reviewScreen(params, ctx, nav) {
   async function save(r) {
     const savedR = await ctx.repo.saveRecipe(r);
     if (originalPhoto && originalPhoto !== savedR.photo) await ctx.photos.delete(originalPhoto);
+    const imp = ctx.importSession.draft; if (!editId && imp?.source && ctx.drafts) { try { await ctx.drafts.link(savedR.id, imp.source, []); } catch { /* the recipe is saved either way */ } }
     ctx.importSession.clear(); saved = true;
     nav.goPopUpTo(Routes.DETAIL, { id: savedR.id }, Routes.HUB);
     say('Saved to your collection');

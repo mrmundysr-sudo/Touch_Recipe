@@ -1,9 +1,9 @@
 // IndexedDB backend: the app state as one JSON document plus a blob store for photos. Local only.
-const DB = 'touch-recipe', VERSION = 1;
+const DB = 'touch-recipe', VERSION = 2;
 function open() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB, VERSION);
-    req.onupgradeneeded = () => { const db = req.result; if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv'); if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos'); };
+    req.onupgradeneeded = () => { const db = req.result; if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv'); if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos'); for (const n of ['drafts', 'originals']) if (!db.objectStoreNames.contains(n)) db.createObjectStore(n); };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
@@ -20,4 +20,13 @@ export class IdbBackend {
   async deletePhoto(name) { return wrap((await this.store('photos', 'readwrite')).delete(name)); }
   async photoNames() { return wrap((await this.store('photos')).getAllKeys()); }
   async clearPhotos() { return wrap((await this.store('photos', 'readwrite')).clear()); }
+  // Unfinished recipes (drafts) and the kept originals live in their own stores, so clean-up of unused recipe photos never touches them.
+  async putDraft(id, d) { return wrap((await this.store('drafts', 'readwrite')).put(JSON.parse(JSON.stringify(d)), id)); }
+  async getDraft(id) { return (await wrap((await this.store('drafts')).get(id))) ?? null; }
+  async deleteDraft(id) { return wrap((await this.store('drafts', 'readwrite')).delete(id)); }
+  async draftIds() { return wrap((await this.store('drafts')).getAllKeys()); }
+  async putOriginal(name, blob) { return wrap((await this.store('originals', 'readwrite')).put(blob, name)); }
+  async getOriginal(name) { return (await wrap((await this.store('originals')).get(name))) ?? null; }
+  async deleteOriginal(name) { return wrap((await this.store('originals', 'readwrite')).delete(name)); }
+  async originalNames() { return wrap((await this.store('originals')).getAllKeys()); }
 }

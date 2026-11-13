@@ -61,9 +61,11 @@ export function detailScreen(params, ctx, nav) {
       bigButton('Take a photo', async () => { close(false); const f = await pickFile({ accept: 'image/*', capture: 'environment' }); if (f) { const n = await ctx.photos.saveBlob(f); n ? setPhoto(n) : say("That photo couldn't be used."); } }, { primary: false }),
       r.photo ? bigButton('Remove photo', () => { close(false); setPhoto(null); }, { primary: false }) : null) });
   }
+  let hasOriginal = false; ctx.drafts?.forRecipe(id).then((o) => { hasOriginal = !!o; });
   function moreMenu(r) {
     sheet({ label: 'More options', content: (close) => h('div', { style: 'display:flex;flex-direction:column;gap:8px' }, h('h2', { class: 'sheet-title' }, r.title.trim() || 'Recipe'),
       bigButton('Edit details', () => { close(false); nav.go(Routes.REVIEW, { edit: r.id }); }, { primary: false }),
+      hasOriginal ? bigButton('View the original', () => { close(false); nav.go(Routes.ORIGINAL, { id: r.id }); }, { primary: false, testid: 'view-original' }) : null,
       bigButton('Add to meal plan', () => { close(false); dayPickerSheet(`Add “${r.title}” to which day?`, async (date) => { await ctx.repo.assignMeal(date, r.id, st.servings ?? r.servings); say(`Planned for ${Planner.dayLabel(date)}, ${Planner.dateLabel(date)}.`); }); }, { primary: false }),
       bigButton('Share as text', () => { close(false); shareText(r.title, recipeText(r, st.servings)); }, { primary: false }),
       bigButton('Delete recipe', () => { close(false); confirmDialog('Delete this recipe?', `“${r.title}” will be removed from your collection and meal plan. You can undo right after.`, 'Delete', async () => {

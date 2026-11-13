@@ -23,7 +23,8 @@ export function importScreen(params, ctx, nav) {
       if (!draft.recipe.title.trim() && !draft.recipe.ingredients.length && !draft.recipe.directions.length && draft.warnings.some((w) => w.severity === Severity.ERROR)) {
         setUi({ s: 'failed', message: draft.warnings.find((w) => w.severity === Severity.ERROR).message, retryable: input.type === 'url', offline: false, blocked: input.type === 'url' }); return;
       }
-      if (draft.imageCandidates.length) {
+      if (draft.dishPhotoBlob) { const n = await ctx.photos.saveBlob(draft.dishPhotoBlob); if (n) ctx.importSession.photoFile = n; }
+      if (!ctx.importSession.photoFile && draft.imageCandidates.length) {
         setUi({ s: 'working', message: 'Fetching the photo…' });
         ctx.importSession.photoFile = await ctx.importer.fetchPhoto(draft.imageCandidates);
         if (job.cancelled) return;
@@ -109,13 +110,19 @@ export function importScreen(params, ctx, nav) {
         h('p', { style: 'margin:0' }, `${r.ingredients.filter((i) => !i.header).length} ingredients · ${r.directions.filter((x) => !x.header).length} directions` + (r.servings != null ? ` · serves ${r.servings}` : '')),
         h('p', null, d.confidence === Confidence.HIGH ? "This came from the page's own recipe data, but extraction is never perfect. Please give it a quick check." : d.confidence === Confidence.MEDIUM ? 'Some parts were interpreted automatically. Please check the details before saving.' : 'This was guessed from text or layout, so mistakes are likely. Please check carefully; everything can be edited.'),
         ...d.warnings.filter((w) => w.severity !== Severity.INFO).map((w) => h('p', { style: 'color:var(--error);font-size:14px;margin:2px 0' }, `⚠ ${w.message}`)),
-        bigButton('Continue to Review', () => { vm.resultOpen = false; drawResult(); nav.go(Routes.REVIEW, {}); }, { testid: 'result-continue' }),
+        bigButton('Fix it in Recipe Rescue', () => { vm.resultOpen = false; drawResult(); nav.go(Routes.RESCUE, {}); }, { primary: d.confidence !== Confidence.HIGH, testid: 'result-rescue' }),
+        bigButton('Continue to Review', () => { vm.resultOpen = false; drawResult(); nav.go(Routes.REVIEW, {}); }, { primary: d.confidence === Confidence.HIGH, testid: 'result-continue' }),
         textButton('Discard this import', discard));
     })();
     if (resultSheet && resultSheet.body.isConnected) mount(resultSheet.body, body);
     else resultSheet = sheet({ label: 'Import result', tall: true, content: body, onDismiss: () => { vm.resultOpen = false; dismiss(); resultSheet = null; } });
   }
+  // unfinished recipes: drafts waiting in Recipe Rescue
+  const pill = h('button', { type: 'button', class: 'chip', 'data-testid': 'unfinished-pill', style: 'position:absolute;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom));z-index:5;display:none', onclick: () => nav.go(Routes.UNFINISHED) });
+  art.el.append(pill);
+  const pillUpdate = async () => { const n = await ctx.drafts.count(); pill.style.display = n ? '' : 'none'; pill.textContent = `Unfinished recipes (${n})`; };
+  pillUpdate(); const unPill = ctx.drafts.subscribe(pillUpdate);
   if (vm.resultOpen) setTimeout(drawResult, 0);
-  art.destroy = () => { resultSheet?.close(false); };
+  art.destroy = () => { resultSheet?.close(false); unPill(); };
   return art;
 }

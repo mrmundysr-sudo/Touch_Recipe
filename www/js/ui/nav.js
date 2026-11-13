@@ -4,7 +4,7 @@ import { h } from './dom.js';
 export const Routes = {
   SPLASH: 'splash', HUB: 'hub', COLLECTION: 'collection', DETAIL: 'detail', COOK: 'cook', IMPORT: 'import', REVIEW: 'review',
   PLANNER: 'planner', GROCERY: 'grocery', DRAWER: 'drawer', SETTINGS: 'settings', CATEGORIES: 'categories', BACKUP: 'backup',
-  THEMES: 'themes', HELP: 'help', TOOLS: 'tools', PRINT: 'print',
+  THEMES: 'themes', HELP: 'help', TOOLS: 'tools', PRINT: 'print', RESCUE: 'rescue', UNFINISHED: 'unfinished', ORIGINAL: 'original',
 };
 
 export class Nav {
