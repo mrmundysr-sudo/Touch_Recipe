@@ -77,17 +77,75 @@ public class TouchRecipeOcrPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "renderPdfPage", returnType: CAPPluginReturnPromise)
     ]
 
-    private func recognize(_ image: CGImage) -> String {
+    /// Recognised lines with their boxes (Vision's normalised box: origin bottom-left).
+    private func observations(_ image: CGImage) -> [(text: String, box: CGRect)] {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
         let handler = VNImageRequestHandler(cgImage: image, options: [:])
-        do { try handler.perform([request]) } catch { return "" }
-        var lines: [String] = []
+        do { try handler.perform([request]) } catch { return [] }
+        var found: [(text: String, box: CGRect)] = []
         for observation in request.results ?? [] {
-            if let top = observation.topCandidates(1).first { lines.append(top.string) }
+            if let top = observation.topCandidates(1).first { found.append((text: top.string, box: observation.boundingBox)) }
         }
-        return lines.joined(separator: "\n")
+        return found
+    }
+
+    private func recognize(_ image: CGImage) -> String {
+        return observations(image).map { $0.text }.joined(separator: "\n")
+    }
+
+    /// The same lines as pieces with positions in pixels, y growing downward, for the layout reader in the app.
+    private func recognizedPieces(_ found: [(text: String, box: CGRect)], _ image: CGImage, page: Int) -> [[String: Any]] {
+        let w = Double(image.width)
+        let h = Double(image.height)
+        return found.map { o -> [String: Any] in
+            return ["text": o.text,
+                    "left": Double(o.box.minX) * w, "right": Double(o.box.maxX) * w,
+                    "top": (1.0 - Double(o.box.maxY)) * h, "bottom": (1.0 - Double(o.box.minY)) * h,
+                    "page": page]
+        }
+    }
+
+    /// The text layer of one PDF page as pieces with positions (points, y growing downward). A piece is a run of characters on
+    /// one baseline with no gap. PDFKit's own `string` follows the order the file draws things in, which on a page with columns
+    /// or a table of amounts and ingredients is not the reading order; the app puts the pieces back in order (layout.js).
+    /// A rotated page returns nothing, and the app then uses the plain text.
+    private func textPieces(_ page: PDFPage, index: Int) -> [[String: Any]] {
+        guard page.rotation == 0, let all = page.string else { return [] }
+        let ns = all as NSString
+        let box = page.bounds(for: .mediaBox)
+        var pieces: [[String: Any]] = []
+        var text = ""
+        var rect = CGRect.null
+        var prev = CGRect.null
+        func flush() {
+            if !text.isEmpty && !rect.isNull {
+                pieces.append(["text": text,
+                               "left": Double(rect.minX - box.minX), "right": Double(rect.maxX - box.minX),
+                               "top": Double(box.maxY - rect.maxY), "bottom": Double(box.maxY - rect.minY),
+                               "page": index])
+            }
+            text = ""
+            rect = CGRect.null
+            prev = CGRect.null
+        }
+        for i in 0..<ns.length {
+            let ch = ns.substring(with: NSRange(location: i, length: 1))
+            if ch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { flush(); continue }
+            let r = page.characterBounds(at: i)
+            if r.isNull || r.isInfinite { continue }
+            if !prev.isNull {
+                let h = max(prev.height, r.height)
+                let gap = r.minX - prev.maxX
+                if gap > h * 0.35 || gap < -h * 0.6 || abs(r.midY - prev.midY) > h * 0.6 { flush() }
+            }
+            text += ch
+            rect = rect.isNull ? r : rect.union(r)
+            prev = r
+        }
+        flush()
+        return pieces
     }
 
     @objc func recognizeImage(_ call: CAPPluginCall) {
@@ -116,20 +174,28 @@ public class TouchRecipeOcrPlugin: CAPPlugin, CAPBridgedPlugin {
         DispatchQueue.global(qos: .userInitiated).async {
             let count = min(doc.pageCount, maxPages)
             var parts: [String] = []
+            var pieces: [[String: Any]] = []
             for i in 0..<count {
                 guard let page = doc.page(at: i) else { continue }
                 var text = forceOcr ? "" : (page.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                var found: [[String: Any]] = forceOcr ? [] : self.textPieces(page, index: i)
                 if text.count < 40 {
                     // a scanned page has no text layer: render it and recognise the picture
                     let box = page.bounds(for: .mediaBox)
                     let scale = 1800.0 / max(box.width, box.height)
                     let size = CGSize(width: box.width * scale, height: box.height * scale)
                     let rendered = page.thumbnail(of: size, for: .mediaBox)
-                    if let cg = rendered.cgImage { text = self.recognize(cg) }
+                    if let cg = rendered.cgImage {
+                        let seen = self.observations(cg)
+                        text = seen.map { $0.text }.joined(separator: "\n")
+                        found = self.recognizedPieces(seen, cg, page: i)
+                    }
                 }
                 parts.append(text)
+                pieces.append(contentsOf: found)
             }
-            call.resolve(["text": parts.joined(separator: "\n\n"), "pages": count])
+            // `text` is the plain reading (fallback); `lines` are the pieces with positions for the layout reader
+            call.resolve(["text": parts.joined(separator: "\n\n"), "lines": pieces, "pages": count])
         }
     }
 

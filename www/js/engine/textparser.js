@@ -94,7 +94,7 @@ function mergeWrapped(items) {
   const out = [];
   for (const { text, mark } of items) {
     const prev = out[out.length - 1];
-    const open = prev !== undefined && !/[.!?:;]$/.test(prev);
+    const open = prev !== undefined && !/[.!?:]$/.test(prev);   // a semicolon is a clause break, not the end of a step
     if (!mark && open && /^[a-z(\[,;)]/.test(text)) out[out.length - 1] = prev.endsWith('-') && /^[a-z]/.test(text) ? prev.slice(0, -1) + text : `${prev} ${text}`;
     else out.push(text);
   }
@@ -157,9 +157,11 @@ export function parse(raw, method = ImportMethod.TEXT, sourceUrl = null, titleHi
         continue;
       }
     }
-    if (ingHeader.test(line) && !line.toLowerCase().startsWith('for the ')) { current = 'ing'; sawIngHeader = true; ingBlocks.push({ order, lines: [] }); continue; }
-    if (dirHeader.test(line) && !STEP_LABEL.test(line)) { current = 'dir'; sawDirHeader = true; dirBlocks.push({ order, lines: [] }); continue; }
-    if (noteHeader.test(line)) { current = 'note'; continue; }
+    // a step that wraps onto a line holding one word ("Combine first 6" / "ingredients.") is not a heading
+    const wrapsStep = current === 'dir' && /\.$/.test(line) && ((x) => x != null && !/[.!?:;]$/.test(x))(dirBlocks[dirBlocks.length - 1]?.lines.at(-1));
+    if (!wrapsStep && ingHeader.test(line) && !line.toLowerCase().startsWith('for the ')) { current = 'ing'; sawIngHeader = true; ingBlocks.push({ order, lines: [] }); continue; }
+    if (!wrapsStep && dirHeader.test(line) && !STEP_LABEL.test(line)) { current = 'dir'; sawDirHeader = true; dirBlocks.push({ order, lines: [] }); continue; }
+    if (!wrapsStep && noteHeader.test(line)) { current = 'note'; continue; }
     if ((sawIngHeader || sawDirHeader) && END_HEADER.test(line)) { current = 'post'; continue; }
     if (current === 'post') continue;   // page furniture after the recipe; the full text is still kept in rawSource
     if (current === 'ing') ingBlocks[ingBlocks.length - 1].lines.push(line);

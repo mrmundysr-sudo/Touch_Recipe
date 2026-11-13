@@ -58,7 +58,7 @@ Ported to `www/` and verified by `npm test` (126 tests; the real-page benchmark 
 | Grocery list, Import Review | **Not rebuilt.** Grocery already scrolls as one list inside its artwork panel; Review is a form. Both unchanged and working. |
 
 ### Known limits on iOS
-- `LayoutReader` (column-aware reading order) is ported but not fed: the native bridge returns text, not line positions, so two-column cookbook scans may read in page order. Rescue's Original tab is the remedy.
+- `LayoutReader` (column-aware reading order) is now fed for **PDFs** (2026-11-13): the native bridge sends each piece of text with its position, and the app reads them in layout order (`docs/knowledge/reports/2026-11-13-ios-pdf-layout.md`). Photos and scans are still read in Vision's order, so two-column cookbook scans may read in page order; Rescue's Original tab is the remedy.
 - No in-app live browsing of a recipe page (cross-origin frames cannot be read in a WKWebView); use Share/Copy, then paste, or open the page in Safari.
 - "Open the PDF" uses a blob link and may not open in the web view; the cleaned page picture is shown instead.
 - Drafts and originals are not part of the backup ZIP yet (same as Android).

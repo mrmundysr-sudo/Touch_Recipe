@@ -26,3 +26,6 @@ Record development branch/HEAD SHA, base branch/SHA, PR, workflow/run result, ar
 
 ## 2026-11-13 iOS update
 `ccr-c5e79198-7pqe4i` now carries the iOS functional update on top of the Android 1.2.0 work. `claude/ios-testflight` is untouched. See `docs/knowledge/reports/2026-11-13-ios-functional-update.md`.
+
+## 2026-11-13 iOS PDF layout fix
+Branch `ccr-ios-pdf-layout-fix`, cut from `ccr-c5e79198-7pqe4i` @ `0605029` (which is untouched). Fixes the owner's PDF that imported scrambled on iOS. Not merged, not delivered. See `docs/knowledge/reports/2026-11-13-ios-pdf-layout.md`; the Swift needs the macOS `ios-check.yml` run and a device pass.

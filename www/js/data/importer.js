@@ -2,6 +2,7 @@
 // Network access happens only for URL imports the user asked for. Recognition runs on the device (Apple Vision) via a
 // tiny native bridge; when it is missing (e.g. in a desktop browser) scanning explains that and offers Paste or Type.
 import * as Text from '../engine/textparser.js';
+import * as Layout from '../engine/layout.js';
 import * as Web from '../engine/webextract.js';
 import { ImportMethod, Confidence, Severity, warn } from '../engine/models.js';
 import { emptySource, pageText } from '../engine/rescue.js';
@@ -64,8 +65,26 @@ export class VisionOcr {
   async recognizePdf(blob, { forceOcr = false } = {}) {
     const p = plugin('TouchRecipeOcr');
     if (!p) throw new OcrUnavailable("Text recognition isn't available on this device.");
-    try { const r = await p.recognizePdf({ pdf: await blobToB64(blob), maxPages: 6, forceOcr }); return { text: r.text || '', pages: r.pages || 0 }; } catch { throw new OcrUnavailable("That PDF could not be read."); }
+    try { const r = await p.recognizePdf({ pdf: await blobToB64(blob), maxPages: 6, forceOcr }); return { ...pdfText(r), pages: r.pages || 0 }; } catch { throw new OcrUnavailable("That PDF could not be read."); }
   }
+}
+
+/**
+ * The text of a PDF from the bridge's answer. The bridge sends the text in the order the file draws it, which on a page with
+ * columns (or a table of amounts and ingredients) is not the reading order, and also the pieces of text with their positions on
+ * the page (`lines`). The pieces go through the layout reader; the plain text is only the fallback, used when there are no pieces
+ * or when the reader's result is missing a lot of what the page holds (it never silently loses text).
+ */
+export function pdfText(r) {
+  const plain = r.text || '';
+  if (Array.isArray(r.lines) && r.lines.length) {
+    try {
+      const out = Layout.readWithNotes(r.lines);
+      const size = (t) => t.replace(/\s/g, '').length;
+      if (out.text.trim() && size(out.text) + size(out.extra) >= size(plain) * 0.6) return { text: out.text, extra: out.extra, notes: out.notes };
+    } catch { /* fall back to the plain text */ }
+  }
+  return { text: plain, extra: '', notes: [] };
 }
 
 /** One PDF page as a picture (native), or null when the bridge is missing. */
@@ -183,7 +202,8 @@ export class ImportService {
     onStatus('Opening the PDF…');
     let r;
     try { onStatus('Reading the PDF…'); r = await this.ocr.recognizePdf(file); r = await this.preferCleanText(file, r, onStatus); } catch (e) { throw new ImportFailure((e.message || 'That PDF could not be opened.') + ' You can still use Paste or Type Recipe.', { retryable: true }); }
-    const d0 = this.ocrDraft(r.text);
+    const read = this.ocrDraft(r.text);
+    const d0 = r.notes?.length ? { ...read, warnings: [...read.warnings, ...r.notes.map((n) => warn('recipe', n, Severity.INFO))] } : read;
     let name = null; if (this.originals) { try { name = await this.originals.saveFile(file, 'pdf'); } catch { /* ignore */ } }
     // the first page as a picture: kept, cleaned, and searched for the printed dish photo
     let cleaned = [], dishFile = null, dishBlob = null;
@@ -197,7 +217,7 @@ export class ImportService {
         }
       } catch { /* optional */ }
     }
-    const d = this.withSource(d0, { kind: 'PDF', files: name ? [name] : [], cleaned, text: r.text, dishPhoto: dishFile });
+    const d = this.withSource(d0, { kind: 'PDF', files: name ? [name] : [], cleaned, text: r.extra ? `${r.text}\n\n--- Another recipe on the same page ---\n\n${r.extra}` : r.text, dishPhoto: dishFile });
     if (dishBlob) d.dishPhotoBlob = dishBlob;
     return r.pages >= 6 ? { ...d, warnings: [...d.warnings, warn('recipe', 'Only the first 6 pages were read.', Severity.INFO)] } : d;
   }
