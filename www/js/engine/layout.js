@@ -232,7 +232,8 @@ function peelOne(frags, h) {
     const members = new Set(stack);
     const others = frags.filter((l) => !members.has(l) && !l.table);
     // the ingredient text to the right of each amount, a clear gap away (a word space is not enough: that is an ordinary "2 cups flour")
-    const near = stack.map((a) => others.filter((o) => o.left >= a.right + h * 0.5 && o.left <= a.right + h * 3.2 && overlap(a, o) >= height(a) * 0.4).sort((x, y) => x.left - y.left)[0]).filter(Boolean);
+    // "beside" = vertically close, not overlapping: an amount centred on a two-line ingredient sits between its lines and overlaps neither by much when the boxes are small (PDFKit)
+    const near = stack.map((a) => others.filter((o) => o.left >= a.right + h * 0.5 && o.left <= a.right + h * 3.2 && Math.abs((a.top + a.bottom) / 2 - (o.top + o.bottom) / 2) <= h * 1.1).sort((x, y) => x.left - y.left)[0]).filter(Boolean);
     if (near.length < 3 || near.length < stack.length * 0.6) continue;
     const L = median(near.map((o) => o.left));
     if (near.filter((o) => Math.abs(o.left - L) <= tol).length < near.length * 0.7) continue;
@@ -244,8 +245,15 @@ function peelOne(frags, h) {
     const words = band.filter((o) => o.right <= R + 0.01);
     const lines = textLines(words, h);
     if (!lines.length) continue;
+    // The lines of one ingredient are one line pitch apart and the next ingredient starts a little further down. The boxes of a source can be taller (poppler)
+    // or as small as the font (PDFKit) for the same page, so the cut is taken from the pitch measured in this table, not from the box height alone:
+    // the smallest top-to-top distance (the pitch inside a multi-line ingredient) plus 12%, less the box height. Without a plausible pitch (every ingredient on one line) the box rule applies.
+    const byTop = [...lines].sort((a, b) => a.top - b.top);
+    const pitches = byTop.slice(1).map((l, i) => l.top - byTop[i].top).filter((d) => d > h * 0.5);
+    const pitch = pitches.length ? Math.min(...pitches) : Infinity;
+    const joinGap = pitch <= h * 1.9 ? Math.max(h * 0.4, pitch * 1.12 - h) : h * 0.4;
     const blocks = [];
-    for (const l of lines) { const b = blocks[blocks.length - 1]; if (b && l.top - b.bottom <= h * 0.4) b.lines.push(l), b.bottom = Math.max(b.bottom, l.bottom); else blocks.push({ lines: [l], top: l.top, bottom: l.bottom }); }
+    for (const l of byTop) { const b = blocks[blocks.length - 1]; if (b && l.top - b.bottom <= joinGap) b.lines.push(l), b.bottom = Math.max(b.bottom, l.bottom); else blocks.push({ lines: [l], top: l.top, bottom: l.bottom }); }
     const centre = (o) => (o.top + o.bottom) / 2;
     const target = (a) => blocks.map((b) => ({ b, o: overlap(a, b) })).sort((x, y) => y.o - x.o || Math.abs(centre(x.b) - centre(a)) - Math.abs(centre(y.b) - centre(a)))[0];
     const given = new Map();
@@ -259,7 +267,7 @@ function peelOne(frags, h) {
     const body = new Set(words.filter((w) => w.bottom >= bodyTop - 0.5 && w.top <= bodyBottom + 0.5));
     const left = Math.min(...[...taken].map((a) => a.left), L);
     // a short heading right above the table (Ingredients) belongs to it
-    const above = others.filter((o) => !body.has(o) && o.bottom <= bodyTop + 0.5 && bodyTop - o.bottom <= h * 1.5 && o.left >= left - tol && o.right <= R + 0.01).sort((a, b) => b.bottom - a.bottom);
+    const above = others.filter((o) => !body.has(o) && o.bottom <= bodyTop + 0.5 && bodyTop - o.bottom <= Math.max(h * 1.5, (Number.isFinite(pitch) ? pitch : 0) * 1.3) && o.left >= left - tol && o.right <= R + 0.01).sort((a, b) => b.bottom - a.bottom);
     let heading = [];
     if (above.length) { heading = above.filter((o) => Math.abs(centre(o) - centre(above[0])) < h * 0.45); if (heading.length > 4) heading = []; }
     const headText = heading.sort((a, b) => a.left - b.left).map((o) => o.text.trim()).join(' ');

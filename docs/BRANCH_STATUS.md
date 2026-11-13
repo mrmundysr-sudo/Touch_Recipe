@@ -38,3 +38,6 @@ Same branch `ccr-ios-rescue-review-fix` (after `63ff9a2`). Root cause of the own
 
 ## 2026-11-13 later: PDFKit finding and landscape
 Same branch `ccr-ios-rescue-review-fix`. (1) macOS probe showed PDFKit's per-character boxes drift; the Swift piece reader now uses per-word selection bounds (awaiting probe confirmation). (2) Recipe Rescue can rotate to landscape with the original left and the recipe card right; other screens stay portrait. Not uploaded to TestFlight from this work.
+
+## 2026-11-13 plain Recipe Rescue
+Same branch `ccr-ios-rescue-review-fix` (after `4977a52`). Recipe Rescue rebuilt plain with numbered lists; layout reader fixed for PDFKit-sized boxes (macOS probe findings). Not uploaded to TestFlight. See `docs/knowledge/reports/2026-11-13-plain-rescue-and-pdfkit.md`.

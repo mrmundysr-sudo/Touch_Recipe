@@ -52,57 +52,54 @@ const { execFileSync } = require('child_process');
     assert.equal(draft.title, expected.title); ok(`${theme}: the app's import of the real PDF gives the exact title, ingredients and directions`);
     assert.ok(!calls.some((x) => x.includes('picture')), 'picture reading never requested'); ok(`${theme}: the PDF's own text was read; picture reading was never asked for (${calls.join(', ')})`);
 
-    // STAGE 4: what the Recipe Rescue screen actually shows
+    // STAGE 4: what the plain Recipe Rescue screen actually shows (our side: numbered lists)
     const tid = (id) => page.locator(`[data-testid="${id}"]`);
-    await tid('tab-recipe').click(); await page.waitForTimeout(300);   // the Recipe view on its own; the split view has its own test
-    const screen = await page.evaluate(() => ({
-      title: document.querySelector('[data-testid="field-title"] .sp-text')?.textContent || '',
-      ing: [...document.querySelectorAll('[data-testid="ing-line"] .sp-text')].map((e) => e.firstChild ? e.firstChild.textContent : ''),
-      dir: [...document.querySelectorAll('[data-testid="dir-line"] .sp-text')].map((e) => e.firstChild ? e.firstChild.textContent : ''),
-      marked: document.querySelectorAll('[data-review]').length, hasCount: !!document.querySelector('[data-testid="review-count"]'),
-    }));
-    assert.equal(screen.title.replace(/^Title\s*/, ''), expected.title, `${theme}: the title on screen`);
-    assert.deepEqual(screen.ing, expected.ingredients, `${theme}: ingredient cards show exactly the parsed ingredients`);
-    assert.deepEqual(screen.dir, expected.directions.map((d, i) => `${i + 1}. ${d}`), `${theme}: step cards show exactly the parsed steps, numbered in order`);
-    assert.equal(screen.marked, 0, 'no card is marked "Check this line"'); assert.ok(!screen.hasCount, 'no "lines to check" banner');
-    ok(`${theme}: the Rescue screen shows ${screen.ing.length} ingredient cards and ${screen.dir.length} step cards, word for word, none marked`);
+    const texts = (id) => page.locator(`[data-testid="${id}-text"]`).evaluateAll((els) => els.map((e) => e.value));
+    const nums = (id) => page.locator(`[data-testid="${id}-num"]`).allTextContents();
+    assert.equal(await tid('rr-title').inputValue(), expected.title, `${theme}: the title on screen`);
+    assert.equal(await tid('rr-servings').inputValue(), String(expected.servings));
+    assert.deepEqual(await texts('ing'), expected.ingredients, `${theme}: the ingredient entries are exactly the parsed ingredients`);
+    assert.deepEqual(await nums('ing'), expected.ingredients.map((_, i) => `${i + 1}.`), `${theme}: numbered 1..${expected.ingredients.length}`);
+    assert.deepEqual(await texts('dir'), expected.directions, `${theme}: the step entries are exactly the parsed steps`);
+    assert.deepEqual(await nums('dir'), expected.directions.map((_, i) => `${i + 1}.`), `${theme}: numbered 1..${expected.directions.length}`);
+    assert.equal(await page.locator('[data-testid="review-note"]:visible').count(), 0, 'no entry is marked "Check this line"'); assert.equal(await tid('review-count').count(), 0, 'no "lines to check" banner');
+    ok(`${theme}: our side shows the title, ${expected.ingredients.length} numbered ingredients and ${expected.directions.length} numbered steps, word for word, none marked`);
 
-    const emptyHeadings = await page.evaluate(() => [...document.querySelectorAll('.sp-sec')].filter((sec) => sec.querySelector(':scope > .sp-h2') && sec.children.length < 2).map((sec) => sec.querySelector('.sp-h2').textContent));
-    assert.deepEqual(emptyHeadings, [], `${theme}: no heading without content under it`);
-    // nothing hidden: every card shows its whole text, nothing sits under the buttons, nothing scrolls sideways, every line can be scrolled to
+    // nothing hidden: every entry shows its whole text, nothing sideways, every entry can be scrolled fully into view, the Create button is below the content
     const geo = await page.evaluate(() => {
-      const b = document.querySelector('[data-testid="rescue-body"]'), f = document.querySelector('[data-testid="rescue-foot"]');
-      const cards = [...b.querySelectorAll('.sp-line')];
-      const clipped = cards.filter((l) => l.scrollWidth > l.clientWidth + 1 || l.querySelector('.sp-text').scrollHeight > l.clientHeight + 1).length;
-      let underButtons = 0, reached = new Set(); const fr = f.getBoundingClientRect();
-      for (let k = 0; k <= 20; k++) { b.scrollTop = (b.scrollHeight - b.clientHeight) * (k / 20); const br = b.getBoundingClientRect();
-        cards.forEach((l, i) => { const r = l.getBoundingClientRect(); if (r.top >= br.top - 0.5 && r.bottom <= br.bottom + 0.5) reached.add(i); });
-        for (let y = fr.top + 2; y < fr.bottom - 2; y += 6) for (let x = 8; x < innerWidth - 8; x += 24) { const e = document.elementFromPoint(x, y); if (e && e.closest('.sp-line')) underButtons++; } }
-      return { clipped, underButtons, reached: reached.size, cards: cards.length, sideways: document.documentElement.scrollWidth > innerWidth + 1, footTop: fr.top, bodyBottom: b.getBoundingClientRect().bottom };
+      const pane = document.querySelector('[data-testid="pane-recipe"]'); const foot = document.querySelector('[data-testid="rescue-foot"]');
+      const entries = [...pane.querySelectorAll('.nl-text')]; const clipped = entries.filter((e) => e.scrollHeight > e.clientHeight + 3).length;
+      const reached = new Set(); for (let k = 0; k <= 30; k++) { pane.scrollTop = (pane.scrollHeight - pane.clientHeight) * (k / 30); const pr = pane.getBoundingClientRect(); entries.forEach((e, i) => { const r = e.getBoundingClientRect(); if (r.top >= pr.top - 0.5 && r.bottom <= pr.bottom + 0.5) reached.add(i); }); }
+      return { clipped, reached: reached.size, entries: entries.length, sideways: document.documentElement.scrollWidth > innerWidth + 1, footTop: foot.getBoundingClientRect().top, paneBottom: pane.getBoundingClientRect().bottom };
     });
-    assert.equal(geo.clipped, 0, `${theme}: no card clips its text`); assert.equal(geo.underButtons, 0, `${theme}: no card under the buttons`);
-    assert.equal(geo.reached, geo.cards, `${theme}: every card can be scrolled fully into view (${geo.reached}/${geo.cards})`); assert.ok(!geo.sideways); assert.ok(geo.footTop >= geo.bodyBottom - 0.5);
-    ok(`${theme}: every one of the ${geo.cards} cards is fully visible when scrolled to; nothing is clipped, covered, or off to the side`);
+    assert.equal(geo.clipped, 0, `${theme}: no entry clips its text`); assert.equal(geo.reached, geo.entries, `${theme}: every entry can be scrolled fully into view (${geo.reached}/${geo.entries})`); assert.ok(!geo.sideways); assert.ok(geo.footTop >= geo.paneBottom - 0.5);
+    ok(`${theme}: all ${geo.entries} entries are fully visible when scrolled to; nothing is clipped or off to the side`);
+    const emptyHeads = await page.evaluate(() => [...document.querySelectorAll('.rr-group')].filter((g) => g.querySelector(':scope > .rr-label') && g.children.length < 2).map((g) => g.textContent)); assert.deepEqual(emptyHeads, [], `${theme}: no heading without content`);
 
-    // the Original tab: the kept page picture and the kept text, including the other recipe
+    // the Original side: the kept page picture and the kept text, including the other recipe
     await tid('tab-original').click(); await page.waitForTimeout(600);
-    const orig = await page.evaluate(() => ({ imgs: document.querySelectorAll('[data-testid="original-image"]').length, lines: [...document.querySelectorAll('[data-testid="orig-line"]')].map((e) => e.textContent) }));
+    const orig = await page.evaluate(() => ({ imgs: document.querySelectorAll('[data-testid="original-image"]').length, text: document.querySelector('[data-testid="orig-text"]')?.textContent || '' }));
     const broken = await page.evaluate(() => [...document.querySelectorAll('[data-testid="original-image"]')].filter((i) => !i.complete || i.naturalWidth === 0).length);
-    assert.equal(broken, 0, `${theme}: every picture in the Original tab loads (no broken image)`);
-    assert.ok(orig.imgs >= 1, `${theme}: the page picture is kept and shown`);
-    const joined = orig.lines.join('\n');
-    const note = await page.locator('[data-testid="read-note"]').textContent(); assert.match(note, /Read from the PDF's own text with positions \(286 pieces\)/, `${theme}: the Original tab says how the file was read`);
-    for (const ing of ['VEG-ALL CHICKEN POT PIE', 'BOURBON CHICKEN', 'Another recipe on the same page']) assert.ok(joined.includes(ing), `${theme}: Original keeps "${ing}"`);
-    ok(`${theme}: the Original tab shows the PDF page picture and all ${orig.lines.length} text lines, including the other recipe`);
+    assert.equal(broken, 0, `${theme}: every picture on the original side loads (no broken image)`); assert.ok(orig.imgs >= 1, `${theme}: the page picture is kept and shown`);
+    const note = await page.locator('[data-testid="read-note"]').textContent(); assert.match(note, /Read from the PDF's own text with positions \(286 pieces\)/, `${theme}: the original side says how the file was read`);
+    for (const word of ['VEG-ALL CHICKEN POT PIE', 'BOURBON CHICKEN', 'Another recipe on the same page', '1/2 teaspoon black pepper']) assert.ok(orig.text.includes(word), `${theme}: the original text keeps "${word}"`);
+    ok(`${theme}: the original side shows the real page picture and its whole text (${orig.text.split('\n').length} lines), including the other recipe`);
 
+    // on its side: the original on the left, our recipe on the right, both wide
+    await page.setViewportSize({ width: 844, height: 390 }); await page.waitForTimeout(600);
+    const L = await page.evaluate(() => { const a = document.querySelector('[data-testid="pane-original"]').getBoundingClientRect(), b = document.querySelector('[data-testid="pane-recipe"]').getBoundingClientRect(); return { al: a.left, ar: a.right, bl: b.left, br: b.right, bw: b.width, aw: a.width }; });
+    assert.ok(L.ar <= L.bl + 0.5 && L.aw > 300 && L.bw > 300, `${theme}: original left, recipe right, both wide (${Math.round(L.aw)} / ${Math.round(L.bw)})`);
+    assert.deepEqual(await texts('ing'), expected.ingredients, 'the same entries on its side'); ok(`${theme}: on its side the original is on the left and the recipe on the right, each ${Math.round(L.aw)}px wide`);
+    if (outDir) { await page.screenshot({ path: path.join(outDir, `rescue-${theme.toLowerCase()}-landscape.png`) }); }
+    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(600);
     if (outDir) {
       await tid('tab-recipe').click(); await page.waitForTimeout(400);
-      const body = '[data-testid="rescue-body"]';
+      const body = '[data-testid="pane-recipe"]';
       await page.evaluate((b) => { document.querySelector(b).scrollTop = 0; }, body); await page.screenshot({ path: path.join(outDir, `rescue-${theme.toLowerCase()}-1-top.png`) });
-      await page.evaluate((b) => { const e = document.querySelector(b); e.scrollTop = e.scrollHeight * 0.45; }, body); await page.screenshot({ path: path.join(outDir, `rescue-${theme.toLowerCase()}-2-middle.png`) });
+      await page.evaluate((b) => { const e = document.querySelector(b); e.scrollTop = e.scrollHeight * 0.4; }, body); await page.screenshot({ path: path.join(outDir, `rescue-${theme.toLowerCase()}-2-middle.png`) });
       await page.evaluate((b) => { const e = document.querySelector(b); e.scrollTop = e.scrollHeight; }, body); await page.screenshot({ path: path.join(outDir, `rescue-${theme.toLowerCase()}-3-bottom.png`) });
       await tid('tab-original').click(); await page.waitForTimeout(500); await page.screenshot({ path: path.join(outDir, `rescue-${theme.toLowerCase()}-4-original.png`) });
-      fs.writeFileSync(path.join(outDir, `screen-${theme.toLowerCase()}.json`), JSON.stringify({ screen, draft: { ing: draft.ing, dir: draft.dir, notes: draft.notes } }, null, 2));
+      fs.writeFileSync(path.join(outDir, `screen-${theme.toLowerCase()}.json`), JSON.stringify({ ingredients: await (async () => { await tid('tab-recipe').click(); await page.waitForTimeout(300); return texts('ing'); })(), steps: await texts('dir') }, null, 2));
     }
     await c.close();
   }

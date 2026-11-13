@@ -1,8 +1,10 @@
-// Port of ui/screens/RescueScreen.kt: fix a bad import by sending the right text to the right place, never guessing.
-// Two tabs on a phone: Recipe (the editable result) and Original (what was captured). Every edit can be undone.
+// Recipe Rescue: fix an import by copying what is right from the ORIGINAL into OUR recipe. Deliberately plain: no artwork, open spacing, big fields,
+// nothing squeezed into narrow strips. Two sides: the original (its picture and its text, selectable) and the recipe (title, times, a numbered
+// list of ingredients, a numbered list of steps, notes). Upright, one side at a time at full width (a switch at the top); on its side, both next to each other.
+// Nothing is guessed: the app never moves text for you here, and every edit can be undone. Port of ui/screens/RescueScreen.kt (simplified).
 import { h, mount } from '../ui/dom.js';
 import { Routes } from '../ui/nav.js';
-import { ScrollPage, Section } from '../ui/page.js';
+import { ScrollPage } from '../ui/page.js';
 import { bigButton, textButton, sheet, dialog, confirmDialog, say, undoable, chip, iconBtn, photoImg } from '../ui/widgets.js';
 import * as R from '../engine/rescue.js';
 import { Recipe } from '../engine/models.js';
@@ -10,54 +12,52 @@ import { validate } from '../engine/validator.js';
 import { pickFile } from '../ui/shared.js';
 import { cropSheet } from './crop.js';
 import { allowLandscape, isWideScreen } from '../ui/orientation.js';
+import { numberedList } from '../ui/numbered.js';
 
 /** Starts a rescue draft from an import draft (or edits an existing one), stored privately so it survives leaving the app. */
 export const draftFromImport = (d) => R.newDraft({ recipe: d.recipe, source: d.source || R.emptySource(), imageCandidates: d.imageCandidates || [], findings: validate(d).warnings || [] });
 
-export function askText({ title, hint = '', initial = '', multiline = false, ok = 'Save', note = null, onOk }) {
-  sheet({ label: title, tall: multiline, content: (close) => {
-    const f = multiline ? h('textarea', { class: 'field', 'aria-label': title, placeholder: hint, style: 'min-height:180px', 'data-testid': 'ask-field' }) : h('input', { class: 'field', type: 'text', 'aria-label': title, placeholder: hint, 'data-testid': 'ask-field', onkeydown: (e) => { if (e.key === 'Enter') go(); } });
-    f.value = initial;
-    const go = () => { close(false); onOk(f.value); };
-    return h('div', { class: 'sheet-col' }, h('h2', { class: 'sheet-title' }, title), note ? h('p', { class: 'sheet-note' }, note) : null, f, h('div', { class: 'sheet-row' }, bigButton('Cancel', () => close(), { primary: false }), bigButton(ok, go, { testid: 'ask-ok' })));
-  } });
-}
-
 export function rescueScreen(params, ctx, nav) {
   const drafts = ctx.drafts;
-  let st = null, tab = 'split', splitFrac = 0.4, lastWide = null, alive = true, saveTimer = null, originalLines = [], urls = {}, footBar = null;
-  const page = ScrollPage({ title: 'Recipe Rescue', testid: 'rescue', slot: 'page_15', onBack: () => leave() });
-  const undoBtn = iconBtn('Undo', '↶', () => apply(R.undo(st)), ''); const redoBtn = iconBtn('Redo', '↷', () => apply(R.redo(st)), '');
+  let st = null, tab = 'recipe', lastWide = null, alive = true, saveTimer = null;
+  const editors = new Set();
+  const page = ScrollPage({ title: 'Recipe Rescue', testid: 'rescue', slot: null, onBack: () => leave() });
+  const undoBtn = iconBtn('Undo', '↶', () => act(R.undo), ''); const redoBtn = iconBtn('Redo', '↷', () => act(R.redo), '');
   undoBtn.dataset.testid = 'rescue-undo'; redoBtn.dataset.testid = 'rescue-redo';
   page.head.querySelector('.sp-actions').append(undoBtn, redoBtn);
 
+  const commitAll = () => editors.forEach((e) => e.commit());
+  const syncUndo = () => { undoBtn.disabled = !R.canUndo(st); redoBtn.disabled = !R.canRedo(st); };
   const apply = (next) => { st = next; schedule(); render(); };
+  /** An edit made with a button: first take in whatever is being typed, then change the recipe and redraw. */
+  const act = (f) => { commitAll(); apply(f(st)); };
+  /** An edit made by typing in a field: the recipe changes, nothing is redrawn (a redraw would take the cursor away). */
+  const field = (f) => { const next = f(st); if (next === st) return; st = next; schedule(); syncUndo(); };   // nothing changed: nothing is saved
   const schedule = () => { clearTimeout(saveTimer); saveTimer = setTimeout(flush, 400); };
   const flush = async () => { clearTimeout(saveTimer); saveTimer = null; if (st && !st.draft.recipeId) st = { ...st, draft: await drafts.save(st.draft) }; };
-  const leave = async () => { await flush(); nav.backOr(Routes.HUB); };
-
+  const leave = async () => { commitAll(); await flush(); nav.backOr(Routes.HUB); };
   const recipe = () => st.draft.recipe;
   const hasImg = () => R.allFiles(st.draft.source).some((f) => !/\.pdf$/i.test(f));
+  const wideNow = () => isWideScreen(window.innerWidth, window.innerHeight);
 
-  // ---------- sheets ----------
-  function addMenu() {
-    sheet({ label: 'Add to recipe', content: (close) => h('div', { class: 'sheet-col' }, h('h2', { class: 'sheet-title' }, 'Add to the recipe'),
-      bigButton('Smart Paste…', () => { close(false); smartPaste(); }, { testid: 'smart-paste' }),
-      bigButton('Add ingredients…', () => { close(false); askText({ title: 'Add ingredients', hint: 'One per line', multiline: true, ok: 'Add', onOk: (t) => apply(R.addIngredients(st, t)) }); }, { primary: false }),
-      bigButton('Add steps…', () => { close(false); askText({ title: 'Add steps', hint: 'One per line or paragraph', multiline: true, ok: 'Add', onOk: (t) => apply(R.addSteps(st, t)) }); }, { primary: false }),
-      bigButton('Add a note…', () => { close(false); askText({ title: 'Add a note', multiline: true, ok: 'Add', onOk: (t) => apply(R.addNotes(st, t)) }); }, { primary: false })) });
+  // ---------- photo ----------
+  async function photoMenu() {
+    const r = recipe(); const src = st.draft.source;
+    const set = async (blob) => { const n = blob && await ctx.photos.saveBlob(blob); n ? act((s) => R.setPhoto(s, n)) : say("That photo couldn't be used."); };
+    sheet({ label: 'Recipe photo', content: (close) => h('div', { class: 'sheet-col' }, h('h2', { class: 'sheet-title' }, 'Recipe photo'),
+      src.dishPhoto ? bigButton('Use the dish photo found on the page', async () => { close(false); set(await drafts.file(src.dishPhoto)); }) : null,
+      hasImg() ? bigButton('Cut a photo out of the original…', () => { close(false); cutFromOriginal(); }, { primary: false }) : null,
+      bigButton('Choose from photo library', async () => { close(false); const f = await pickFile({ accept: 'image/*' }); if (f) set(f); }, { primary: false }),
+      bigButton('Take a photo', async () => { close(false); const f = await pickFile({ accept: 'image/*', capture: 'environment' }); if (f) set(f); }, { primary: false }),
+      r.photo ? bigButton('Remove photo', () => { close(false); act((s) => R.setPhoto(s, null)); }, { primary: false }) : null) });
   }
-  function smartPaste() {
-    askText({ title: 'Smart Paste', hint: 'Paste anything: a whole recipe or part of one', multiline: true, ok: 'Preview', note: 'You will see what goes where before anything is added. Nothing already in the recipe is overwritten.',
-      onOk: (t) => {
-        const p = R.planSmartPaste(t);
-        if (p.isEmpty) { say('Nothing recognisable in that text. Try adding it line by line instead.'); return; }
-        dialog({ title: 'Add this?', confirm: 'Add', cancel: 'Cancel', content: h('div', null,
-          p.title.trim() ? h('p', null, `Title: ${p.title}`) : null, h('p', null, `${p.ingredients.filter((i) => !i.header).length} ingredients, ${p.directions.filter((d) => !d.header).length} steps`),
-          p.servings != null ? h('p', null, `Servings: ${p.servings}`) : null, p.leftover.length ? h('p', { class: 'sheet-note' }, `${p.leftover.length} lines could not be placed and will be left out.`) : null),
-          onConfirm: () => apply(R.applySmartPaste(st, p)) });
-      } });
+  async function cutFromOriginal(file = null) {
+    const name = file || (st.draft.source.cleaned.find(Boolean) || st.draft.source.files.find((f) => !/\.pdf$/i.test(f))); if (!name) return;
+    const blob = await drafts.file(name); if (!blob) { say('The original picture is no longer on this device.'); return; }
+    cropSheet(blob, { title: 'Cut out the dish photo', onDone: async (b) => { const n = await ctx.photos.saveBlob(b); n ? act((s) => R.setPhoto(s, n)) : say("That photo couldn't be used."); } });
   }
+
+  // ---------- start fresh / discard / create ----------
   function startFresh() {
     sheet({ label: 'Start fresh', content: (close) => {
       const keep = new Set([R.TITLE, R.PHOTO]);
@@ -67,50 +67,13 @@ export function rescueScreen(params, ctx, nav) {
       draw();
       return h('div', { class: 'sheet-col' }, h('h2', { class: 'sheet-title' }, 'Start fresh'),
         h('p', { class: 'sheet-note' }, 'Clears everything except the parts you keep. The original is never touched, and one Undo brings it all back.'), box,
-        h('div', { class: 'sheet-row' }, bigButton('Cancel', () => close(), { primary: false }), bigButton('Clear the rest', () => { close(false); apply(R.startFresh(st, [...keep])); undoable('Cleared', () => apply(R.undo(st))); }, { testid: 'start-fresh-go' })));
+        h('div', { class: 'sheet-row' }, bigButton('Cancel', () => close(), { primary: false }), bigButton('Clear the rest', () => { close(false); act((s) => R.startFresh(s, [...keep])); undoable('Cleared', () => act(R.undo)); }, { testid: 'start-fresh-go' })));
     } });
   }
-  function lineMenu(item, kind) {
-    const isHdr = item.header;
-    sheet({ label: 'Edit line', content: (close) => h('div', { class: 'sheet-col' }, h('h2', { class: 'sheet-title' }, kind === 'ing' ? 'Ingredient' : 'Step'),
-      bigButton('Edit text…', () => { close(false); askText({ title: 'Edit', initial: item.text, multiline: true, onOk: (t) => apply(kind === 'ing' ? R.editIngredient(st, item.id, t) : R.editStep(st, item.id, t)) }); }),
-      bigButton(isHdr ? 'Make it a normal line' : 'Make it a heading', () => { close(false); apply(R.toggleHeader(st, item.id)); }, { primary: false }),
-      bigButton('Ask the family about this…', () => { close(false); askText({ title: 'Question for the family', hint: 'e.g. how much flour?', onOk: (t) => apply(R.addHelp(st, item.id, t)) }); }, { primary: false }),
-      bigButton('Select several lines', () => { close(false); apply(R.toggle(R.startSelecting(st), item.id)); }, { primary: false }),
-      bigButton('Delete line', () => { close(false); apply(R.remove(st, item.id)); undoable('Line deleted', () => apply(R.undo(st))); }, { primary: false })) });
-  }
-  function fieldSheet(which) {
-    const r = recipe();
-    const map = {
-      title: () => askText({ title: 'Title', initial: r.title, onOk: (t) => apply(R.setTitle(st, t)) }),
-      servings: () => askText({ title: 'Servings', initial: r.servings ?? '', hint: 'A number', onOk: (t) => (t.trim() ? apply(R.setServings(st, t)) : apply(R.clearServings(st))) }),
-      time: () => sheet({ label: 'Times', content: (close) => {
-        const mk = (l, v) => h('input', { class: 'field', type: 'text', inputmode: 'numeric', 'aria-label': `${l} minutes`, placeholder: `${l} (min)`, value: v ?? '' });
-        const p = mk('Prep', r.prepMinutes), c = mk('Cook', r.cookMinutes), t = mk('Total', r.totalMinutes);
-        return h('div', { class: 'sheet-col' }, h('h2', { class: 'sheet-title' }, 'Times'), p, c, t, bigButton('Save', () => { close(false); let n = st; n = R.setTime(n, 'prep', p.value); n = R.setTime(n, 'cook', c.value); n = R.setTime(n, 'total', t.value); apply(n); }));
-      } }),
-      notes: () => askText({ title: 'Notes', initial: r.notes, multiline: true, onOk: (t) => apply(R.setNotes(st, t)) }),
-      description: () => askText({ title: 'Description', initial: r.description, multiline: true, onOk: (t) => apply(R.setDescription(st, t)) }),
-    };
-    map[which]();
-  }
-  async function photoMenu() {
-    const r = recipe(); const src = st.draft.source;
-    sheet({ label: 'Recipe photo', content: (close) => h('div', { class: 'sheet-col' }, h('h2', { class: 'sheet-title' }, 'Recipe photo'),
-      src.dishPhoto ? bigButton('Use the dish photo found on the page', async () => { close(false); const b = await drafts.file(src.dishPhoto); const n = b && await ctx.photos.saveBlob(b); n ? apply(R.setPhoto(st, n)) : say("That photo couldn't be used."); }) : null,
-      hasImg() ? bigButton('Cut a photo out of the original…', () => { close(false); cutFromOriginal(); }, { primary: false }) : null,
-      bigButton('Choose from photo library', async () => { close(false); const f = await pickFile({ accept: 'image/*' }); if (f) { const n = await ctx.photos.saveBlob(f); n ? apply(R.setPhoto(st, n)) : say("That photo couldn't be used."); } }, { primary: false }),
-      bigButton('Take a photo', async () => { close(false); const f = await pickFile({ accept: 'image/*', capture: 'environment' }); if (f) { const n = await ctx.photos.saveBlob(f); n ? apply(R.setPhoto(st, n)) : say("That photo couldn't be used."); } }, { primary: false }),
-      r.photo ? bigButton('Remove photo', () => { close(false); apply(R.setPhoto(st, null)); }, { primary: false }) : null) });
-  }
-  async function cutFromOriginal(file = null) {
-    const name = file || (st.draft.source.cleaned.find(Boolean) || st.draft.source.files.find((f) => !/\.pdf$/i.test(f))); if (!name) return;
-    const blob = await drafts.file(name); if (!blob) { say('The original picture is no longer on this device.'); return; }
-    cropSheet(blob, { title: 'Cut out the dish photo', onDone: async (b) => { const n = await ctx.photos.saveBlob(b); n ? apply(R.setPhoto(st, n)) : say("That photo couldn't be used."); } });
-  }
-
-  // ---------- creating the recipe ----------
+  const hostOf = (u) => { try { return new URL(u).host.replace(/^www\./, ''); } catch { return null; } };
+  function discard() { confirmDialog('Discard this unfinished recipe?', 'The draft and its saved original files will be deleted from this device.', 'Discard', async () => { alive = false; clearTimeout(saveTimer); await drafts.discard(st.draft.id); nav.backOr(Routes.HUB); say('Draft discarded'); }, true); }
   async function create() {
+    commitAll();
     const probs = R.problems(recipe());
     if (probs.length) { dialog({ title: 'Not ready yet', text: probs.join('\n'), confirm: 'OK', noCancel: true }); return; }
     const open = R.openQuestions(st.draft);
@@ -124,150 +87,97 @@ export function rescueScreen(params, ctx, nav) {
     };
     if (open) dialog({ title: 'Questions still open', text: `${open} question${open === 1 ? '' : 's'} for the family ${open === 1 ? 'is' : 'are'} still open. Save the recipe anyway? The questions stay with the original.`, confirm: 'Save anyway', cancel: 'Not yet', onConfirm: go }); else go();
   }
-  const hostOf = (u) => { try { return new URL(u).host.replace(/^www\./, ''); } catch { return null; } };
-  function discard() { confirmDialog('Discard this unfinished recipe?', 'The draft and its saved original files will be deleted from this device.', 'Discard', async () => { alive = false; clearTimeout(saveTimer); await drafts.discard(st.draft.id); nav.backOr(Routes.HUB); say('Draft discarded'); }, true); }
 
-  // ---------- recipe tab ----------
-  function lineRow(item, kind, idx, total) {
-    const sel = st.selection.includes(item.id), helps = R.helpFor(st, item.id);
-    const label = (kind === 'dir' && !item.header ? `${recipe().directions.filter((d, i) => !d.header && i <= idx).length}. ` : '') + (item.text || '(empty)');
-    const why = item.header ? null : R.reviewReason(item.text, kind);
-    return h('div', { class: `sp-line${sel ? ' selected' : ''}${item.header ? ' header' : ''}${why ? ' review' : ''}`, 'data-testid': `${kind}-line`, 'data-review': why ? why : null },
-      st.selecting ? h('input', { type: 'checkbox', checked: sel, 'aria-label': 'Select line', style: 'width:28px;height:28px', onchange: () => apply(R.toggle(st, item.id)) }) : null,
-      h('div', { class: 'sp-text', role: 'button', tabindex: '0', onclick: () => (st.selecting ? apply(R.toggle(st, item.id)) : lineMenu(item, kind)) }, label,
-        why ? h('div', { class: 'sp-check', 'data-testid': 'review-note' }, `Check this line: ${why}.`) : null,
-        ...helps.map((n) => h('div', { class: 'sp-warn', style: 'margin-top:4px' }, `Ask: ${n.text}`))),
-      !st.selecting ? h('button', { class: 'sp-mini', type: 'button', 'aria-label': 'Move up', disabled: idx === 0, onclick: () => apply(R.move(st, item.id, -1)) }, '↑') : null,
-      !st.selecting ? h('button', { class: 'sp-mini', type: 'button', 'aria-label': 'Move down', disabled: idx === total - 1, onclick: () => apply(R.move(st, item.id, 1)) }, '↓') : null);
-  }
-  function fieldRow(label, value, which) { return h('button', { class: 'sp-line', type: 'button', style: 'text-align:left;cursor:pointer;width:100%', 'data-testid': `field-${which}`, onclick: () => fieldSheet(which) }, h('div', { class: 'sp-text' }, h('strong', null, label + ' '), value || h('span', { style: 'opacity:.6' }, 'Tap to add'))); }
-
-  function recipeTab() {
-    const r = recipe(); const out = [];
-    const finds = st.draft.findings || [];
+  // ---------- OUR side: the recipe ----------
+  const group = (label, control) => h('label', { class: 'rr-group' }, h('span', { class: 'rr-label' }, label), control);
+  const textField = (label, value, onCommit, { testid, inputmode = null, placeholder = '' } = {}) => {
+    const el = h('input', { class: 'rr-field', type: 'text', inputmode, placeholder, value: value ?? '', 'data-testid': testid });
+    el.addEventListener('change', () => onCommit(el.value));
+    return group(label, el);
+  };
+  function recipeSide() {
+    const r = recipe(); const out = [h('h2', { class: 'rr-h' }, 'Recipe')];
+    const finds = (st.draft.findings || []).filter((f) => f.severity !== 'INFO').slice(0, 6);   // information-only notes are not "things to check"
+    if (finds.length) out.push(h('div', { class: 'rr-notes' }, ...finds.map((f) => h('div', { class: `sp-warn${f.severity === 'ERROR' ? ' error' : ''}` }, f.message))));
     const review = R.linesToReview(r).length;
-    if (review) out.push(Section('', h('div', { class: 'sp-warn', 'data-testid': 'review-count' }, `${review} line${review === 1 ? '' : 's'} marked "Check this line". They are shown exactly as they were read: compare them with the Original tab, then fix or delete them.`)));
-    const shownFinds = finds.filter((f) => f.severity !== 'INFO').slice(0, 6);   // information-only notes are not "things to check": no empty heading
-    if (shownFinds.length) out.push(Section('Check these', ...shownFinds.map((f) => h('div', { class: `sp-warn${f.severity === 'ERROR' ? ' error' : ''}` }, f.message))));
-    out.push(Section('', h('div', { style: 'position:relative' }, r.photo ? photoImg(ctx.photos, r.photo, { cls: 'sp-photo', alt: 'Recipe photo' }) : h('div', { class: 'sp-photo', style: 'display:flex;align-items:center;justify-content:center;color:#6a5a40' }, 'No photo yet'),
-      h('div', { style: 'margin-top:8px' }, bigButton(r.photo ? 'Change photo' : 'Add photo', photoMenu, { primary: false, testid: 'rescue-photo' })))));
-    out.push(Section('Details', fieldRow('Title', r.title, 'title'), fieldRow('Servings', r.servings ?? '', 'servings'),
-      fieldRow('Times', [r.prepMinutes != null ? `prep ${r.prepMinutes}` : '', r.cookMinutes != null ? `cook ${r.cookMinutes}` : '', r.totalMinutes != null ? `total ${r.totalMinutes}` : ''].filter(Boolean).join(' · '), 'time'),
-      fieldRow('Notes', r.notes, 'notes')));
-    const ingN = r.ingredients.length, dirN = r.directions.length;
-    out.push(Section(`Ingredients (${r.ingredients.filter((i) => !i.header).length})`, ...(ingN ? r.ingredients.map((i, k) => lineRow(i, 'ing', k, ingN)) : [h('div', { class: 'sp-warn' }, 'No ingredients yet. Use Add, or send lines from the Original tab.')]),
-      st.selecting ? textButton('Select all ingredients', () => apply(R.selectAllIngredients(st))) : null));
-    out.push(Section(`Steps (${r.directions.filter((d) => !d.header).length})`, ...(dirN ? r.directions.map((d, k) => lineRow(d, 'dir', k, dirN)) : [h('div', { class: 'sp-warn' }, 'No steps yet. Use Add, or send lines from the Original tab.')]),
-      st.selecting ? textButton('Select all steps', () => apply(R.selectAllSteps(st))) : null));
-    const notes = st.draft.helpNotes;
-    if (notes.length) out.push(Section('Questions for the family', ...notes.map((n) => h('div', { class: 'sp-line', style: n.resolved ? 'opacity:.55' : '' }, h('div', { class: 'sp-text' }, n.text),
-      h('button', { class: 'sp-mini', type: 'button', 'aria-label': n.resolved ? 'Reopen' : 'Mark answered', onclick: () => apply(R.resolveHelp(st, n.id, !n.resolved)) }, n.resolved ? '↺' : '✓'),
-      h('button', { class: 'sp-mini', type: 'button', 'aria-label': 'Delete question', onclick: () => apply(R.deleteHelp(st, n.id)) }, '✕')))));
-    out.push(Section('', textButton('Start fresh…', startFresh), textButton('Discard this unfinished recipe', discard)));
+    if (review) out.push(h('div', { class: 'sp-warn', 'data-testid': 'review-count' }, `${review} line${review === 1 ? '' : 's'} marked "Check this line". They are shown exactly as they were read: compare them with the original, then fix or delete them.`));
+    out.push(textField('Title', r.title, (v) => field((s) => R.setTitle(s, v)), { testid: 'rr-title' }));
+    out.push(h('div', { class: 'rr-pair' },
+      textField('Servings', r.servings ?? '', (v) => field((s) => (v.trim() ? R.setServings(s, v) : R.clearServings(s))), { testid: 'rr-servings', inputmode: 'numeric' }),
+      textField('Prep minutes', r.prepMinutes ?? '', (v) => field((s) => R.setTime(s, 'prep', v)), { testid: 'rr-prep', inputmode: 'numeric' }),
+      textField('Cook minutes', r.cookMinutes ?? '', (v) => field((s) => R.setTime(s, 'cook', v)), { testid: 'rr-cook', inputmode: 'numeric' })));
+    const flagged = (kind) => (t) => (t.trim() && !R.isHeadingText(t) ? R.reviewReason(t, kind) : null);
+    const ing = numberedList({ rows: R.ingredientRows(r), label: 'Ingredient', testid: 'ing', placeholder: 'Paste or type the ingredients. Enter starts the next one.', clean: (text) => R.ingredientLines(text).map((l) => l.replace(/^\d{1,2}\s*[.)]\s+(?=\S)/, '')), review: flagged('ing'), onChange: (rows) => field((s) => R.setIngredientRows(s, rows)) });
+    const dir = numberedList({ rows: R.stepRows(r), label: 'Step', testid: 'dir', placeholder: 'Paste or type the steps. Enter starts the next one.', clean: R.stepLines, review: flagged('dir'), onChange: (rows) => field((s) => R.setStepRows(s, rows)) });
+    editors.add(ing); editors.add(dir);
+    out.push(h('div', { class: 'rr-group' }, h('span', { class: 'rr-label' }, 'Ingredients'), ing.el));
+    out.push(h('div', { class: 'rr-group' }, h('span', { class: 'rr-label' }, 'Steps'), dir.el));
+    const notes = h('textarea', { class: 'rr-field rr-notes-field', rows: '4', 'data-testid': 'rr-notes' }); notes.value = r.notes || '';
+    notes.addEventListener('change', () => field((s) => R.setNotes(s, notes.value)));
+    out.push(group('Notes', notes));
+    out.push(h('div', { class: 'rr-group' }, h('span', { class: 'rr-label' }, 'Photo'), r.photo ? photoImg(ctx.photos, r.photo, { cls: 'rr-photo', alt: 'Recipe photo' }) : null,
+      h('div', { class: 'rr-row' }, bigButton(r.photo ? 'Change photo' : 'Add photo', photoMenu, { primary: false, testid: 'rescue-photo' }))));
+    const qs = st.draft.helpNotes;
+    if (qs.length) out.push(h('div', { class: 'rr-group' }, h('span', { class: 'rr-label' }, 'Questions for the family'), ...qs.map((n) => h('div', { class: 'rr-q', style: n.resolved ? 'opacity:.55' : '' }, h('span', { class: 'rr-q-text' }, n.text),
+      h('button', { class: 'sp-mini', type: 'button', 'aria-label': n.resolved ? 'Reopen' : 'Mark answered', onclick: () => act((s) => R.resolveHelp(s, n.id, !n.resolved)) }, n.resolved ? '↺' : '✓'),
+      h('button', { class: 'sp-mini', type: 'button', 'aria-label': 'Delete question', onclick: () => act((s) => R.deleteHelp(s, n.id)) }, '✕')))));
+    out.push(h('div', { class: 'rr-row rr-links' }, textButton('Start fresh…', startFresh), textButton('Discard this unfinished recipe', discard)));
     return out;
   }
-  // ---------- original tab ----------
-  function sendMenu(texts) {
-    const text = texts.join('\n');
-    sheet({ label: 'Send selected text', content: (close) => h('div', { class: 'sheet-col' }, h('h2', { class: 'sheet-title' }, `Send ${texts.length} line${texts.length === 1 ? '' : 's'} to…`),
-      h('p', { class: 'sheet-note' }, text.length > 140 ? text.slice(0, 140) + '…' : text),
-      bigButton('Ingredients', () => { close(false); apply(R.addIngredients(st, text)); originalSel.clear(); }, { testid: 'send-ing' }),
-      bigButton('Steps', () => { close(false); apply(R.addSteps(st, text)); originalSel.clear(); }, { primary: false, testid: 'send-steps' }),
-      bigButton('Title', () => { close(false); apply(R.setTitle(st, text)); originalSel.clear(); }, { primary: false }),
-      bigButton('Servings', () => { close(false); apply(R.setServings(st, text)); originalSel.clear(); }, { primary: false }),
-      bigButton('Notes', () => { close(false); apply(R.addNotes(st, text)); originalSel.clear(); }, { primary: false }),
-      selectionToReplace() ? bigButton('Replace the lines I selected in the recipe', () => { close(false); apply(R.replaceSelected(st, text)); originalSel.clear(); }, { primary: false }) : null) });
-  }
-  const selectionToReplace = () => st.selection.length > 0;
-  const originalSel = new Set();
-  function originalTab(inSplit = false) {
-    const src = st.draft.source; const out = [];
-    if (R.sourceIsEmpty(src)) return [Section('', h('div', { class: 'sp-warn' }, 'No original was kept for this recipe. You can still edit everything on the Recipe tab.'))];
-    if (src.readNote) out.push(Section('', h('div', { class: 'sp-note', 'data-testid': 'read-note' }, `How this was read: ${src.readNote}`)));
-    if (src.url) out.push(Section('', h('div', { class: 'sp-warn' }, `Captured from ${src.url}`), bigButton('Open the page in your browser', () => window.open(src.url, '_blank', 'noopener'), { primary: false })));
-    // a kept PDF is opened with its own button below; it is not a picture and must not be listed as one (it showed as a broken image)
+
+  // ---------- the ORIGINAL side ----------
+  function originalSide() {
+    const src = st.draft.source; const out = [h('h2', { class: 'rr-h' }, 'Original')];
+    if (R.sourceIsEmpty(src)) { out.push(h('p', { class: 'rr-note' }, 'No original was kept for this recipe. You can still type everything on the recipe side.')); return out; }
+    if (src.readNote) out.push(h('p', { class: 'rr-note', 'data-testid': 'read-note' }, `How this was read: ${src.readNote}`));
+    if (src.url) out.push(h('div', { class: 'rr-group' }, h('p', { class: 'rr-note' }, `Captured from ${src.url}`), bigButton('Open the page in your browser', () => window.open(src.url, '_blank', 'noopener'), { primary: false })));
+    // a kept PDF is opened with its own button; it is not a picture and must not be listed as one
     const files = [...(src.cleaned || []).filter(Boolean), ...(src.files || []).filter((f) => !/\.pdf$/i.test(f))];
-    if (files.length) out.push(Section('Pictures', ...files.map((f) => {
-      const img = h('img', { class: 'sp-img', alt: 'Captured page', 'data-testid': 'original-image' }); drafts.url(f).then((u) => { if (u && img.isConnected !== undefined) img.src = u; });
-      return h('div', { class: 'sp-sec' }, img, bigButton('Cut a photo out of this…', () => cutFromOriginal(f), { primary: false }));
-    })));
-    if ((src.kind === 'PDF') && src.files?.[0]) out.push(Section('', textButton('Open the PDF', async () => { const b = await drafts.file(src.files[0]); if (b) window.open(URL.createObjectURL(b), '_blank'); })));
-    originalLines = R.sourceLines(src);
-    if (originalLines.length) {
-      out.push(Section(inSplit ? 'Text: tap lines, then send' : 'Text (tap lines, then send them where they belong)', ...originalLines.map((l, i) => h('div', { class: `sp-line${originalSel.has(i) ? ' selected' : ''}`, 'data-testid': 'orig-line' },
-        h('div', { class: 'sp-text', role: 'checkbox', 'aria-checked': String(originalSel.has(i)), tabindex: '0', onclick: () => { originalSel.has(i) ? originalSel.delete(i) : originalSel.add(i); render(); } }, l)))));
-      footBar = h('div', { class: 'sp-bar' }, bigButton(`Send ${originalSel.size || ''} selected…`.replace('  ', ' '), () => sendMenu([...originalSel].sort((a, b) => a - b).map((i) => originalLines[i])), { disabled: !originalSel.size, testid: 'send-selected' }),
-        bigButton('Select all', () => { originalLines.forEach((_, i) => originalSel.add(i)); render(); }, { primary: false }));
-    }
+    files.forEach((f) => {
+      const img = h('img', { class: 'rr-img', alt: 'Captured page', 'data-testid': 'original-image' }); drafts.url(f).then((u) => { if (u) img.src = u; });
+      out.push(h('div', { class: 'rr-group' }, img, h('div', { class: 'rr-row' }, textButton('Cut a photo out of this…', () => cutFromOriginal(f)))));
+    });
+    if (src.kind === 'PDF' && src.files?.[0]) out.push(h('div', { class: 'rr-row' }, textButton('Open the PDF', async () => { const b = await drafts.file(src.files[0]); if (b) window.open(URL.createObjectURL(b), '_blank'); })));
+    if ((src.text || '').trim()) out.push(h('div', { class: 'rr-group' }, h('span', { class: 'rr-label' }, 'Text (press and hold to select, then copy)'), h('div', { class: 'rr-original', 'data-testid': 'orig-text' }, src.text.trim())));
     return out;
   }
 
-  /** The splitter between the original and the recipe card: drag it (or use the arrow keys) to give either more room. */
-  function divider(wide) {
-    const d = h('div', { class: 'sp-divider', role: 'separator', 'aria-orientation': wide ? 'vertical' : 'horizontal', 'aria-label': 'Drag to give the original or the recipe more room', tabindex: '0', 'data-testid': 'split-divider' });
-    const set = (f) => { splitFrac = Math.min(0.8, Math.max(0.2, f)); d.parentElement?.style.setProperty('--split', String(splitFrac)); };
-    d.addEventListener('pointerdown', (e) => {
-      d.setPointerCapture?.(e.pointerId); const box = d.parentElement.getBoundingClientRect();
-      const move = (ev) => set(wide ? (ev.clientX - box.left) / box.width : (ev.clientY - box.top) / box.height);
-      const up = () => { d.removeEventListener('pointermove', move); d.removeEventListener('pointerup', up); d.removeEventListener('pointercancel', up); };
-      d.addEventListener('pointermove', move); d.addEventListener('pointerup', up); d.addEventListener('pointercancel', up); e.preventDefault();
-    });
-    d.addEventListener('keydown', (e) => { if (['ArrowLeft', 'ArrowUp'].includes(e.key)) { set(splitFrac - 0.05); e.preventDefault(); } else if (['ArrowRight', 'ArrowDown'].includes(e.key)) { set(splitFrac + 0.05); e.preventDefault(); } });
-    return d;
-  }
-  const wideNow = () => isWideScreen(window.innerWidth, window.innerHeight);
-
-  // Wide (a phone on its side, a tablet): the original on the left, the editable recipe card on the right, each scrolling on its own.
-  // Upright: the original above the card with a draggable divider, or either one alone (chips). Nothing is shown twice or rearranged.
+  // Wide (a phone on its side, a tablet): the original on the left, our recipe on the right, each scrolling on its own. Upright: one at a time, full width.
   function render() {
     if (!alive || !st) return;
-    undoBtn.disabled = !R.canUndo(st); redoBtn.disabled = !R.canRedo(st);
+    editors.forEach((e) => e.destroy()); editors.clear();
+    syncUndo();
     const wide = wideNow(); lastWide = wide;
-    const view = wide ? 'split' : tab;
-    const bar = h('div', { class: 'sp-bar' },
-      ...(st.selecting ? [bigButton(`Delete ${st.selection.length}`, () => { apply(R.removeSelected(st)); undoable('Deleted', () => apply(R.undo(st))); }, { disabled: !st.selection.length, testid: 'delete-selected' }),
-        bigButton('Replace with text…', () => askText({ title: 'Replace selected lines', multiline: true, ok: 'Replace', onOk: (t) => apply(R.replaceSelected(st, t)) }), { primary: false, disabled: !st.selection.length }),
-        bigButton('Done selecting', () => apply(R.cancelSelection(st)), { primary: false })]
-      : [bigButton('Add…', addMenu, { primary: false, testid: 'rescue-add' }), bigButton('Select lines', () => apply(R.startSelecting(st)), { primary: false }), bigButton('Create recipe', create, { testid: 'rescue-create' })]));
-    const q = (sel) => page.body.querySelector(sel);
-    const keep = { body: page.body.scrollTop, orig: q('[data-testid="pane-original-scroll"]')?.scrollTop ?? 0, rec: q('[data-testid="pane-recipe-scroll"]')?.scrollTop ?? 0 };
-    footBar = null;
-    const origNodes = view === 'recipe' ? [] : originalTab(view === 'split');
-    const origBar = footBar; footBar = null;
-    const recNodes = view === 'original' ? [] : recipeTab();
-    page.body.classList.toggle('sp-body-split', view === 'split');
-    const tabs = wide ? null : h('div', { class: 'sp-tabs', role: 'tablist' },
-      chip('Split', view === 'split', () => { tab = 'split'; render(); }, { 'data-testid': 'tab-split' }),
-      chip('Recipe', view === 'recipe', () => { tab = 'recipe'; render(); }, { 'data-testid': 'tab-recipe' }),
-      chip('Original', view === 'original', () => { tab = 'original'; render(); }, { 'data-testid': 'tab-original' }));
-    if (view === 'split') {
-      // each pane = a scrolling area with its buttons in a row UNDER it (never on top of the content)
-      const originalScroll = h('div', { class: 'sp-pane-scroll', 'data-testid': 'pane-original-scroll' }, ...origNodes);
-      const recipeScroll = h('div', { class: 'sp-pane-scroll', 'data-testid': 'pane-recipe-scroll' }, ...recNodes);
-      const originalPane = h('div', { class: 'sp-pane sp-pane-original', 'data-testid': 'pane-original' }, originalScroll, origBar);
-      const recipePane = h('div', { class: 'sp-pane sp-pane-recipe', 'data-testid': 'pane-recipe' }, recipeScroll, wide ? bar : null);
-      mount(page.body, tabs, h('div', { class: `sp-split ${wide ? 'wide' : 'stack'}`, style: `--split:${splitFrac}`, 'data-testid': 'split' }, originalPane, divider(wide), recipePane));
-      mount(page.foot, wide ? null : bar);
-      originalScroll.scrollTop = keep.orig; recipeScroll.scrollTop = keep.rec;
-    } else {
-      mount(page.body, tabs, ...(view === 'recipe' ? recNodes : origNodes));
-      mount(page.foot, view === 'recipe' ? bar : origBar);
-      page.body.scrollTop = keep.body;
-    }
+    const scroll = (id) => page.body.querySelector(`[data-testid="${id}"]`)?.scrollTop ?? 0;
+    const keep = { orig: scroll('pane-original'), rec: scroll('pane-recipe') };
+    const pane = (id, kids) => h('div', { class: 'rr-pane', 'data-testid': id }, ...kids);
+    const orig = wide || tab === 'original' ? pane('pane-original', originalSide()) : null;
+    const rec = wide || tab === 'recipe' ? pane('pane-recipe', recipeSide()) : null;
+    const choose = h('div', { class: 'rr-switch', role: 'tablist' }, chip('Original', tab === 'original', () => { commitAll(); tab = 'original'; render(); }, { 'data-testid': 'tab-original' }), chip('Recipe', tab === 'recipe', () => { commitAll(); tab = 'recipe'; render(); }, { 'data-testid': 'tab-recipe' }));
+    mount(page.body, wide ? null : choose, h('div', { class: `rr-cols${wide ? ' wide' : ''}` }, orig, rec));
+    mount(page.foot, h('div', { class: 'sp-bar' }, bigButton('Create recipe', create, { testid: 'rescue-create' })));
+    if (orig) orig.scrollTop = keep.orig; if (rec) rec.scrollTop = keep.rec;
   }
   // turning the phone: only a change between wide and upright needs a new layout
   let resizeTimer = null;
-  const onResize = () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (alive && st && wideNow() !== lastWide) render(); }, 60); };
+  const onResize = () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (alive && st && wideNow() !== lastWide) { commitAll(); render(); } }, 60); };
   window.addEventListener('resize', onResize);
   allowLandscape(true);   // this is the one screen that may turn sideways
+  page.body.classList.add('rr-body');
 
   (async () => {
     if (params.draftId) { const d = await drafts.get(params.draftId); if (!d) { say('That unfinished recipe is no longer here.'); nav.backOr(Routes.HUB); return; } st = R.state(d); }
-    else if (ctx.importSession.draft) { st = R.state(draftFromImport(ctx.importSession.draft)); if (ctx.importSession.photoFile && !st.draft.recipe.photo) st = R.state({ ...st.draft, recipe: { ...st.draft.recipe, photo: ctx.importSession.photoFile } }); st = { ...st, draft: await drafts.save(st.draft) }; tab = 'split'; }
+    else if (ctx.importSession.draft) { st = R.state(draftFromImport(ctx.importSession.draft)); if (ctx.importSession.photoFile && !st.draft.recipe.photo) st = R.state({ ...st.draft, recipe: { ...st.draft.recipe, photo: ctx.importSession.photoFile } }); st = { ...st, draft: await drafts.save(st.draft) }; }
     else { st = R.state(R.newDraft({ recipe: Recipe() })); }
-    if (params.tab) tab = params.tab;
+    if (params.tab === 'original' || params.tab === 'recipe') tab = params.tab;
     render();
   })();
-  page.destroy = () => { alive = false; clearTimeout(resizeTimer); window.removeEventListener('resize', onResize); allowLandscape(false); if (saveTimer) flush(); };
+  page.destroy = () => {
+    const wasAlive = alive; alive = false;   // after Create or Discard the screen is already finished: nothing may be saved again
+    clearTimeout(resizeTimer); window.removeEventListener('resize', onResize); allowLandscape(false);
+    if (wasAlive) commitAll();
+    editors.forEach((e) => e.destroy()); editors.clear();
+    if (wasAlive && saveTimer) flush();
+  };
   return { el: page.el, destroy: () => page.destroy() };
 }

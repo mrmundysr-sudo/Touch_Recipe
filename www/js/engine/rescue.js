@@ -195,6 +195,30 @@ export function pageText(html, maxLines = 1500) {
   } catch { return ''; }
 }
 
+// ---------- the numbered-list editors (plain Recipe Rescue) ----------
+// Ingredients and steps are edited as numbered rows: Enter starts a new numbered row, deleting at the start of a row joins it to the one above.
+// A row that ends with a colon is a heading ("For the sauce:"); it is not numbered. Empty rows are dropped. One call = one Undo step.
+const rowText = (x) => (x.header ? `${x.text}:` : x.text);
+export const ingredientRows = (r) => r.ingredients.map((i) => ({ id: i.id, text: rowText(i) }));
+export const stepRows = (r) => r.directions.map((d) => ({ id: d.id, text: rowText(d) }));
+export const isHeadingText = (t) => { const x = String(t || '').trim(); return x.length > 1 && x.length < 50 && x.endsWith(':'); };
+const parseRow = (t) => { const text = String(t || '').replace(/\s+/g, ' ').trim(); const header = isHeadingText(text); return { text: header ? text.replace(/:+$/, '').trim() : text, header }; };
+export function setIngredientRows(s, rows) {
+  return edit(s, (r) => {
+    const old = new Map(r.ingredients.map((i) => [i.id, i]));
+    const list = rows.map((x) => ({ x, p: parseRow(x.text) })).filter(({ p }) => p.text).map(({ x, p }) => { const o = x.id ? old.get(x.id) : null; return o ? { ...o, text: p.text, header: p.header } : Ingredient({ ...(x.id ? { id: x.id } : {}), text: p.text, header: p.header }); });
+    return { ...r, ingredients: list };
+  });
+}
+export function setStepRows(s, rows) {
+  return edit(s, (r) => {
+    const old = new Map(r.directions.map((d) => [d.id, d]));
+    const list = rows.map((x) => ({ x, p: parseRow(x.text) })).filter(({ p }) => p.text).map(({ x, p }) => { const o = x.id ? old.get(x.id) : null;
+      return o ? { ...o, text: p.text, header: p.header, timerSeconds: o.text === p.text ? o.timerSeconds : timerSeconds(p.text) } : Direction({ ...(x.id ? { id: x.id } : {}), text: p.text, header: p.header, timerSeconds: timerSeconds(p.text) }); });
+    return { ...r, directions: list };
+  });
+}
+
 // ---------- lines that need a look ----------
 // Nothing is changed or guessed here: a line the app is unsure about stays exactly as it is, editable, and is marked so the
 // person checks it against the Original tab. `kind` is 'ing' or 'dir'. Returns a short reason, or null when the line looks fine.
