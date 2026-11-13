@@ -107,51 +107,6 @@ public class TouchRecipeOcrPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    /// The text layer of one PDF page as pieces with positions (points, y growing downward). A piece is a run of characters on
-    /// one baseline with no gap. PDFKit's own `string` follows the order the file draws things in, which on a page with columns
-    /// or a table of amounts and ingredients is not the reading order; the app puts the pieces back in order (layout.js).
-    /// A rotated page returns nothing, and the app then uses the plain text.
-    private func textPieces(_ page: PDFPage, index: Int) -> [[String: Any]] {
-        guard page.rotation == 0, let all = page.string else { return [] }
-        let ns = all as NSString
-        let box = page.bounds(for: .mediaBox)
-        var pieces: [[String: Any]] = []
-        var text = ""
-        var rect = CGRect.null
-        var prev = CGRect.null
-        func flush() {
-            if !text.isEmpty && !rect.isNull {
-                pieces.append(["text": text,
-                               "left": Double(rect.minX - box.minX), "right": Double(rect.maxX - box.minX),
-                               "top": Double(box.maxY - rect.maxY), "bottom": Double(box.maxY - rect.minY),
-                               "page": index])
-            }
-            text = ""
-            rect = CGRect.null
-            prev = CGRect.null
-        }
-        for i in 0..<ns.length {
-            let ch = ns.substring(with: NSRange(location: i, length: 1))
-            if ch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { flush(); continue }
-            let r = page.characterBounds(at: i)
-            if r.isNull || r.isInfinite { continue }
-            if !prev.isNull {
-                // A piece is a word: it ends at white space (handled above), never at a small gap between two characters.
-                // PDFKit's character boxes are not exact (kerning, ligatures, web fonts), and cutting at a small gap
-                // split words into pieces ("s poon", "chic ken") that the layout reader then joined with spaces.
-                // Only a jump that cannot happen inside a word (a whole character height of gap, going backwards, or a new baseline) ends a piece.
-                let h = max(prev.height, r.height)
-                let gap = r.minX - prev.maxX
-                if gap > h * 1.0 || gap < -h * 1.0 || abs(r.midY - prev.midY) > h * 0.6 { flush() }
-            }
-            text += ch
-            rect = rect.isNull ? r : rect.union(r)
-            prev = r
-        }
-        flush()
-        return pieces
-    }
-
     @objc func recognizeImage(_ call: CAPPluginCall) {
         guard let b64 = call.getString("image"),
               let data = Data(base64Encoded: b64, options: .ignoreUnknownCharacters),
@@ -182,7 +137,7 @@ public class TouchRecipeOcrPlugin: CAPPlugin, CAPBridgedPlugin {
             for i in 0..<count {
                 guard let page = doc.page(at: i) else { continue }
                 var text = forceOcr ? "" : (page.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                var found: [[String: Any]] = forceOcr ? [] : self.textPieces(page, index: i)
+                var found: [[String: Any]] = forceOcr ? [] : touchRecipeTextPieces(page, index: i)
                 if text.count < 40 {
                     // a scanned page has no text layer: render it and recognise the picture
                     let box = page.bounds(for: .mediaBox)
@@ -236,13 +191,15 @@ src = delegate.read_text()
 if "TouchRecipeOcrPlugin" not in src:
     if "import Vision" not in src:
         src = src.replace("import Capacitor", "import Capacitor\nimport Vision\nimport PDFKit", 1)
-    delegate.write_text(src.rstrip() + "\n" + SWIFT)
+    # the shared piece reader (tools/swift/TextPieces.swift): same file the macOS probe compiles; its import lines are already at the top
+    shared = "\n".join(l for l in (ROOT / "tools" / "swift" / "TextPieces.swift").read_text().split("\n") if not l.startswith("import "))
+    delegate.write_text(src.rstrip() + "\n" + SWIFT + "\n" + shared)
 story = APP / "Base.lproj" / "Main.storyboard"
 t = story.read_text()
 if 'customClass="CAPBridgeViewController" customModule="Capacitor"' in t:
     t = t.replace('customClass="CAPBridgeViewController" customModule="Capacitor"', 'customClass="MainViewController" customModule="App" customModuleProvider="target"')
     story.write_text(t)
 assert "MainViewController" in story.read_text(), "Main.storyboard was not pointed at MainViewController"
-assert "TouchRecipeOcrPlugin" in delegate.read_text(), "AppDelegate.swift was not patched"
+assert "TouchRecipeOcrPlugin" in delegate.read_text() and "func touchRecipeTextPieces" in delegate.read_text(), "AppDelegate.swift was not patched"
 
 print("iOS project patched; AppIcon is opaque RGB 1024x1024; text-recognition bridge installed.")

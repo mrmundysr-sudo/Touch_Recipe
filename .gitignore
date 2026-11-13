@@ -11,3 +11,6 @@ captures/
 # iOS (Capacitor) shell: the Xcode project is generated in CI and never committed
 node_modules/
 ios/
+
+# private fixtures (third-party PDFs used by the real-PDF tests)
+tests/private/

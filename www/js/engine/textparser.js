@@ -36,7 +36,7 @@ const LEADING_STEP_NUMBER = /^\s*(?:step\s*)?(\d{1,2})\s*[.):\-]\s+/i;
 // details that belong to the recipe card, not to a list: they are read wherever they turn up, never as an ingredient or a step
 const STRICT_META = /^\s*(ready in|serves|servings|yield)\s*:/i;
 const COUNT_LINE = /^\W*ingredients?\s*:\s*\d{1,3}\W*$/i;      // "Ingredients: 8" is a count, not the Ingredients heading
-const SUBMITTED = /^\W*submitted by\s+(\S.{0,60})$/i;
+const SUBMITTED = /^\W*submitted by\s+(\S.{0,60}?)(?:\s+\d{1,3})?\s*$/i;   // a trailing number is the page's review count, not part of the name
 const EDITOR_NOTE = /^\W*editor'?s? note\s*:?\s*(.*)$/i;
 const AMOUNT_ONLY = /^\W*\d{1,3}(?:[./]\d{1,3})?\W*$/;
 const META_EACH = /(prep(?:aration)?(?: time)?|cook(?:ing)?(?: time)?|total(?: time)?|ready in|serv(?:es|ings?)|yield|makes)\s*[:\-]?\s*(.*?)(?=\s+(?:prep(?:aration)?(?: time)?|cook(?:ing)?(?: time)?|total(?: time)?|ready in|serv(?:es|ings?)|yield|makes)\s*[:\-]|$)/gi;
@@ -72,10 +72,16 @@ export function cleanPageText(raw) {
   return { text: out.join('\n'), sourceUrl, titleHint };
 }
 
-/** True when a PDF text layer looks damaged by web-font ligatures (e.g. "Di!iculty", an unmatched quote inside a word): read the page by OCR instead. */
+/** True when a PDF text layer looks damaged by web-font ligatures (e.g. "Di!iculty", `Southern "ied Chicken`): read the page by OCR instead.
+ *  A quotation that wraps over several lines has an odd number of quote marks on each of its lines; that is NOT damage (the owner's
+ *  Veg-All PDF was wrongly sent to picture reading because of it). A damaged ligature leaves a quote mark in front of lower-case letters
+ *  ("ied) or between letters (Di"iculty); a real opening quote is followed by a capital or a digit, a closing one follows punctuation or a letter and ends the word. */
 export function looksGarbled(text) {
   if (/[A-Za-z][!#%*][a-z]/.test(text) || /\uFFFD/.test(text)) return true;
-  for (const line of text.split('\n')) { const q = (line.match(/"/g) || []).length; if (q % 2 === 1 && !/[“”]/.test(line)) return true; }
+  for (const line of text.split('\n')) {
+    if ((line.match(/"/g) || []).length % 2 === 0 || /[\u201c\u201d]/.test(line)) continue;
+    if (/(^|[^\p{L}\p{N}])"\p{Ll}|\p{L}"\p{Ll}/u.test(line)) return true;
+  }
   return false;
 }
 
@@ -144,7 +150,7 @@ export function parse(raw, method = ImportMethod.TEXT, sourceUrl = null, titleHi
     order++;
     if (COUNT_LINE.test(line)) continue;
     const sub = SUBMITTED.exec(line);
-    if (sub && !/\d/.test(sub[1]) && current !== 'post') { extras.push(`Submitted by ${sub[1].trim()}`); continue; }
+    if (sub && !/\d/.test(sub[1]) && current !== 'post' && line.length < 70) { extras.push(`Submitted by ${sub[1].trim()}`); continue; }
     const ed = EDITOR_NOTE.exec(line);
     if (ed && current !== 'post') { current = 'note'; if (ed[1].trim()) sections.note.push(`Editor's Note: ${ed[1].trim()}`); else sections.note.push("Editor's Note:"); continue; }
     if (current === 'dir' && AMOUNT_ONLY.test(line)) continue;   // a step number or an amount left alone on its line is not a step

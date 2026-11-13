@@ -129,7 +129,7 @@ test('bridge answer: positioned pieces are read in layout order; the plain text 
   assert.ok(r.text.startsWith('SAVORY CHICKEN PIE'));
   assert.ok(r.text.includes('1/2 cup milk'));
   assert.equal(r.notes.length, 1);
-  assert.deepEqual(pdfText({ text: 'Pie\nIngredients\n2 cups flour' }), { text: 'Pie\nIngredients\n2 cups flour', extra: '', notes: [] }, 'an older bridge sends no pieces');
+  assert.deepEqual(pdfText({ text: 'Pie\nIngredients\n2 cups flour' }), { text: 'Pie\nIngredients\n2 cups flour', extra: '', notes: [], method: 'plain', pieces: 0 }, 'an older bridge sends no pieces');
   assert.equal(pdfText({ text: plainOf(frags), lines: [frag('x', 0, 0)] }).text, plainOf(frags), 'pieces that cover far less than the plain text are not trusted');
 });
 

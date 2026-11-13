@@ -32,3 +32,6 @@ Branch `ccr-ios-pdf-layout-fix`, cut from `ccr-c5e79198-7pqe4i` @ `0605029` (whi
 
 ## 2026-11-13 iOS review fix
 Branch `ccr-ios-rescue-review-fix`, cut from `ccr-ios-pdf-layout-fix` @ `13bf6cc` (untouched). Fixes the cut-up words, mixed sections and unreadable review screen from the owner's screenshots. Not merged, not delivered, **not uploaded to TestFlight**. See `docs/knowledge/reports/2026-11-13-ios-rescue-review-fix.md`; needs the macOS `ios-check.yml` run and a device pass.
+
+## 2026-11-13 iOS real-PDF root cause
+Same branch `ccr-ios-rescue-review-fix` (after `63ff9a2`). Root cause of the owner's screenshots found with the real PDF; see `docs/knowledge/reports/2026-11-13-ios-real-pdf-root-cause.md`. **Not uploaded to TestFlight from this work.** An earlier launcher run for `63ff9a2` (dispatched before the real PDF was available) may have produced a TestFlight build that still has the bug; do not test that one.

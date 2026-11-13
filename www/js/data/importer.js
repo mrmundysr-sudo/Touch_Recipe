@@ -66,7 +66,7 @@ export class VisionOcr {
   async recognizePdf(blob, { forceOcr = false } = {}) {
     const p = plugin('TouchRecipeOcr');
     if (!p) throw new OcrUnavailable("Text recognition isn't available on this device.");
-    try { const r = await p.recognizePdf({ pdf: await blobToB64(blob), maxPages: 6, forceOcr }); return { ...pdfText(r), pages: r.pages || 0 }; } catch { throw new OcrUnavailable("That PDF could not be read."); }
+    try { const r = await p.recognizePdf({ pdf: await blobToB64(blob), maxPages: 6, forceOcr }); return { ...pdfText(r), pages: r.pages || 0, picture: forceOcr }; } catch { throw new OcrUnavailable("That PDF could not be read."); }
   }
 }
 
@@ -88,11 +88,11 @@ export function pdfText(r) {
         const text = healText(out.text, plain), extra = healText(out.extra, plain);
         // what is still cut up is not rearranged or guessed: the person is told to check the text against the original
         if (fragmentRate(text) > 0.02) cautions.push('Some words in this PDF were read in pieces and could not be put back together. Check the text against the original.');
-        return { text, extra, notes: out.notes, ...(cautions.length ? { cautions } : {}) };
+        return { text, extra, notes: out.notes, method: 'positions', pieces: r.lines.length, ...(cautions.length ? { cautions } : {}) };
       }
     } catch { /* fall back to the plain text */ }
   }
-  return { text: plain, extra: '', notes: [] };
+  return { text: plain, extra: '', notes: [], method: 'plain', pieces: 0 };
 }
 
 /** One PDF page as a picture (native), or null when the bridge is missing. */
@@ -227,7 +227,9 @@ export class ImportService {
         }
       } catch { /* optional */ }
     }
-    const d = this.withSource(d0, { kind: 'PDF', files: name ? [name] : [], cleaned, text: r.extra ? `${r.text}\n\n--- Another recipe on the same page ---\n\n${r.extra}` : r.text, dishPhoto: dishFile });
+    // which route read the file, kept with the original so a screenshot of the Original tab shows it
+    const readNote = r.picture ? 'a picture of each page (the PDF\'s own text looked damaged)' : r.method === 'positions' ? `the PDF\'s own text with positions (${r.pieces} pieces)` : 'the PDF\'s own text, without positions';
+    const d = this.withSource(d0, { kind: 'PDF', readNote: `Read from ${readNote}.`, files: name ? [name] : [], cleaned, text: r.extra ? `${r.text}\n\n--- Another recipe on the same page ---\n\n${r.extra}` : r.text, dishPhoto: dishFile });
     if (dishBlob) d.dishPhotoBlob = dishBlob;
     return r.pages >= 6 ? { ...d, warnings: [...d.warnings, warn('recipe', 'Only the first 6 pages were read.', Severity.INFO)] } : d;
   }

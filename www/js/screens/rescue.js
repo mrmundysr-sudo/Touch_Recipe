@@ -36,7 +36,7 @@ export function rescueScreen(params, ctx, nav) {
   const leave = async () => { await flush(); nav.backOr(Routes.HUB); };
 
   const recipe = () => st.draft.recipe;
-  const hasImg = () => R.allFiles(st.draft.source).length > 0;
+  const hasImg = () => R.allFiles(st.draft.source).some((f) => !/\.pdf$/i.test(f));
 
   // ---------- sheets ----------
   function addMenu() {
@@ -103,7 +103,7 @@ export function rescueScreen(params, ctx, nav) {
       r.photo ? bigButton('Remove photo', () => { close(false); apply(R.setPhoto(st, null)); }, { primary: false }) : null) });
   }
   async function cutFromOriginal(file = null) {
-    const name = file || (st.draft.source.cleaned.find(Boolean) || st.draft.source.files[0]); if (!name) return;
+    const name = file || (st.draft.source.cleaned.find(Boolean) || st.draft.source.files.find((f) => !/\.pdf$/i.test(f))); if (!name) return;
     const blob = await drafts.file(name); if (!blob) { say('The original picture is no longer on this device.'); return; }
     cropSheet(blob, { title: 'Cut out the dish photo', onDone: async (b) => { const n = await ctx.photos.saveBlob(b); n ? apply(R.setPhoto(st, n)) : say("That photo couldn't be used."); } });
   }
@@ -146,7 +146,8 @@ export function rescueScreen(params, ctx, nav) {
     const finds = st.draft.findings || [];
     const review = R.linesToReview(r).length;
     if (review) out.push(Section('', h('div', { class: 'sp-warn', 'data-testid': 'review-count' }, `${review} line${review === 1 ? '' : 's'} marked "Check this line". They are shown exactly as they were read: compare them with the Original tab, then fix or delete them.`)));
-    if (finds.length) out.push(Section('Check these', ...finds.filter((f) => f.severity !== 'INFO').slice(0, 6).map((f) => h('div', { class: `sp-warn${f.severity === 'ERROR' ? ' error' : ''}` }, f.message))));
+    const shownFinds = finds.filter((f) => f.severity !== 'INFO').slice(0, 6);   // information-only notes are not "things to check": no empty heading
+    if (shownFinds.length) out.push(Section('Check these', ...shownFinds.map((f) => h('div', { class: `sp-warn${f.severity === 'ERROR' ? ' error' : ''}` }, f.message))));
     out.push(Section('', h('div', { style: 'position:relative' }, r.photo ? photoImg(ctx.photos, r.photo, { cls: 'sp-photo', alt: 'Recipe photo' }) : h('div', { class: 'sp-photo', style: 'display:flex;align-items:center;justify-content:center;color:#6a5a40' }, 'No photo yet'),
       h('div', { style: 'margin-top:8px' }, bigButton(r.photo ? 'Change photo' : 'Add photo', photoMenu, { primary: false, testid: 'rescue-photo' })))));
     out.push(Section('Details', fieldRow('Title', r.title, 'title'), fieldRow('Servings', r.servings ?? '', 'servings'),
@@ -181,8 +182,10 @@ export function rescueScreen(params, ctx, nav) {
   function originalTab() {
     const src = st.draft.source; const out = [];
     if (R.sourceIsEmpty(src)) return [Section('', h('div', { class: 'sp-warn' }, 'No original was kept for this recipe. You can still edit everything on the Recipe tab.'))];
+    if (src.readNote) out.push(Section('', h('div', { class: 'sp-note', 'data-testid': 'read-note' }, `How this was read: ${src.readNote}`)));
     if (src.url) out.push(Section('', h('div', { class: 'sp-warn' }, `Captured from ${src.url}`), bigButton('Open the page in your browser', () => window.open(src.url, '_blank', 'noopener'), { primary: false })));
-    const files = [...(src.cleaned || []).filter(Boolean), ...(src.files || [])];
+    // a kept PDF is opened with its own button below; it is not a picture and must not be listed as one (it showed as a broken image)
+    const files = [...(src.cleaned || []).filter(Boolean), ...(src.files || []).filter((f) => !/\.pdf$/i.test(f))];
     if (files.length) out.push(Section('Pictures', ...files.map((f) => {
       const img = h('img', { class: 'sp-img', alt: 'Captured page', 'data-testid': 'original-image' }); drafts.url(f).then((u) => { if (u && img.isConnected !== undefined) img.src = u; });
       return h('div', { class: 'sp-sec' }, img, bigButton('Cut a photo out of this…', () => cutFromOriginal(f), { primary: false }));

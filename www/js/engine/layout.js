@@ -82,7 +82,9 @@ function mergeBands(src) {
   for (const band of bands) {
     let cur = null;
     for (const l of [...band].sort((a, b) => a.left - b.left)) {
-      if (cur && l.left - cur.right < h * 1.2) {
+      // a piece that overlaps the one before it by more than a third of a line height is another layer of the page (text hidden under
+      // visible text, as in a printed web page's clipped card): it is never glued onto it
+      if (cur && l.left - cur.right < h * 1.2 && l.left - cur.right > -h * 0.33) {
         const spaced = l.left - cur.right > h * 0.15 || cur.text.endsWith(' ') || l.text.startsWith(' ');
         cur = ln({ text: spaced ? `${cur.text.trimEnd()} ${l.text.trimStart()}` : cur.text + l.text, left: cur.left, top: Math.min(cur.top, l.top), right: Math.max(cur.right, l.right), bottom: Math.max(cur.bottom, l.bottom), page: cur.page, confidence: minConf(cur.confidence, l.confidence) });
       } else { if (cur) out.push(cur); cur = l; }

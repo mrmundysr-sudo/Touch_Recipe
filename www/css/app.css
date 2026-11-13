@@ -186,6 +186,7 @@ hr.div { border: 0; border-top: 1px solid var(--outline); opacity: .4; margin: 1
 .sp-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; background: var(--primary, var(--forest)); color: var(--on-primary, var(--cream, #FBF4E6)); font-size: calc(13px * var(--ts)); font-weight: 600; }
 .sp-warn { border-left: 4px solid var(--tomato); padding: 6px 10px; background: rgba(207,74,39,.12); border-radius: 6px; font-size: calc(14px * var(--ts)); color: var(--on-surface, #2A2118); }
 .sp-warn.error { border-left-color: var(--error, #B3261E); }
+.sp-note { font-size: calc(13px * var(--ts)); color: var(--on-surface-var, #50443A); }
 .sp-tabs { display: flex; gap: 8px; } .sp-tabs > * { flex: 1; }
 .sp-img { width: 100%; border-radius: 12px; border: 1px solid var(--outline, #cfc4ae); background: #fff; display: block; }
 .sp-bar { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0; background: var(--surface, #FBF4E6); }

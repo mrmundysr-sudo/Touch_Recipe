@@ -1,0 +1,27 @@
+{
+  "_about": "What a correct import of the owner's real PDF 'Veg-All Chicken Pot Pie Recipe - Food.com.pdf' must produce. These are the recipe's facts, read from the page by a person. The PDF itself is NOT in this repository (it is a third-party web page and the repository is public); see tests/fixtures/real-pdf/README.md.",
+  "title": "VEG-ALL CHICKEN POT PIE",
+  "servings": 4,
+  "totalMinutes": 70,
+  "ingredients": [
+    "2 (10 3/4 ounce) cans cream of potato soup",
+    "1 (16 ounce) can Veg-All, drained",
+    "2 cups cooked chicken, diced",
+    "1/2 cup milk",
+    "1/2 teaspoon thyme",
+    "1/2 teaspoon black pepper",
+    "2 (9 inch) frozen pie crusts, thawed (deep dish)",
+    "1 egg, lightly beaten (optional)"
+  ],
+  "directions": [
+    "Combine first 6 ingredients.",
+    "Spoon into prepared pie crust.",
+    "Cover with top crust; crimp edges to seal.",
+    "Slit top crust and brush with egg.",
+    "Bake at 375 degrees for 40 minutes.",
+    "Cool for 10 minutes before serving."
+  ],
+  "notesContain": ["Submitted by Chef Teresa"],
+  "otherRecipeMarkers": ["Bourbon", "LinMarie", "Editor's Note", "copycat", "apple juice", "olive oil", "brown sugar", "lbs boneless"],
+  "detailMarkers": ["Ready In", "Serves", "Ingredients:", "Submitted by", "Editor's"]
+}

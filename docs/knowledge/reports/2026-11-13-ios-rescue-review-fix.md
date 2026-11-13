@@ -1,5 +1,7 @@
 # Work Report — 2026-11-13 — iOS Recipe Rescue: cut-up words, mixed sections, unreadable review screen
 
+> **Correction (same day):** the main cause named below (PDFKit cutting words) is **not** supported by the owner's real PDF. The real cause is in `2026-11-13-ios-real-pdf-root-cause.md`: a false "damaged text layer" verdict sent the page to picture reading. The other changes in this report remain valid hardening.
+
 **Status:** Awaiting review (JavaScript and browser layout verified in a sandbox; the Swift change compiles only on the macOS runner and has **not** been tried on the owner's PDF or an iPhone)
 **Repository / branch / commit:** `mrmundysr-sudo/Touch_Recipe`, branch `ccr-ios-rescue-review-fix`, cut from `ccr-ios-pdf-layout-fix` @ `13bf6cc` (unchanged). Commit: see the branch head.
 **Scope authorized by owner:** bug report with five screenshots of the Veg-All Chicken Pot Pie PDF imported on the 13bf6cc build ("still not ready for TestFlight"). Fix before any upload. No new feature scope.

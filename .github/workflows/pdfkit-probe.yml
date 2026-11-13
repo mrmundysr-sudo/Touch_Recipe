@@ -1,0 +1,36 @@
+# Developer probe: what does Apple's PDFKit return for a Quartz-made PDF with the geometry of a printed web page, and does the app read it correctly?
+# Uses an INVENTED recipe page (no third-party content, no secrets, no signing, uploads nothing but the probe's own files as an artifact).
+name: PDFKit probe
+on:
+  workflow_dispatch:
+  push:
+    branches: ['ccr-**']
+    paths: ['tools/swift/**', 'tools/pdfkit-probe/**', 'www/js/engine/layout.js', 'www/js/engine/wordheal.js', 'www/js/data/importer.js', '.github/workflows/pdfkit-probe.yml']
+permissions:
+  contents: read
+concurrency:
+  group: pdfkit-probe-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  probe:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Draw the page with Quartz, read it with PDFKit using the app's Swift
+        run: |
+          set -euo pipefail
+          sw_vers; xcodebuild -version
+          node tools/pdfkit-probe/make-spec.mjs "$RUNNER_TEMP/spec.json"
+          swiftc -O tools/swift/TextPieces.swift tools/pdfkit-probe/probe.swift -o "$RUNNER_TEMP/probe"
+          "$RUNNER_TEMP/probe" "$RUNNER_TEMP/spec.json" probe-out
+      - name: Run what PDFKit returned through the app's layout reader and parser
+        run: node tools/pdfkit-probe/verify.mjs probe-out/bridge.json | tee probe-out/report.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pdfkit-probe
+          path: probe-out/
