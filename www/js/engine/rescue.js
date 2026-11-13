@@ -194,3 +194,29 @@ export function pageText(html, maxLines = 1500) {
     return out.join('\n');
   } catch { return ''; }
 }
+
+// ---------- lines that need a look ----------
+// Nothing is changed or guessed here: a line the app is unsure about stays exactly as it is, editable, and is marked so the
+// person checks it against the Original tab. `kind` is 'ing' or 'dir'. Returns a short reason, or null when the line looks fine.
+const LETTERS_ONLY = /^\p{L}+$/u;
+const STRAY_OK = new Set(['a', 'i', 'x']);
+const DETAIL_LINE = /^\W*(ready in|serves|servings|prep time|cook time|total time|yield|submitted by|editor'?s? note|ingredients\s*:\s*\d)/i;
+const DETAIL_INSIDE = /\b(ingredients\s*:\s*\d|ready in|prep time|cook time|submitted by|editor'?s? note|serves?:)/i;
+const AMOUNT_ONLY = /^\W*\d{1,3}(?:[./]\d{1,3})?\W*$/;
+export function reviewReason(text, kind) {
+  const t = String(text || '').trim();
+  if (!t) return 'Empty line';
+  if (AMOUNT_ONLY.test(t) || !/\p{L}/u.test(t)) return 'Only a number';
+  if (DETAIL_LINE.test(t)) return 'Looks like details or a note, not ' + (kind === 'ing' ? 'an ingredient' : 'a step');
+  const words = t.split(/\s+/);
+  const strays = words.filter((w) => LETTERS_ONLY.test(w.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '')) && w.replace(/[^\p{L}]/gu, '').length === 1 && !STRAY_OK.has(w.toLowerCase().replace(/[^\p{L}]/gu, ''))).length;
+  if (strays >= 1) return 'Some words look cut in pieces';
+  if (words.some((w) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '').length >= 19)) return 'Some words look run together';
+  if (DETAIL_INSIDE.test(t)) return 'Mixes in recipe details or a note';
+  if (kind === 'ing' && t.length > 160) return 'Long for an ingredient: it may be a step';
+  if (kind === 'ing' && /^\s*(?:step\s*)?\d{1,2}\s*[.)]\s+\p{L}/iu.test(t) && !/\d\s*(?:cup|tbsp|tsp|oz|ounce|lb|pound|gram|clove|can)/i.test(t)) return 'Looks like a step';
+  if (t.length < 4 && words.length === 1 && !/^[\d¼½¾]/.test(t)) return 'Very short';
+  return null;
+}
+export const linesToReview = (recipe) => [...recipe.ingredients.filter((i) => !i.header).map((i) => ({ item: i, kind: 'ing', reason: reviewReason(i.text, 'ing') })),
+  ...recipe.directions.filter((d) => !d.header).map((d) => ({ item: d, kind: 'dir', reason: reviewReason(d.text, 'dir') }))].filter((x) => x.reason);

@@ -136,9 +136,13 @@ public class TouchRecipeOcrPlugin: CAPPlugin, CAPBridgedPlugin {
             let r = page.characterBounds(at: i)
             if r.isNull || r.isInfinite { continue }
             if !prev.isNull {
+                // A piece is a word: it ends at white space (handled above), never at a small gap between two characters.
+                // PDFKit's character boxes are not exact (kerning, ligatures, web fonts), and cutting at a small gap
+                // split words into pieces ("s poon", "chic ken") that the layout reader then joined with spaces.
+                // Only a jump that cannot happen inside a word (a whole character height of gap, going backwards, or a new baseline) ends a piece.
                 let h = max(prev.height, r.height)
                 let gap = r.minX - prev.maxX
-                if gap > h * 0.35 || gap < -h * 0.6 || abs(r.midY - prev.midY) > h * 0.6 { flush() }
+                if gap > h * 1.0 || gap < -h * 1.0 || abs(r.midY - prev.midY) > h * 0.6 { flush() }
             }
             text += ch
             rect = rect.isNull ? r : rect.union(r)

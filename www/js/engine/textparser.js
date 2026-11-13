@@ -33,6 +33,12 @@ const END_HEADER = /^\W*(nutrition(?:al)?(?: facts| information| info)?(?: \(?pe
 /** "Step 1", "Step 2:" label a single step; they are not the Directions heading. */
 const STEP_LABEL = /^\W*steps?\s*\d/i;
 const LEADING_STEP_NUMBER = /^\s*(?:step\s*)?(\d{1,2})\s*[.):\-]\s+/i;
+// details that belong to the recipe card, not to a list: they are read wherever they turn up, never as an ingredient or a step
+const STRICT_META = /^\s*(ready in|serves|servings|yield)\s*:/i;
+const COUNT_LINE = /^\W*ingredients?\s*:\s*\d{1,3}\W*$/i;      // "Ingredients: 8" is a count, not the Ingredients heading
+const SUBMITTED = /^\W*submitted by\s+(\S.{0,60})$/i;
+const EDITOR_NOTE = /^\W*editor'?s? note\s*:?\s*(.*)$/i;
+const AMOUNT_ONLY = /^\W*\d{1,3}(?:[./]\d{1,3})?\W*$/;
 const META_EACH = /(prep(?:aration)?(?: time)?|cook(?:ing)?(?: time)?|total(?: time)?|ready in|serv(?:es|ings?)|yield|makes)\s*[:\-]?\s*(.*?)(?=\s+(?:prep(?:aration)?(?: time)?|cook(?:ing)?(?: time)?|total(?: time)?|ready in|serv(?:es|ings?)|yield|makes)\s*[:\-]|$)/gi;
 
 /** "Best Banana Bread Recipe - Site Name" -> "Best Banana Bread Recipe". */
@@ -136,6 +142,12 @@ export function parse(raw, method = ImportMethod.TEXT, sourceUrl = null, titleHi
   for (const line of lines) {
     if (!line) continue;
     order++;
+    if (COUNT_LINE.test(line)) continue;
+    const sub = SUBMITTED.exec(line);
+    if (sub && !/\d/.test(sub[1]) && current !== 'post') { extras.push(`Submitted by ${sub[1].trim()}`); continue; }
+    const ed = EDITOR_NOTE.exec(line);
+    if (ed && current !== 'post') { current = 'note'; if (ed[1].trim()) sections.note.push(`Editor's Note: ${ed[1].trim()}`); else sections.note.push("Editor's Note:"); continue; }
+    if (current === 'dir' && AMOUNT_ONLY.test(line)) continue;   // a step number or an amount left alone on its line is not a step
     if (current === 'pre') {
       const diff = /^di.{0,3}cult\w*\s*[:\-]\s*(\S.*)$/i.exec(line);
       if (diff && line.length < 60) { extras.push(`Difficulty: ${diff[1].trim()}`); continue; }
@@ -143,7 +155,7 @@ export function parse(raw, method = ImportMethod.TEXT, sourceUrl = null, titleHi
       if (by && sections.pre.length <= 2 && !/\d/.test(line)) { author = by[1].trim(); continue; }
     }
     const mm = metaRe.exec(line);
-    if (mm && mm[2].trim() && line.length < 140 && current !== 'dir') {
+    if (mm && mm[2].trim() && line.length < 140 && (current !== 'dir' || STRICT_META.test(line))) {
       // one line may carry several values: "Servings: 36  Prep time: 20 minutes  Cook time: 11 minutes"
       const parts = [...line.matchAll(META_EACH)];
       if (line.length < 70 || parts.length >= 2) {
@@ -222,9 +234,14 @@ export function parse(raw, method = ImportMethod.TEXT, sourceUrl = null, titleHi
   const titleLine = sections.pre.find((l) => l.length < 120);
   const title = hint ? cleanTitle(hint) : titleLine !== undefined ? cleanTitle(titleLine) : '';
   const ingredients = [];
+  let pendingAmount = null, droppedAmounts = 0;
   for (const l of sections.ing) {
-    const t = l.replace(bullet, '').trim();
+    let t = l.replace(bullet, '').trim();
     if (!t) continue;
+    // an amount alone on a line ("2") belongs to the ingredient line right after it, when that line has no amount of its own
+    if (AMOUNT_ONLY.test(t)) { if (pendingAmount != null) droppedAmounts++; pendingAmount = t; continue; }
+    if (pendingAmount != null) { if (!qtyStart.test(t) && !t.endsWith(':')) t = `${pendingAmount} ${t}`; else droppedAmounts++; pendingAmount = null; }
+    if (ingredients.length && !ingredients[ingredients.length - 1].header && ingredients[ingredients.length - 1].text === t) continue;   // the same line twice in a row
     // a wrapped line ("1 cup butter," / "softened") continues the ingredient above it
     const prevIng = ingredients[ingredients.length - 1];
     if (prevIng && !prevIng.header && !bullet.test(l) && !qtyStart.test(t) && (/\p{Ll}/u.test(t[0]) && t[0] === t[0].toLowerCase() || t[0] === '(' || prevIng.text.endsWith(',') || prevIng.text.endsWith(' and') || prevIng.text.endsWith(' or')) && t.length < 80 && !t.endsWith(':')) {
@@ -233,7 +250,10 @@ export function parse(raw, method = ImportMethod.TEXT, sourceUrl = null, titleHi
     const isHeader = t.endsWith(':') || (t.length < 40 && /^for /i.test(t) && t.split(' ').length <= 4 && !/[\d,]/.test(t)) || (t.length < 40 && t === t.toUpperCase() && [...t].some(isLetter) && !qtyStart.test(t));
     ingredients.push(Ingredient({ text: isHeader ? trimSet(t, [':']).trim() : t, header: isHeader }));
   }
+  if (pendingAmount != null) droppedAmounts++;
+  if (droppedAmounts) warnings.push(warn('ingredients', `${droppedAmounts} stray number${droppedAmounts === 1 ? '' : 's'} with no ingredient next to ${droppedAmounts === 1 ? 'it was' : 'them were'} left out. Compare the ingredients with the original.`));
   const directions = mergeWrapped(sections.dir.map((l) => ({ text: l.replace(bullet, '').replace(stepNum, '').trim(), mark: bullet.test(l) || stepNum.test(l) })).filter((x) => x.text))
+    .filter((t, i, a) => i === 0 || t !== a[i - 1])
     .map((t) => Direction({ text: t, timerSeconds: timerSeconds(t) }));
   let host = null; if (sourceUrl) { try { host = new URL(sourceUrl).host.replace(/^www\./, '') || null; } catch { host = null; } }
   const notes = [...(author && sourceUrl ? [`By ${author}`] : []), ...extras, ...sections.note.map((l) => l.replace(bullet, '').trim())].join('\n');

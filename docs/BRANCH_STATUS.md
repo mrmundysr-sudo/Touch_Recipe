@@ -29,3 +29,6 @@ Record development branch/HEAD SHA, base branch/SHA, PR, workflow/run result, ar
 
 ## 2026-11-13 iOS PDF layout fix
 Branch `ccr-ios-pdf-layout-fix`, cut from `ccr-c5e79198-7pqe4i` @ `0605029` (which is untouched). Fixes the owner's PDF that imported scrambled on iOS. Not merged, not delivered. See `docs/knowledge/reports/2026-11-13-ios-pdf-layout.md`; the Swift needs the macOS `ios-check.yml` run and a device pass.
+
+## 2026-11-13 iOS review fix
+Branch `ccr-ios-rescue-review-fix`, cut from `ccr-ios-pdf-layout-fix` @ `13bf6cc` (untouched). Fixes the cut-up words, mixed sections and unreadable review screen from the owner's screenshots. Not merged, not delivered, **not uploaded to TestFlight**. See `docs/knowledge/reports/2026-11-13-ios-rescue-review-fix.md`; needs the macOS `ios-check.yml` run and a device pass.

@@ -24,7 +24,7 @@ export function askText({ title, hint = '', initial = '', multiline = false, ok 
 
 export function rescueScreen(params, ctx, nav) {
   const drafts = ctx.drafts;
-  let st = null, tab = 'recipe', alive = true, saveTimer = null, originalLines = [], urls = {};
+  let st = null, tab = 'recipe', alive = true, saveTimer = null, originalLines = [], urls = {}, footBar = null;
   const page = ScrollPage({ title: 'Recipe Rescue', testid: 'rescue', slot: 'page_15', onBack: () => leave() });
   const undoBtn = iconBtn('Undo', '↶', () => apply(R.undo(st)), ''); const redoBtn = iconBtn('Redo', '↷', () => apply(R.redo(st)), '');
   undoBtn.dataset.testid = 'rescue-undo'; redoBtn.dataset.testid = 'rescue-redo';
@@ -130,9 +130,11 @@ export function rescueScreen(params, ctx, nav) {
   function lineRow(item, kind, idx, total) {
     const sel = st.selection.includes(item.id), helps = R.helpFor(st, item.id);
     const label = (kind === 'dir' && !item.header ? `${recipe().directions.filter((d, i) => !d.header && i <= idx).length}. ` : '') + (item.text || '(empty)');
-    return h('div', { class: `sp-line${sel ? ' selected' : ''}${item.header ? ' header' : ''}`, 'data-testid': `${kind}-line` },
+    const why = item.header ? null : R.reviewReason(item.text, kind);
+    return h('div', { class: `sp-line${sel ? ' selected' : ''}${item.header ? ' header' : ''}${why ? ' review' : ''}`, 'data-testid': `${kind}-line`, 'data-review': why ? why : null },
       st.selecting ? h('input', { type: 'checkbox', checked: sel, 'aria-label': 'Select line', style: 'width:28px;height:28px', onchange: () => apply(R.toggle(st, item.id)) }) : null,
       h('div', { class: 'sp-text', role: 'button', tabindex: '0', onclick: () => (st.selecting ? apply(R.toggle(st, item.id)) : lineMenu(item, kind)) }, label,
+        why ? h('div', { class: 'sp-check', 'data-testid': 'review-note' }, `Check this line: ${why}.`) : null,
         ...helps.map((n) => h('div', { class: 'sp-warn', style: 'margin-top:4px' }, `Ask: ${n.text}`))),
       !st.selecting ? h('button', { class: 'sp-mini', type: 'button', 'aria-label': 'Move up', disabled: idx === 0, onclick: () => apply(R.move(st, item.id, -1)) }, '↑') : null,
       !st.selecting ? h('button', { class: 'sp-mini', type: 'button', 'aria-label': 'Move down', disabled: idx === total - 1, onclick: () => apply(R.move(st, item.id, 1)) }, '↓') : null);
@@ -142,6 +144,8 @@ export function rescueScreen(params, ctx, nav) {
   function recipeTab() {
     const r = recipe(); const out = [];
     const finds = st.draft.findings || [];
+    const review = R.linesToReview(r).length;
+    if (review) out.push(Section('', h('div', { class: 'sp-warn', 'data-testid': 'review-count' }, `${review} line${review === 1 ? '' : 's'} marked "Check this line". They are shown exactly as they were read: compare them with the Original tab, then fix or delete them.`)));
     if (finds.length) out.push(Section('Check these', ...finds.filter((f) => f.severity !== 'INFO').slice(0, 6).map((f) => h('div', { class: `sp-warn${f.severity === 'ERROR' ? ' error' : ''}` }, f.message))));
     out.push(Section('', h('div', { style: 'position:relative' }, r.photo ? photoImg(ctx.photos, r.photo, { cls: 'sp-photo', alt: 'Recipe photo' }) : h('div', { class: 'sp-photo', style: 'display:flex;align-items:center;justify-content:center;color:#6a5a40' }, 'No photo yet'),
       h('div', { style: 'margin-top:8px' }, bigButton(r.photo ? 'Change photo' : 'Add photo', photoMenu, { primary: false, testid: 'rescue-photo' })))));
@@ -188,8 +192,8 @@ export function rescueScreen(params, ctx, nav) {
     if (originalLines.length) {
       out.push(Section('Text (tap lines, then send them where they belong)', ...originalLines.map((l, i) => h('div', { class: `sp-line${originalSel.has(i) ? ' selected' : ''}`, 'data-testid': 'orig-line' },
         h('div', { class: 'sp-text', role: 'checkbox', 'aria-checked': String(originalSel.has(i)), tabindex: '0', onclick: () => { originalSel.has(i) ? originalSel.delete(i) : originalSel.add(i); render(); } }, l)))));
-      out.push(h('div', { class: 'sp-bar' }, bigButton(`Send ${originalSel.size || ''} selected…`.replace('  ', ' '), () => sendMenu([...originalSel].sort((a, b) => a - b).map((i) => originalLines[i])), { disabled: !originalSel.size, testid: 'send-selected' }),
-        bigButton('Select all', () => { originalLines.forEach((_, i) => originalSel.add(i)); render(); }, { primary: false })));
+      footBar = h('div', { class: 'sp-bar' }, bigButton(`Send ${originalSel.size || ''} selected…`.replace('  ', ' '), () => sendMenu([...originalSel].sort((a, b) => a - b).map((i) => originalLines[i])), { disabled: !originalSel.size, testid: 'send-selected' }),
+        bigButton('Select all', () => { originalLines.forEach((_, i) => originalSel.add(i)); render(); }, { primary: false }));
     }
     return out;
   }
@@ -204,7 +208,10 @@ export function rescueScreen(params, ctx, nav) {
         bigButton('Replace with text…', () => askText({ title: 'Replace selected lines', multiline: true, ok: 'Replace', onOk: (t) => apply(R.replaceSelected(st, t)) }), { primary: false, disabled: !st.selection.length }),
         bigButton('Done selecting', () => apply(R.cancelSelection(st)), { primary: false })]
       : [bigButton('Add…', addMenu, { primary: false, testid: 'rescue-add' }), bigButton('Select lines', () => apply(R.startSelecting(st)), { primary: false }), bigButton('Create recipe', create, { testid: 'rescue-create' })]) : null;
-    mount(page.body, tabs, ...(tab === 'recipe' ? recipeTab() : originalTab()), bar);
+    footBar = null;
+    const content = tab === 'recipe' ? recipeTab() : originalTab();
+    mount(page.body, tabs, ...content);
+    mount(page.foot, tab === 'recipe' ? bar : footBar);
     page.body.scrollTop = keep;
   }
 

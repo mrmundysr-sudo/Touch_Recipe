@@ -3,6 +3,7 @@
 // tiny native bridge; when it is missing (e.g. in a desktop browser) scanning explains that and offers Paste or Type.
 import * as Text from '../engine/textparser.js';
 import * as Layout from '../engine/layout.js';
+import { healText, healPieces, fragmentRate } from '../engine/wordheal.js';
 import * as Web from '../engine/webextract.js';
 import { ImportMethod, Confidence, Severity, warn } from '../engine/models.js';
 import { emptySource, pageText } from '../engine/rescue.js';
@@ -77,11 +78,18 @@ export class VisionOcr {
  */
 export function pdfText(r) {
   const plain = r.text || '';
+  const cautions = [];
   if (Array.isArray(r.lines) && r.lines.length) {
     try {
-      const out = Layout.readWithNotes(r.lines);
+      const out = Layout.readWithNotes(healPieces(r.lines, plain));
       const size = (t) => t.replace(/\s/g, '').length;
-      if (out.text.trim() && size(out.text) + size(out.extra) >= size(plain) * 0.6) return { text: out.text, extra: out.extra, notes: out.notes };
+      if (out.text.trim() && size(out.text) + size(out.extra) >= size(plain) * 0.6) {
+        // words cut in pieces by a bad spacing guess are put back together, but only where the plain text proves the word
+        const text = healText(out.text, plain), extra = healText(out.extra, plain);
+        // what is still cut up is not rearranged or guessed: the person is told to check the text against the original
+        if (fragmentRate(text) > 0.02) cautions.push('Some words in this PDF were read in pieces and could not be put back together. Check the text against the original.');
+        return { text, extra, notes: out.notes, ...(cautions.length ? { cautions } : {}) };
+      }
     } catch { /* fall back to the plain text */ }
   }
   return { text: plain, extra: '', notes: [] };
@@ -203,17 +211,19 @@ export class ImportService {
     let r;
     try { onStatus('Reading the PDF…'); r = await this.ocr.recognizePdf(file); r = await this.preferCleanText(file, r, onStatus); } catch (e) { throw new ImportFailure((e.message || 'That PDF could not be opened.') + ' You can still use Paste or Type Recipe.', { retryable: true }); }
     const read = this.ocrDraft(r.text);
-    const d0 = r.notes?.length ? { ...read, warnings: [...read.warnings, ...r.notes.map((n) => warn('recipe', n, Severity.INFO))] } : read;
+    const d0 = (r.notes?.length || r.cautions?.length) ? { ...read, warnings: [...read.warnings, ...(r.notes || []).map((n) => warn('recipe', n, Severity.INFO)), ...(r.cautions || []).map((n) => warn('recipe', n, Severity.WARNING))] } : read;
     let name = null; if (this.originals) { try { name = await this.originals.saveFile(file, 'pdf'); } catch { /* ignore */ } }
     // the first page as a picture: kept, cleaned, and searched for the printed dish photo
     let cleaned = [], dishFile = null, dishBlob = null;
     if (this.originals) {
       try {
-        const pg = await renderPdfPage(file, 0);
-        if (pg) {
-          onStatus('Looking for a photo of the dish…');
-          cleaned = [await this.originals.saveFile(pg, 'jpg')];
-          const dish = await Img.dishPhoto(pg); if (dish) { dishBlob = dish.blob; dishFile = await this.originals.saveFile(dish.blob, 'jpg'); }
+        // every page up to four is kept as a picture for the Original tab; the dish photo is looked for on the first
+        const pages = Math.max(1, Math.min(r.pages || 1, 4));
+        for (let i = 0; i < pages; i++) {
+          const pg = await renderPdfPage(file, i);
+          if (!pg) { if (i === 0) break; continue; }
+          cleaned.push(await this.originals.saveFile(pg, 'jpg'));
+          if (i === 0) { onStatus('Looking for a photo of the dish…'); const dish = await Img.dishPhoto(pg); if (dish) { dishBlob = dish.blob; dishFile = await this.originals.saveFile(dish.blob, 'jpg'); } }
         }
       } catch { /* optional */ }
     }
