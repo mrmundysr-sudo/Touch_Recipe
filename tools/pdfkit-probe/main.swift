@@ -1,7 +1,7 @@
 // macOS PDFKit probe. Draws the invented page (spec.json) with Apple's Quartz PDF engine (the engine that made the owner's real PDF),
 // opens it with PDFKit and runs EXACTLY the piece reader the iOS app ships (tools/swift/TextPieces.swift).
 // Output: probe.pdf and bridge.json ({ text, lines, pages }) in the shape the app's native bridge returns.
-//   swiftc -O tools/swift/TextPieces.swift tools/pdfkit-probe/probe.swift -o probe && ./probe spec.json outdir
+//   swiftc -O tools/swift/TextPieces.swift tools/pdfkit-probe/main.swift -o probe && ./probe spec.json outdir
 import Foundation
 import CoreGraphics
 import CoreText
