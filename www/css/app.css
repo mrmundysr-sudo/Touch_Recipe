@@ -187,6 +187,23 @@ hr.div { border: 0; border-top: 1px solid var(--outline); opacity: .4; margin: 1
 .sp-warn { border-left: 4px solid var(--tomato); padding: 6px 10px; background: rgba(207,74,39,.12); border-radius: 6px; font-size: calc(14px * var(--ts)); color: var(--on-surface, #2A2118); }
 .sp-warn.error { border-left-color: var(--error, #B3261E); }
 .sp-note { font-size: calc(13px * var(--ts)); color: var(--on-surface-var, #50443A); }
+.sp-body-split { overflow: hidden; padding-bottom: 0; }                      /* in the split view the panes scroll, not the page */
+.sp-split { flex: 1; min-height: 0; display: flex; }
+.sp-split.wide { flex-direction: row; } .sp-split.stack { flex-direction: column; }
+.sp-pane { min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.sp-pane-scroll { flex: 1 1 0; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 12px; padding: 4px 2px 10px; }
+.sp-pane-original { flex: 0 0 calc((100% - 22px) * var(--split, .4)); }
+.sp-pane-recipe { flex: 1 1 0; }
+.sp-divider { position: relative; flex: none; touch-action: none; background: transparent; }
+.sp-split.wide > .sp-divider { width: 22px; cursor: col-resize; } .sp-split.stack > .sp-divider { height: 22px; cursor: row-resize; }
+.sp-divider::after { content: ''; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); border-radius: 3px; background: var(--outline, #9C9079); }
+.sp-split.wide > .sp-divider::after { width: 4px; height: 52px; } .sp-split.stack > .sp-divider::after { width: 52px; height: 4px; }
+.sp-divider:focus-visible { outline: 2px solid var(--primary, #1F4D3A); border-radius: 6px; }
+.sp-pane > .sp-bar { flex: none; position: static; border-top: 1px solid var(--outline, #cfc4ae); flex-wrap: nowrap; gap: 6px; }
+.sp-pane > .sp-bar > * { flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 6px; font-size: calc(14px * var(--ts)); }   /* one row of buttons: a short screen cannot spare two */
+.sp-pane .sp-h2 { font-size: calc(16px * var(--ts)); }
+[data-testid="orig-line"] .sp-text { -webkit-user-select: text; user-select: text; }   /* long-press the original's text to copy it */
+.sp { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
 .sp-tabs { display: flex; gap: 8px; } .sp-tabs > * { flex: 1; }
 .sp-img { width: 100%; border-radius: 12px; border: 1px solid var(--outline, #cfc4ae); background: #fff; display: block; }
 .sp-bar { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0; background: var(--surface, #FBF4E6); }

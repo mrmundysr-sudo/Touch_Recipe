@@ -54,6 +54,7 @@ const { execFileSync } = require('child_process');
 
     // STAGE 4: what the Recipe Rescue screen actually shows
     const tid = (id) => page.locator(`[data-testid="${id}"]`);
+    await tid('tab-recipe').click(); await page.waitForTimeout(300);   // the Recipe view on its own; the split view has its own test
     const screen = await page.evaluate(() => ({
       title: document.querySelector('[data-testid="field-title"] .sp-text')?.textContent || '',
       ing: [...document.querySelectorAll('[data-testid="ing-line"] .sp-text')].map((e) => e.firstChild ? e.firstChild.textContent : ''),

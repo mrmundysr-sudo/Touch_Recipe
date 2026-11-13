@@ -28,7 +28,9 @@ jobs:
           swiftc -O tools/swift/TextPieces.swift tools/pdfkit-probe/main.swift -o "$RUNNER_TEMP/probe"
           "$RUNNER_TEMP/probe" "$RUNNER_TEMP/spec.json" probe-out
       - name: Run what PDFKit returned through the app's layout reader and parser
-        run: node tools/pdfkit-probe/verify.mjs probe-out/bridge.json | tee probe-out/report.txt
+        run: |
+          set -o pipefail
+          node tools/pdfkit-probe/verify.mjs probe-out/bridge.json | tee probe-out/report.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:

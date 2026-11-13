@@ -32,6 +32,7 @@ const assert = require('assert');
     });
     await page.waitForTimeout(1200);
     const tid = (id) => page.locator(`[data-testid="${id}"]`);
+    await tid('tab-recipe').click(); await page.waitForTimeout(300);   // this test measures the Recipe view on its own (the split view has its own test)
     const lum = (rgb) => { const [r, g, b] = rgb.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
     const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
     const rgbOf = (s) => (s.match(/[\d.]+/g) || []).slice(0, 3).map(Number);

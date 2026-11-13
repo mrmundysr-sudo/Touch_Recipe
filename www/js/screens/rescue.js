@@ -9,6 +9,7 @@ import { Recipe } from '../engine/models.js';
 import { validate } from '../engine/validator.js';
 import { pickFile } from '../ui/shared.js';
 import { cropSheet } from './crop.js';
+import { allowLandscape, isWideScreen } from '../ui/orientation.js';
 
 /** Starts a rescue draft from an import draft (or edits an existing one), stored privately so it survives leaving the app. */
 export const draftFromImport = (d) => R.newDraft({ recipe: d.recipe, source: d.source || R.emptySource(), imageCandidates: d.imageCandidates || [], findings: validate(d).warnings || [] });
@@ -24,7 +25,7 @@ export function askText({ title, hint = '', initial = '', multiline = false, ok 
 
 export function rescueScreen(params, ctx, nav) {
   const drafts = ctx.drafts;
-  let st = null, tab = 'recipe', alive = true, saveTimer = null, originalLines = [], urls = {}, footBar = null;
+  let st = null, tab = 'split', splitFrac = 0.4, lastWide = null, alive = true, saveTimer = null, originalLines = [], urls = {}, footBar = null;
   const page = ScrollPage({ title: 'Recipe Rescue', testid: 'rescue', slot: 'page_15', onBack: () => leave() });
   const undoBtn = iconBtn('Undo', '↶', () => apply(R.undo(st)), ''); const redoBtn = iconBtn('Redo', '↷', () => apply(R.redo(st)), '');
   undoBtn.dataset.testid = 'rescue-undo'; redoBtn.dataset.testid = 'rescue-redo';
@@ -179,7 +180,7 @@ export function rescueScreen(params, ctx, nav) {
   }
   const selectionToReplace = () => st.selection.length > 0;
   const originalSel = new Set();
-  function originalTab() {
+  function originalTab(inSplit = false) {
     const src = st.draft.source; const out = [];
     if (R.sourceIsEmpty(src)) return [Section('', h('div', { class: 'sp-warn' }, 'No original was kept for this recipe. You can still edit everything on the Recipe tab.'))];
     if (src.readNote) out.push(Section('', h('div', { class: 'sp-note', 'data-testid': 'read-note' }, `How this was read: ${src.readNote}`)));
@@ -193,7 +194,7 @@ export function rescueScreen(params, ctx, nav) {
     if ((src.kind === 'PDF') && src.files?.[0]) out.push(Section('', textButton('Open the PDF', async () => { const b = await drafts.file(src.files[0]); if (b) window.open(URL.createObjectURL(b), '_blank'); })));
     originalLines = R.sourceLines(src);
     if (originalLines.length) {
-      out.push(Section('Text (tap lines, then send them where they belong)', ...originalLines.map((l, i) => h('div', { class: `sp-line${originalSel.has(i) ? ' selected' : ''}`, 'data-testid': 'orig-line' },
+      out.push(Section(inSplit ? 'Text: tap lines, then send' : 'Text (tap lines, then send them where they belong)', ...originalLines.map((l, i) => h('div', { class: `sp-line${originalSel.has(i) ? ' selected' : ''}`, 'data-testid': 'orig-line' },
         h('div', { class: 'sp-text', role: 'checkbox', 'aria-checked': String(originalSel.has(i)), tabindex: '0', onclick: () => { originalSel.has(i) ? originalSel.delete(i) : originalSel.add(i); render(); } }, l)))));
       footBar = h('div', { class: 'sp-bar' }, bigButton(`Send ${originalSel.size || ''} selected…`.replace('  ', ' '), () => sendMenu([...originalSel].sort((a, b) => a - b).map((i) => originalLines[i])), { disabled: !originalSel.size, testid: 'send-selected' }),
         bigButton('Select all', () => { originalLines.forEach((_, i) => originalSel.add(i)); render(); }, { primary: false }));
@@ -201,30 +202,72 @@ export function rescueScreen(params, ctx, nav) {
     return out;
   }
 
+  /** The splitter between the original and the recipe card: drag it (or use the arrow keys) to give either more room. */
+  function divider(wide) {
+    const d = h('div', { class: 'sp-divider', role: 'separator', 'aria-orientation': wide ? 'vertical' : 'horizontal', 'aria-label': 'Drag to give the original or the recipe more room', tabindex: '0', 'data-testid': 'split-divider' });
+    const set = (f) => { splitFrac = Math.min(0.8, Math.max(0.2, f)); d.parentElement?.style.setProperty('--split', String(splitFrac)); };
+    d.addEventListener('pointerdown', (e) => {
+      d.setPointerCapture?.(e.pointerId); const box = d.parentElement.getBoundingClientRect();
+      const move = (ev) => set(wide ? (ev.clientX - box.left) / box.width : (ev.clientY - box.top) / box.height);
+      const up = () => { d.removeEventListener('pointermove', move); d.removeEventListener('pointerup', up); d.removeEventListener('pointercancel', up); };
+      d.addEventListener('pointermove', move); d.addEventListener('pointerup', up); d.addEventListener('pointercancel', up); e.preventDefault();
+    });
+    d.addEventListener('keydown', (e) => { if (['ArrowLeft', 'ArrowUp'].includes(e.key)) { set(splitFrac - 0.05); e.preventDefault(); } else if (['ArrowRight', 'ArrowDown'].includes(e.key)) { set(splitFrac + 0.05); e.preventDefault(); } });
+    return d;
+  }
+  const wideNow = () => isWideScreen(window.innerWidth, window.innerHeight);
+
+  // Wide (a phone on its side, a tablet): the original on the left, the editable recipe card on the right, each scrolling on its own.
+  // Upright: the original above the card with a draggable divider, or either one alone (chips). Nothing is shown twice or rearranged.
   function render() {
     if (!alive || !st) return;
     undoBtn.disabled = !R.canUndo(st); redoBtn.disabled = !R.canRedo(st);
-    const tabs = h('div', { class: 'sp-tabs', role: 'tablist' }, chip('Recipe', tab === 'recipe', () => { tab = 'recipe'; render(); }, { 'data-testid': 'tab-recipe' }), chip('Original', tab === 'original', () => { tab = 'original'; render(); }, { 'data-testid': 'tab-original' }));
-    const keep = page.body.scrollTop;
-    const bar = tab === 'recipe' ? h('div', { class: 'sp-bar' },
-      st.selecting ? [bigButton(`Delete ${st.selection.length}`, () => { apply(R.removeSelected(st)); undoable('Deleted', () => apply(R.undo(st))); }, { disabled: !st.selection.length, testid: 'delete-selected' }),
+    const wide = wideNow(); lastWide = wide;
+    const view = wide ? 'split' : tab;
+    const bar = h('div', { class: 'sp-bar' },
+      ...(st.selecting ? [bigButton(`Delete ${st.selection.length}`, () => { apply(R.removeSelected(st)); undoable('Deleted', () => apply(R.undo(st))); }, { disabled: !st.selection.length, testid: 'delete-selected' }),
         bigButton('Replace with text…', () => askText({ title: 'Replace selected lines', multiline: true, ok: 'Replace', onOk: (t) => apply(R.replaceSelected(st, t)) }), { primary: false, disabled: !st.selection.length }),
         bigButton('Done selecting', () => apply(R.cancelSelection(st)), { primary: false })]
-      : [bigButton('Add…', addMenu, { primary: false, testid: 'rescue-add' }), bigButton('Select lines', () => apply(R.startSelecting(st)), { primary: false }), bigButton('Create recipe', create, { testid: 'rescue-create' })]) : null;
+      : [bigButton('Add…', addMenu, { primary: false, testid: 'rescue-add' }), bigButton('Select lines', () => apply(R.startSelecting(st)), { primary: false }), bigButton('Create recipe', create, { testid: 'rescue-create' })]));
+    const q = (sel) => page.body.querySelector(sel);
+    const keep = { body: page.body.scrollTop, orig: q('[data-testid="pane-original-scroll"]')?.scrollTop ?? 0, rec: q('[data-testid="pane-recipe-scroll"]')?.scrollTop ?? 0 };
     footBar = null;
-    const content = tab === 'recipe' ? recipeTab() : originalTab();
-    mount(page.body, tabs, ...content);
-    mount(page.foot, tab === 'recipe' ? bar : footBar);
-    page.body.scrollTop = keep;
+    const origNodes = view === 'recipe' ? [] : originalTab(view === 'split');
+    const origBar = footBar; footBar = null;
+    const recNodes = view === 'original' ? [] : recipeTab();
+    page.body.classList.toggle('sp-body-split', view === 'split');
+    const tabs = wide ? null : h('div', { class: 'sp-tabs', role: 'tablist' },
+      chip('Split', view === 'split', () => { tab = 'split'; render(); }, { 'data-testid': 'tab-split' }),
+      chip('Recipe', view === 'recipe', () => { tab = 'recipe'; render(); }, { 'data-testid': 'tab-recipe' }),
+      chip('Original', view === 'original', () => { tab = 'original'; render(); }, { 'data-testid': 'tab-original' }));
+    if (view === 'split') {
+      // each pane = a scrolling area with its buttons in a row UNDER it (never on top of the content)
+      const originalScroll = h('div', { class: 'sp-pane-scroll', 'data-testid': 'pane-original-scroll' }, ...origNodes);
+      const recipeScroll = h('div', { class: 'sp-pane-scroll', 'data-testid': 'pane-recipe-scroll' }, ...recNodes);
+      const originalPane = h('div', { class: 'sp-pane sp-pane-original', 'data-testid': 'pane-original' }, originalScroll, origBar);
+      const recipePane = h('div', { class: 'sp-pane sp-pane-recipe', 'data-testid': 'pane-recipe' }, recipeScroll, wide ? bar : null);
+      mount(page.body, tabs, h('div', { class: `sp-split ${wide ? 'wide' : 'stack'}`, style: `--split:${splitFrac}`, 'data-testid': 'split' }, originalPane, divider(wide), recipePane));
+      mount(page.foot, wide ? null : bar);
+      originalScroll.scrollTop = keep.orig; recipeScroll.scrollTop = keep.rec;
+    } else {
+      mount(page.body, tabs, ...(view === 'recipe' ? recNodes : origNodes));
+      mount(page.foot, view === 'recipe' ? bar : origBar);
+      page.body.scrollTop = keep.body;
+    }
   }
+  // turning the phone: only a change between wide and upright needs a new layout
+  let resizeTimer = null;
+  const onResize = () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (alive && st && wideNow() !== lastWide) render(); }, 60); };
+  window.addEventListener('resize', onResize);
+  allowLandscape(true);   // this is the one screen that may turn sideways
 
   (async () => {
     if (params.draftId) { const d = await drafts.get(params.draftId); if (!d) { say('That unfinished recipe is no longer here.'); nav.backOr(Routes.HUB); return; } st = R.state(d); }
-    else if (ctx.importSession.draft) { st = R.state(draftFromImport(ctx.importSession.draft)); if (ctx.importSession.photoFile && !st.draft.recipe.photo) st = R.state({ ...st.draft, recipe: { ...st.draft.recipe, photo: ctx.importSession.photoFile } }); st = { ...st, draft: await drafts.save(st.draft) }; tab = 'recipe'; }
+    else if (ctx.importSession.draft) { st = R.state(draftFromImport(ctx.importSession.draft)); if (ctx.importSession.photoFile && !st.draft.recipe.photo) st = R.state({ ...st.draft, recipe: { ...st.draft.recipe, photo: ctx.importSession.photoFile } }); st = { ...st, draft: await drafts.save(st.draft) }; tab = 'split'; }
     else { st = R.state(R.newDraft({ recipe: Recipe() })); }
     if (params.tab) tab = params.tab;
     render();
   })();
-  page.destroy = () => { alive = false; if (saveTimer) flush(); };
+  page.destroy = () => { alive = false; clearTimeout(resizeTimer); window.removeEventListener('resize', onResize); allowLandscape(false); if (saveTimer) flush(); };
   return { el: page.el, destroy: () => page.destroy() };
 }

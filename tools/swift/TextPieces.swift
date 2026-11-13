@@ -3,47 +3,58 @@
 import Foundation
 import PDFKit
 
-/// The text layer of one PDF page as pieces with positions (points, y growing downward). A piece is a run of characters on
-/// one baseline with no gap. PDFKit's own `string` follows the order the file draws things in, which on a page with columns
-/// or a table of amounts and ingredients is not the reading order; the app puts the pieces back in order (layout.js).
-/// A rotated page returns nothing, and the app then uses the plain text.
+/// The text layer of one PDF page as pieces with positions (points, y growing downward). A piece is one WORD of PDFKit's own text,
+/// with the box PDFKit gives that word's range (the same ranges PDFKit uses for text selection).
+///
+/// Why not per-character boxes: `characterBounds(at:)` was tried first. On a Quartz-made PDF (macOS 26 probe, 2026-11-13) its boxes drift
+/// away from the string: the "N" of "CHICKEN" got the position of the next line, and by the middle of the page "Combine" came out as
+/// "Com", "m", "bine" at wrong places. PDFKit's `string` itself is clean, so words are cut from the string at white space and each
+/// word's box comes from `selection(for: range)`. A fraction slash (U+2044) is cut into its own piece, because the numerator, the
+/// slash and the denominator of a fraction are drawn at three heights and the layout reader joins them back into "1/2".
+/// PDFKit's `string` follows the order the file draws things in, which on a page with columns or a table of amounts and ingredients is not
+/// the reading order; the app puts the pieces back in order (layout.js). A rotated page returns nothing, and the app then uses the plain text.
 func touchRecipeTextPieces(_ page: PDFPage, index: Int) -> [[String: Any]] {
     guard page.rotation == 0, let all = page.string else { return [] }
     let ns = all as NSString
     let box = page.bounds(for: .mediaBox)
+    let white = CharacterSet.whitespacesAndNewlines
+    let slash: unichar = 0x2044
     var pieces: [[String: Any]] = []
-    var text = ""
-    var rect = CGRect.null
-    var prev = CGRect.null
-    func flush() {
-        if !text.isEmpty && !rect.isNull {
-            pieces.append(["text": text,
-                           "left": Double(rect.minX - box.minX), "right": Double(rect.maxX - box.minX),
-                           "top": Double(box.maxY - rect.maxY), "bottom": Double(box.maxY - rect.minY),
-                           "page": index])
-        }
-        text = ""
-        rect = CGRect.null
-        prev = CGRect.null
+
+    func isWhite(_ i: Int) -> Bool {
+        guard let u = UnicodeScalar(ns.character(at: i)) else { return false }
+        return white.contains(u)
     }
-    for i in 0..<ns.length {
-        let ch = ns.substring(with: NSRange(location: i, length: 1))
-        if ch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { flush(); continue }
-        let r = page.characterBounds(at: i)
-        if r.isNull || r.isInfinite { continue }
-        if !prev.isNull {
-            // A piece is a word: it ends at white space (handled above), never at a small gap between two characters.
-            // PDFKit's character boxes are not exact (kerning, ligatures, web fonts), and cutting at a small gap
-            // split words into pieces ("s poon", "chic ken") that the layout reader then joined with spaces.
-            // Only a jump that cannot happen inside a word (a whole character height of gap, going backwards, or a new baseline) ends a piece.
-            let h = max(prev.height, r.height)
-            let gap = r.minX - prev.maxX
-            if gap > h * 1.0 || gap < -h * 1.0 || abs(r.midY - prev.midY) > h * 0.6 { flush() }
-        }
-        text += ch
-        rect = rect.isNull ? r : rect.union(r)
-        prev = r
+    func add(_ range: NSRange) {
+        guard range.length > 0, let selection = page.selection(for: range) else { return }
+        let r = selection.bounds(for: page)
+        if r.isNull || r.isInfinite || r.width <= 0 || r.height <= 0 { return }
+        pieces.append(["text": ns.substring(with: range),
+                       "left": Double(r.minX - box.minX), "right": Double(r.maxX - box.minX),
+                       "top": Double(box.maxY - r.maxY), "bottom": Double(box.maxY - r.minY),
+                       "page": index])
     }
-    flush()
+    func addWord(_ start: Int, _ end: Int) {
+        var from = start
+        var k = start
+        while k < end {
+            if ns.character(at: k) == slash {
+                if k > from { add(NSRange(location: from, length: k - from)) }
+                add(NSRange(location: k, length: 1))
+                from = k + 1
+            }
+            k += 1
+        }
+        if from < end { add(NSRange(location: from, length: end - from)) }
+    }
+
+    let n = ns.length
+    var i = 0
+    while i < n {
+        while i < n && isWhite(i) { i += 1 }
+        let start = i
+        while i < n && !isWhite(i) { i += 1 }
+        if i > start { addWord(start, i) }
+    }
     return pieces
 }

@@ -5,7 +5,7 @@
 **Why this report exists:** the owner's screenshots still showed a mess after `63ff9a2` although every automated test passed, and said the real PDF must be the source of truth. They were right: the earlier tests used a page **I reconstructed**, and its geometry and failure were not the real ones.
 
 ## Correction to the previous report (`2026-11-13-ios-rescue-review-fix.md`)
-That report named "words cut mid-word by PDFKit character gaps" as the main cause. With the real PDF in hand that is **not supported**: its text layer is clean (see below). The word-repair, review-marking and layout work are still valid hardening, but they did not address the real failure.
+That report named "words cut mid-word by PDFKit character gaps" as the main cause, from reading the code. The real PDF's own text layer is clean (see below), so the *gap rule* was not the cause. But a macOS probe later the same day (below) showed that PDFKit's per-character boxes ARE wrong, for a different reason, so cut-up words from the PDFKit route were real too. There are two separate failures on the iOS route, both now addressed.
 
 ## What the real PDF is
 `Veg-All Chicken Pot Pie Recipe - Food.com.pdf`: one page, made by iOS 26.5 Quartz from Chrome. Two recipe cards side by side (Veg-All left, Bourbon Chicken right, clipped at the page edge). **An advertisement image is drawn over the lower left** (it hides the end of step 6 and the last two ingredients **in the picture**; they are still in the text layer). Fractions are three separate pieces (numerator, U+2044, denominator) at different heights; amounts sit in a column beside multi-line ingredients; the second card's text layer overlaps itself. Text uses nested flips (`cm -0.717` with `Tm -32`) and per-run `Tc`/`TJ`.
@@ -14,6 +14,13 @@ That report named "words cut mid-word by PDFKit character gaps" as the main caus
 `Text.looksGarbled()` treated **any line with an odd number of `"`** as a damaged text layer. This page's quotation wraps over several lines, so its lines have odd counts. The PDF's perfectly clean text layer was therefore thrown away and `preferCleanText` read the **page picture with Vision** instead, accepting it when it held at least 60% as much text. Reading this particular picture cannot work (the advertisement covers text; the right card is clipped), which is the corrupted text in the owner's screenshots. Evidence:
 - `looksGarbled(real text)` was `true` before the fix and is `false` after; the genuine cases (`Southern "ied Chicken`, `Di!iculty`, `Di"iculty`) are still caught.
 - With the old detector the real-PDF tests fail ("picture reading was requested"); with the fix they pass (run both ways on 2026-11-13).
+
+## PDFKit evidence (macOS runner, Xcode 26.6, macOS 26.7; `.github/workflows/pdfkit-probe.yml`, run 43375472310)
+An INVENTED two-card page drawn with Apple's Quartz PDF engine (doubly flipped text matrices like the real file), read with PDFKit by the app's own Swift:
+- `page.string` is **clean**: whole words, whole lines, newlines between lines (`"1. Combine first 6 | ingredients. | 2. Spoon into prepared ..."`).
+- `characterBounds(at:)` boxes are **wrong and drift**: "CHICKE" + "N" at the position of the line below; "Com" + "m" + "bine"; "vegetabl" + "es"; "bef" ... "ore"; "balls.3.Bakeuntilgolden.2..." run together. 27 pieces of one or two letters on a page with none in the source. The drift grows with each line break (the string counts a newline that the glyph index space does not), which is why it gets worse down the page. This matches the look of the owner's earlier screenshots.
+- The app's old reader built pieces from those boxes. The new reader (`tools/swift/TextPieces.swift`) cuts words from the clean string and asks PDFKit for each word's box with `selection(for: range)` (PDFKit's text-selection API, index-aligned with the string). **Not yet confirmed by a probe run**: see BRANCH_STATUS for the run after this change.
+- The probe job also reported green over a red result (the `tee` pipeline hid the failing exit code); fixed with `set -o pipefail`.
 
 ## Stage-by-stage, real PDF (`node tools/pdf-stages.mjs <pdf> outdir`)
 Stage 1 here is **poppler** (`pdftotext -bbox`/`-raw`) standing in for PDFKit.

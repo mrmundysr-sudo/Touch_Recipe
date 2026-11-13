@@ -15,7 +15,9 @@ BG = (0x1F, 0x4D, 0x3A)
 
 pl_path = APP / "Info.plist"
 pl = plistlib.loads(pl_path.read_bytes())
-pl["UISupportedInterfaceOrientations"] = ["UIInterfaceOrientationPortrait"]
+# The app is declared portrait AND landscape so that ONE screen (Recipe Rescue) may rotate; MainViewController below answers "portrait only"
+# for every other screen (the web layer asks for landscape through TouchRecipeOcr.setOrientation and turns it off again when it leaves).
+pl["UISupportedInterfaceOrientations"] = ["UIInterfaceOrientationPortrait", "UIInterfaceOrientationLandscapeLeft", "UIInterfaceOrientationLandscapeRight"]
 pl.pop("UISupportedInterfaceOrientations~ipad", None)
 pl["UIRequiredDeviceCapabilities"] = ["arm64"]
 pl["UIRequiresFullScreen"] = True
@@ -61,9 +63,15 @@ SWIFT = r'''
 // ===== Touch Recipe on-device text recognition (added by tools/patch_ios.py) =====
 /// Bridge view controller that registers the local plugin below.
 class MainViewController: CAPBridgeViewController {
+    /// Portrait only, except while the Recipe Rescue screen has asked for landscape too (TouchRecipeOcr.setOrientation).
+    static var allowLandscape = false
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(TouchRecipeOcrPlugin())
     }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        return MainViewController.allowLandscape ? [.portrait, .landscapeLeft, .landscapeRight] : .portrait
+    }
+    override var shouldAutorotate: Bool { return true }
 }
 
 /// Reads text from a photo or a PDF entirely on the device. Nothing is uploaded.
@@ -74,8 +82,28 @@ public class TouchRecipeOcrPlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "recognizeImage", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "recognizePdf", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "renderPdfPage", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "renderPdfPage", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setOrientation", returnType: CAPPluginReturnPromise)
     ]
+
+    /// Lets the web layer allow landscape for one screen. `landscape: false` puts the app back to portrait (and turns the screen upright if it was sideways).
+    @objc func setOrientation(_ call: CAPPluginCall) {
+        let landscape = call.getBool("landscape") ?? false
+        DispatchQueue.main.async {
+            MainViewController.allowLandscape = landscape
+            let host = self.bridge?.viewController
+            if #available(iOS 16.0, *) {
+                host?.setNeedsUpdateOfSupportedInterfaceOrientations()
+                if !landscape, let scene = host?.view.window?.windowScene {
+                    scene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait)) { _ in }
+                }
+            } else {
+                if !landscape { UIDevice.current.setValue(UIInterfaceOrientation.portrait.rawValue, forKey: "orientation") }
+                UIViewController.attemptRotationToDeviceOrientation()
+            }
+            call.resolve()
+        }
+    }
 
     /// Recognised lines with their boxes (Vision's normalised box: origin bottom-left).
     private func observations(_ image: CGImage) -> [(text: String, box: CGRect)] {
@@ -200,6 +228,6 @@ if 'customClass="CAPBridgeViewController" customModule="Capacitor"' in t:
     t = t.replace('customClass="CAPBridgeViewController" customModule="Capacitor"', 'customClass="MainViewController" customModule="App" customModuleProvider="target"')
     story.write_text(t)
 assert "MainViewController" in story.read_text(), "Main.storyboard was not pointed at MainViewController"
-assert "TouchRecipeOcrPlugin" in delegate.read_text() and "func touchRecipeTextPieces" in delegate.read_text(), "AppDelegate.swift was not patched"
+assert "TouchRecipeOcrPlugin" in delegate.read_text() and "func touchRecipeTextPieces" in delegate.read_text() and "setOrientation" in delegate.read_text(), "AppDelegate.swift was not patched"
 
 print("iOS project patched; AppIcon is opaque RGB 1024x1024; text-recognition bridge installed.")
