@@ -53,7 +53,11 @@ export const Units = {
   byCanonical(name) { return byName.get(name); },
   best(family, base) {
     switch (family) {
-      case Family.US_VOLUME: return base >= 48 ? [base / 48, 'cup'] : base >= 3 ? [base / 3, 'tbsp'] : [base, 'tsp'];
+      case Family.US_VOLUME: {
+        // Roll tablespoon totals up to cups once they are a clean fraction (10 tbsp -> 5/8 cup, 16 tsp -> 1/3 cup).
+        if (base >= 12) { const c = base / 48; const e = c * 8, t = c * 3; if (Math.abs(e - Math.round(e)) < 0.02 || Math.abs(t - Math.round(t)) < 0.02) return [c, 'cup']; }
+        return base >= 48 ? [base / 48, 'cup'] : base >= 3 ? [base / 3, 'tbsp'] : [base, 'tsp'];
+      }
       case Family.METRIC_VOLUME: return base >= 1000 ? [base / 1000, 'l'] : [base, 'ml'];
       case Family.US_WEIGHT: return base >= 16 ? [base / 16, 'lb'] : [base, 'oz'];
       case Family.METRIC_WEIGHT: return base >= 1000 ? [base / 1000, 'kg'] : [base, 'g'];

@@ -7,7 +7,7 @@ const def = (o = {}) => Object.fromEntries(Object.entries(o).filter(([, v]) => v
 export const Ingredient = (o) => ({ id: newId(), text: '', header: false, checked: false, ...def(o) });
 export const Direction = (o) => ({ id: newId(), text: '', timerSeconds: null, header: false, image: null, ...def(o) });
 export const Recipe = (o = {}) => ({
-  id: newId(), title: '', description: '', notes: '', photo: null, photoFrame: null, sourceUrl: null, sourceName: null, cuisine: null,
+  id: newId(), title: '', description: '', notes: '', photo: null, photoFrame: null, sourceUrl: null, sourceName: null, cuisine: null, course: null,
   prepMinutes: null, cookMinutes: null, totalMinutes: null, servings: null, ingredients: [], directions: [], categoryIds: [],
   favorite: false, rawSource: null, createdAt: 0, updatedAt: 0, ...def(o),
 });

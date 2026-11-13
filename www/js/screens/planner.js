@@ -80,7 +80,7 @@ export function plannerScreen(params, ctx, nav) {
       if (r) { const ph = photoImg(ctx.photos, r.photo, { fallback: r.title, frame: r.photoFrame }); ph.style.cssText = 'position:absolute;inset:0'; pb.append(ph); } else pb.append(h('div', { style: `width:100%;text-align:center;font-size:${sp(52)};color:rgba(181,138,60,.8)` }, '＋'));
       const tb = box(d.title, fitText(r?.title ?? 'Nothing planned', { minScale: 0.5, style: `font-family:var(--display);font-weight:${r ? 700 : 400};font-size:${sp(28)};color:${r ? 'var(--ink)' : 'rgba(42,33,24,.55)'};max-width:100%` }), `padding-left:${dp(10)};padding-right:${dp(64)};`);
       tb.firstChild.dataset.testid = `day-title:${i}`;
-      box(d.cook, fitText(minutesLabel(r?.cookMinutes ?? (r ? effectiveTotal(r) : null)) ?? '—', { style: `font-weight:600;font-size:${sp(21)};color:var(--ink);text-align:center;max-width:100%` }), center);
+      box(d.cook, fitText(minutesLabel(r?.cookMinutes ?? null) ?? '—', { style: `font-weight:600;font-size:${sp(21)};color:var(--ink);text-align:center;max-width:100%` }), center);
       box(d.servings, fitText(String(e?.servings ?? r?.servings ?? '—'), { style: `font-weight:600;font-size:${sp(21)};color:var(--ink);text-align:center;max-width:100%` }), center);
       box(d.action, h('div', { style: `width:${dp(58)};height:${dp(58)};border-radius:50%;background:rgba(251,244,230,.92);border:1.5px solid var(--brass);display:flex;align-items:center;justify-content:center;font-size:${sp(34)};font-weight:700;color:var(--ink)` }, r ? '⋯' : '＋'), center);
     });

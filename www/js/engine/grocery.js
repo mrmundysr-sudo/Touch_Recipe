@@ -48,6 +48,11 @@ export function parse(line) {
     if (u) { unit = u; unitText = u.name; strip(two ? two[0].length : tok.length); }
     else if (Units.isCountUnit(tok)) { unitText = singularUnit(tok.toLowerCase().replace(/\.+$/, '')); strip(tok.length); }
   }
+  // "29oz can of Veg-All": the number is the container size, not a quantity -> 1 can (29 oz)
+  if (unit && !sizeNote && !paren && (unit.family === Family.US_WEIGHT || unit.family === Family.METRIC_WEIGHT || unit.family === Family.METRIC_VOLUME || unit.name === 'fl oz')) {
+    const cont = /^(cans?|jars?|packages?|pkgs?|bags?|bottles?|boxes?|cartons?|containers?|packs?)\b\s*(?:of\s+)?/i.exec(rest);
+    if (cont) return { quantity: 1, unit: null, unitText: singularUnit(cont[1].toLowerCase()), name: `${rest.slice(cont[0].length).trim()} (${format(amount)} ${unit.name})` };
+  }
   if (sizeNote) rest = `${rest} (${sizeNote})`;
   return { quantity: amount, unit, unitText, name: rest.trim() };
 }

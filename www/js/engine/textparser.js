@@ -39,7 +39,8 @@ const COUNT_LINE = /^\W*ingredients?\s*:\s*\d{1,3}\W*$/i;      // "Ingredients: 
 const SUBMITTED = /^\W*submitted by\s+(\S.{0,60}?)(?:\s+\d{1,3})?\s*$/i;   // a trailing number is the page's review count, not part of the name
 const EDITOR_NOTE = /^\W*editor'?s? note\s*:?\s*(.*)$/i;
 const AMOUNT_ONLY = /^\W*\d{1,3}(?:[./]\d{1,3})?\W*$/;
-const META_EACH = /(prep(?:aration)?(?: time)?|cook(?:ing)?(?: time)?|total(?: time)?|ready in|serv(?:es|ings?)|yield|makes)\s*[:\-]?\s*(.*?)(?=\s+(?:prep(?:aration)?(?: time)?|cook(?:ing)?(?: time)?|total(?: time)?|ready in|serv(?:es|ings?)|yield|makes)\s*[:\-]|$)/gi;
+const COURSE_LINE = /^\W*(course|category)\s*[:\-]?\s*(\S.{0,40}?)(?=\s+(?:prep(?:aration)?|cook(?:ing)?|total|ready in|serv(?:es|ings?)|yield|makes)\b|$)(.*)$/i;
+const META_EACH = /(prep(?:aration)?(?: time)?|cook(?:ing)?(?: time)?|total(?: time)?|ready in|serv(?:es|ings?)|yield|makes)\s*[:\-]?\s*(.*?)(?=\s+(?:prep(?:aration)?(?: time)?|cook(?:ing)?(?: time)?|total(?: time)?|ready in|serv(?:es|ings?)|yield|makes)\b|$)/gi;
 
 /** "Best Banana Bread Recipe - Site Name" -> "Best Banana Bread Recipe". */
 export function pageTitle(t) {
@@ -136,7 +137,7 @@ export function parse(raw, method = ImportMethod.TEXT, sourceUrl = null, titleHi
   if (!lines.some((l) => l)) {
     return { recipe: Recipe({ sourceUrl, rawSource: raw }), method, confidence: Confidence.LOW, warnings: [warn('recipe', 'No text was found to build a recipe from.', Severity.ERROR)], imageCandidates: [], unplaced: [] };
   }
-  let prep = null, cook = null, total = null, servings = null;
+  let prep = null, cook = null, total = null, servings = null, course = null;
   const sections = { pre: [], ing: [], dir: [], note: [] };
   let current = 'pre', sawIngHeader = false, sawDirHeader = false;
   const stepNumbers = [];
@@ -145,9 +146,12 @@ export function parse(raw, method = ImportMethod.TEXT, sourceUrl = null, titleHi
   const ingBlocks = [], dirBlocks = [];
   let order = 0;
 
-  for (const line of lines) {
+  for (let line of lines) {
     if (!line) continue;
     order++;
+    // "Course Main Course Prep Time 15 mins Cook Time 40 mins": Course is its own field; the times that follow are read below
+    const crs = COURSE_LINE.exec(line);
+    if (crs && current !== 'dir') { course = crs[2].trim(); line = (crs[3] ?? '').trim(); if (!line) continue; }
     if (COUNT_LINE.test(line)) continue;
     const sub = SUBMITTED.exec(line);
     if (sub && !/\d/.test(sub[1]) && current !== 'post' && line.length < 70) { extras.push(`Submitted by ${sub[1].trim()}`); continue; }
@@ -277,6 +281,6 @@ export function parse(raw, method = ImportMethod.TEXT, sourceUrl = null, titleHi
   }
 
   const confidence = title && ingredients.length && directions.length && (sawIngHeader || sawDirHeader) && method !== ImportMethod.OCR ? Confidence.MEDIUM : Confidence.LOW;
-  const recipe = Recipe({ title, description: intro, notes, sourceUrl, sourceName: host ?? author, prepMinutes: prep, cookMinutes: cook, totalMinutes: total, servings, ingredients, directions, rawSource: raw });
+  const recipe = Recipe({ title, description: intro, notes, sourceUrl, sourceName: host ?? author, course, prepMinutes: prep, cookMinutes: cook, totalMinutes: total, servings, ingredients, directions, rawSource: raw });
   return validate({ recipe, method, confidence, warnings, imageCandidates: [], unplaced: [...new Set(unplaced)] });
 }

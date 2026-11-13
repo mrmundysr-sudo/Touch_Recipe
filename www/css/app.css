@@ -191,7 +191,10 @@ hr.div { border: 0; border-top: 1px solid var(--outline); opacity: .4; margin: 1
 .rr-body { overflow: hidden; padding: 0 20px; gap: 14px; }
 .rr-switch { display: flex; gap: 10px; flex: none; } .rr-switch > * { flex: 1; }
 .rr-cols { flex: 1; min-height: 0; display: flex; gap: 40px; }
-.rr-pane { flex: 1 1 0; min-width: 0; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 6px 2px 40px; display: flex; flex-direction: column; gap: 30px; }
+.rr-wrap { flex: 1 1 0; min-width: 0; min-height: 0; position: relative; border-radius: 12px; }
+.rr-pane { position: absolute; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.rr-pane.zoomed { overflow: hidden; }
+.rr-zoom { padding: 6px 2px 120px; display: flex; flex-direction: column; gap: 30px; transform-origin: 0 0; will-change: auto; }
 .rr-h { margin: 0; font-family: var(--display); font-weight: 700; font-size: calc(22px * var(--ts)); color: var(--primary, var(--forest)); }
 .rr-group { display: flex; flex-direction: column; gap: 10px; }
 .rr-label { font-weight: 700; font-size: calc(15px * var(--ts)); color: var(--on-surface-var, #50443A); }
@@ -244,3 +247,31 @@ hr.div { border: 0; border-top: 1px solid var(--outline); opacity: .4; margin: 1
 .pp-thumb.selected { border-color: var(--primary, #1F4D3A); } .pp-thumb.rejected { opacity: .75; }
 .pp-thumb img { width: 100%; height: 100px; object-fit: contain; background: #222; border-radius: 8px; }
 .pp-cap { font-weight: 700; font-size: calc(14px * var(--ts)); } .pp-note { font-size: calc(12.5px * var(--ts)); color: var(--on-surface-var, #50443A); }
+
+/* Cook Mode: the step card, the scrolling recipe list and the Previous/Next bar are three separate, non-overlapping areas. */
+.sp-body.cook-body{overflow:hidden;padding:0 16px;gap:8px}
+.cook-card{flex:none;max-height:46%;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:14px;background:var(--surface,#FBF4E6);box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.cook-card > *{flex:none}
+.cook-list{flex:1 1 0;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:12px;padding:4px 0 16px}
+.cook-list > *{flex:none}
+.cook-nav{padding:8px 0}
+/* root cause of the overlaps: .sp-line has a min-height, which turns off min-height:auto, so cards in the scrolling column shrank and overflowed */
+.sp-body > .sp-line, .sp-body > .sp-sec, .sp-body > .sheet-row, .cook-list > .sp-line, .cook-list > .sp-sec{flex-shrink:0}
+
+/* Recipe Rescue zoom / pan */
+.rr-zoombar{flex:none;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.rr-tool{min-height:44px;min-width:44px;padding:0 12px;border-radius:12px;border:2px solid var(--outline,#9C9079);background:transparent;color:var(--on-surface,#2A2118);font-size:calc(15px * var(--ts));font-weight:600}
+.rr-tool.on{border-color:var(--tomato,#CF4A27);background:rgba(207,74,39,.14);color:var(--on-surface,#2A2118)}
+.rr-tool:disabled{opacity:.45}
+.rr-tool[data-testid=zoom-btn],.rr-tool[data-testid=pan-btn]{flex:1 1 0;white-space:nowrap;padding:0 8px}
+.rr-zrow{flex:1 1 100%;display:flex;gap:8px;align-items:center}
+.rr-zstatus{flex:1;font-size:calc(13px * var(--ts));color:var(--on-surface-var,#50443A)}
+.rr-active{outline:3px solid var(--tomato,#CF4A27);outline-offset:-1px}
+.rr-gesture{position:absolute;inset:0;z-index:5;touch-action:none;-webkit-user-select:none;user-select:none;background:rgba(207,74,39,.05);cursor:grab}
+.rr-gesture[hidden]{display:none}
+.rr-tools{position:absolute;top:6px;right:6px;z-index:6;display:flex;gap:6px;align-items:center;pointer-events:none}
+.rr-badge{font-size:12px;font-weight:700;padding:4px 8px;border-radius:999px;background:rgba(31,77,58,.92);color:#FFF4E0}
+.rr-fit{pointer-events:auto;min-height:36px;min-width:44px;border-radius:999px;border:0;background:var(--tomato,#CF4A27);color:#FFF4E0;font-weight:700;font-size:13px}
+.rr-fit[hidden]{display:none}
+.cook-card .cook-head{display:flex;align-items:center;gap:10px}
+@media (max-height:700px){.cook-card{max-height:56%} .cook-card [data-testid=step-text]{font-size:calc(18px * var(--ts)) !important} .cook-card [data-testid=step-number]{font-size:30px !important}}

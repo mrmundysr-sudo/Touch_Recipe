@@ -14,6 +14,7 @@ import { cropSheet } from './crop.js';
 import { allowLandscape, isWideScreen } from '../ui/orientation.js';
 import { numberedList } from '../ui/numbered.js';
 import { photoFlow, photoPickerSheet } from './photo.js';
+import * as PZ from '../ui/panzoom.js';
 
 /** Starts a rescue draft from an import draft (or edits an existing one), stored privately so it survives leaving the app. */
 export const draftFromImport = (d) => R.newDraft({ recipe: d.recipe, source: d.source || R.emptySource(), imageCandidates: d.imageCandidates || [], findings: validate(d).warnings || [] });
@@ -22,6 +23,12 @@ export function rescueScreen(params, ctx, nav) {
   const drafts = ctx.drafts;
   let st = null, tab = 'recipe', lastWide = null, alive = true, saveTimer = null, lastCaret = null, restore = null;
   const editors = new Set();
+  // View state for each side lives here, outside render(), so it survives redraws, edits and switching between the sides on a narrow phone.
+  const view = { original: PZ.fit(), recipe: PZ.fit() };
+  const sel = { zoom: null, pan: null };            // which side the magnifier / Pan button currently points at (null = off)
+  const SIDE = { original: 'Original', recipe: 'Recipe' };
+  const cycle = (cur) => (cur == null ? 'original' : cur === 'original' ? 'recipe' : null);   // first tap Original, second Recipe, third off
+  const paneEls = {};                               // side -> { pane, zoom (inner wrapper), wrap }
   const page = ScrollPage({ title: 'Recipe Rescue', testid: 'rescue', slot: null, onBack: () => leave() });
   const undoBtn = iconBtn('Undo', '↶', () => stepHistory(R.undo), ''); const redoBtn = iconBtn('Redo', '↷', () => stepHistory(R.redo), '');
   undoBtn.dataset.testid = 'rescue-undo'; redoBtn.dataset.testid = 'rescue-redo';
@@ -159,6 +166,67 @@ export function rescueScreen(params, ctx, nav) {
     return out;
   }
 
+  // ---------- zoom and pan ----------
+  const sizeOf = (side) => { const e = paneEls[side]; return { vw: e.pane.clientWidth, vh: e.pane.clientHeight, cw: e.zoom.offsetWidth, ch: e.zoom.offsetHeight }; };
+  function applyView(side) {
+    const e = paneEls[side]; if (!e || !e.pane.isConnected) return;
+    const { vw, vh, cw, ch } = sizeOf(side);
+    view[side] = PZ.clamp(view[side], vw, vh, cw, ch);
+    const v = view[side], zoomed = v.s > 1;
+    e.zoom.style.transform = PZ.cssTransform(v);
+    e.pane.classList.toggle('zoomed', zoomed);
+    if (zoomed) { e.pane.scrollTop = 0; e.pane.scrollLeft = 0; }
+    const active = sel.zoom === side || sel.pan === side;
+    e.wrap.classList.toggle('rr-active', active);
+    e.overlay.hidden = !active;
+    e.badge.textContent = `${SIDE[side]} · ${PZ.percent(v)}${sel.zoom === side ? ' · Zoom' : ''}${sel.pan === side ? ' · Pan' : ''}`;
+    e.fit.hidden = PZ.isFit(v); e.badge.hidden = !active && PZ.isFit(v);
+    updateBar();
+  }
+  const setView = (side, v) => { view[side] = v; applyView(side); };
+  function paneWrap(side, id, kids) {
+    const zoom = h('div', { class: 'rr-zoom' }, ...kids);
+    const pane = h('div', { class: 'rr-pane', 'data-testid': id }, zoom);
+    const badge = h('div', { class: 'rr-badge', 'data-testid': `badge-${side}`, 'aria-hidden': 'true' });
+    const fitBtn = h('button', { class: 'rr-fit', type: 'button', 'data-testid': `fit-${side}`, 'aria-label': `Reset ${SIDE[side]} to fit`, onclick: () => setView(side, PZ.fit()) }, 'Fit');
+    const overlay = h('div', { class: 'rr-gesture', 'data-testid': `gesture-${side}`, 'aria-hidden': 'true' }); overlay.hidden = true;
+    const wrap = h('div', { class: 'rr-wrap' }, pane, h('div', { class: 'rr-tools' }, badge, fitBtn), overlay);
+    pane.addEventListener('scroll', () => { if (view[side].s > 1 && (pane.scrollTop || pane.scrollLeft)) { pane.scrollTop = 0; pane.scrollLeft = 0; } }, { passive: true });
+    paneEls[side] = { pane, zoom, wrap, overlay, badge, fit: fitBtn, side };
+    PZ.attachGestures(overlay, {
+      get: () => view[side], set: (v) => setView(side, v), size: () => sizeOf(side),
+      canPan: () => sel.pan === side, onScroll: (dy) => { pane.scrollTop += dy; },
+    });
+    return paneEls[side];
+  }
+  let bar = null;
+  const pick = (kind) => {
+    commitAll(); sel[kind] = cycle(sel[kind]);
+    const side = sel[kind]; if (side && !wideNow() && tab !== side) { tab = side; render(); return; }   // narrow: show the side that was chosen
+    ['original', 'recipe'].forEach(applyView);
+  };
+  const stepZoom = (f) => { const side = sel.zoom; if (!side || !paneEls[side]) return; const { vw, vh, cw, ch } = sizeOf(side); setView(side, PZ.zoomAt(view[side], f, vw / 2, vh / 2, vw, vh, cw, ch)); };
+  function zoomBar() {
+    const btn = (testid, label, onclick) => h('button', { class: 'rr-tool', type: 'button', 'data-testid': testid, onclick }, label);
+    bar = h('div', { class: 'rr-zoombar', role: 'toolbar', 'aria-label': 'Zoom and pan the comparison' },
+      btn('zoom-btn', '', () => pick('zoom')), btn('pan-btn', '', () => pick('pan')),
+      h('div', { class: 'rr-zrow' }, btn('zoom-out', '−', () => stepZoom(1 / 1.25)), btn('zoom-in', '+', () => stepZoom(1.25)),
+        h('div', { class: 'rr-zstatus', 'data-testid': 'zoom-status', 'aria-live': 'polite' })));
+    bar.querySelector('[data-testid=zoom-out]').setAttribute('aria-label', 'Zoom out'); bar.querySelector('[data-testid=zoom-in]').setAttribute('aria-label', 'Zoom in');
+    updateBar(); return bar;
+  }
+  function updateBar() {
+    if (!bar) return;
+    const z = bar.querySelector('[data-testid=zoom-btn]'), p = bar.querySelector('[data-testid=pan-btn]');
+    z.textContent = `🔍 Zoom: ${sel.zoom ? SIDE[sel.zoom] : 'off'}`; p.textContent = `✋ Pan: ${sel.pan ? SIDE[sel.pan] : 'off'}`;
+    z.setAttribute('aria-pressed', String(!!sel.zoom)); p.setAttribute('aria-pressed', String(!!sel.pan));
+    z.classList.toggle('on', !!sel.zoom); p.classList.toggle('on', !!sel.pan);
+    z.setAttribute('aria-label', `Zoom: ${sel.zoom ? SIDE[sel.zoom] + ' selected' : 'off'}. Tap to choose Original, then Recipe, then off.`);
+    p.setAttribute('aria-label', `Pan: ${sel.pan ? SIDE[sel.pan] + ' selected' : 'off'}. Tap to choose Original, then Recipe, then off.`);
+    bar.querySelector('[data-testid=zoom-in]').disabled = bar.querySelector('[data-testid=zoom-out]').disabled = !sel.zoom;
+    bar.querySelector('[data-testid=zoom-status]').textContent = `Original ${PZ.percent(view.original)} · Recipe ${PZ.percent(view.recipe)}`;
+  }
+
   // Wide (a phone on its side, a tablet): the original on the left, our recipe on the right, each scrolling on its own. Upright: one at a time, full width.
   function render() {
     if (!alive || !st) return;
@@ -167,13 +235,15 @@ export function rescueScreen(params, ctx, nav) {
     const wide = wideNow(); lastWide = wide;
     const scroll = (id) => page.body.querySelector(`[data-testid="${id}"]`)?.scrollTop ?? 0;
     const keep = { orig: scroll('pane-original'), rec: scroll('pane-recipe') };
-    const pane = (id, kids) => h('div', { class: 'rr-pane', 'data-testid': id }, ...kids);
+    const sideOf = (id) => (id === 'pane-original' ? 'original' : 'recipe');
+    const pane = (id, kids) => paneWrap(sideOf(id), id, kids);
     const orig = wide || tab === 'original' ? pane('pane-original', originalSide()) : null;
     const rec = wide || tab === 'recipe' ? pane('pane-recipe', recipeSide()) : null;
     const choose = h('div', { class: 'rr-switch', role: 'tablist' }, chip('Original', tab === 'original', () => { commitAll(); tab = 'original'; render(); }, { 'data-testid': 'tab-original' }), chip('Recipe', tab === 'recipe', () => { commitAll(); tab = 'recipe'; render(); }, { 'data-testid': 'tab-recipe' }));
-    mount(page.body, wide ? null : choose, h('div', { class: `rr-cols${wide ? ' wide' : ''}` }, orig, rec));
+    mount(page.body, wide ? null : choose, zoomBar(), h('div', { class: `rr-cols${wide ? ' wide' : ''}` }, orig?.wrap, rec?.wrap));
     mount(page.foot, h('div', { class: 'sp-bar' }, bigButton('Create recipe', create, { testid: 'rescue-create' })));
-    if (orig) orig.scrollTop = keep.orig; if (rec) rec.scrollTop = keep.rec;
+    for (const e of [orig, rec]) if (e) applyView(e.side);
+    if (orig && PZ.isFit(view.original)) orig.pane.scrollTop = keep.orig; if (rec && PZ.isFit(view.recipe)) rec.pane.scrollTop = keep.rec;
   }
   // turning the phone: only a change between wide and upright needs a new layout
   let resizeTimer = null;

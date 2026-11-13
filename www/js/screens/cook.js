@@ -97,15 +97,16 @@ export function cookScreen(params, ctx, nav) {
     } else timerRow = h('button', { class: 'text-btn', type: 'button', 'data-testid': 'timer-add', style: 'color:var(--forest);font-weight:600;padding:0', onclick: durationDialog }, '⏱ Add a timer');
     const progress = u.completed.size / u.steps.length;
     const last = u.index >= u.steps.length - 1;
-    // the current step stays pinned at the top while the whole recipe scrolls underneath
-    const card = h('div', { class: 'sp-line', style: 'position:sticky;top:0;z-index:3;flex-direction:column;background:var(--surface,#FBF4E6);box-shadow:0 4px 12px rgba(0,0,0,.12)', 'data-testid': 'cook-card', 'data-art-slot': 'cook_step' },
-      h('div', { role: 'text', 'aria-label': `Step ${u.index + 1} of ${u.steps.length}`, style: 'font-weight:700;color:var(--forest)' }, `Step ${u.index + 1} of ${u.steps.length}`),
-      h('div', { class: 'row-line', style: 'gap:0;align-items:center' }, h('div', { 'data-testid': 'step-number', style: 'font-family:var(--display);font-weight:700;font-size:48px;color:var(--tomato);line-height:1.1' }, String(u.index + 1)),
-        u.completed.has(u.index) ? h('div', { 'data-testid': 'step-done', style: 'margin-left:8px;color:var(--forest);font-weight:700' }, '✓ done') : null),
-      h('div', { 'data-testid': 'step-text', style: 'font-size:calc(24px * var(--ts));line-height:1.35' }, step.text), timerRow,
-      h('div', { role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.round(progress * 100)), 'aria-label': `${u.completed.size} of ${u.steps.length} steps completed`, 'data-testid': 'cook-progress', style: 'height:8px;border-radius:4px;background:var(--cream-deep);overflow:hidden;width:100%' }, h('div', { style: `height:100%;width:${progress * 100}%;background:var(--tomato)` })),
-      h('div', { class: 'sheet-row', style: 'width:100%' }, bigButton('Previous', () => vm.prev(), { primary: false, disabled: u.index === 0, testid: 'cook-prev' }), bigButton(last ? 'Finish cooking' : 'Next step', goNext, { testid: 'cook-next' })));
-    for (const [k, fn] of [['prev', () => vm.prev()], ['next', goNext]]) { const b = card.querySelector(k === 'prev' ? '[data-testid=cook-prev]' : '[data-testid=cook-next]'); b.dataset.art = k; }
+    // Three separate areas, none overlapping: the current step (own scrollable region, capped so a long step cannot push the rest off
+    // a small phone), the Ingredients / All steps list (its own scroller below), and Previous / Next in the page footer.
+    const card = h('div', { class: 'cook-card', 'data-testid': 'cook-card', 'data-art-slot': 'cook_step' },
+      h('div', { class: 'cook-head' }, h('div', { 'data-testid': 'step-number', style: 'font-family:var(--display);font-weight:700;font-size:40px;color:var(--tomato);line-height:1.1' }, String(u.index + 1)),
+        h('div', { role: 'text', 'aria-label': `Step ${u.index + 1} of ${u.steps.length}`, style: 'font-weight:700;color:var(--forest)' }, `Step ${u.index + 1} of ${u.steps.length}`),
+        u.completed.has(u.index) ? h('div', { 'data-testid': 'step-done', style: 'margin-left:auto;color:var(--forest);font-weight:700' }, '✓ done') : null),
+      h('div', { 'data-testid': 'step-text', style: 'font-size:calc(22px * var(--ts));line-height:1.35;overflow-wrap:anywhere' }, step.text), timerRow,
+      h('div', { role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.round(progress * 100)), 'aria-label': `${u.completed.size} of ${u.steps.length} steps completed`, 'data-testid': 'cook-progress', style: 'height:8px;flex:none;border-radius:4px;background:var(--cream-deep);overflow:hidden;width:100%' }, h('div', { style: `height:100%;width:${progress * 100}%;background:var(--tomato)` })));
+    const nav2 = h('div', { class: 'sheet-row cook-nav', 'data-testid': 'cook-nav', style: 'width:100%' }, bigButton('Previous', () => vm.prev(), { primary: false, disabled: u.index === 0, testid: 'cook-prev' }), bigButton(last ? 'Finish cooking' : 'Next step', goNext, { testid: 'cook-next' }));
+    nav2.querySelector('[data-testid=cook-prev]').dataset.art = 'prev'; nav2.querySelector('[data-testid=cook-next]').dataset.art = 'next';
     // every step is listed so the whole method can be read by scrolling; tap one to jump to it
     let n = 0;
     const steps = h('section', { class: 'sp-sec', 'data-art-slot': 'cook_steps', 'data-testid': 'step-list' }, h('h2', { class: 'sp-h2' }, 'All steps'),
@@ -115,9 +116,12 @@ export function cookScreen(params, ctx, nav) {
         return h('button', { type: 'button', class: `sp-line${i === u.index ? ' selected' : ''}`, style: 'text-align:left;width:100%;cursor:pointer', 'aria-current': i === u.index ? 'step' : null, 'data-testid': `jump:${i}`, onclick: () => vm.jump(i) },
           h('strong', { style: 'flex:none;min-width:2ch' }, `${i + 1}.`), h('span', null, d.text), u.completed.has(i) ? h('span', { 'aria-label': 'done', style: 'margin-left:auto;color:var(--forest)' }, '✓') : null);
       }));
-    const keep = page.body.scrollTop;
-    mount(page.body, card, ingredientsSection(u), steps);
-    page.body.scrollTop = keep;
+    const oldList = page.body.querySelector('.cook-list'), keep = oldList ? oldList.scrollTop : 0, keepCard = page.body.querySelector('.cook-card')?.scrollTop ?? 0;
+    page.body.classList.add('cook-body');
+    const list = h('div', { class: 'cook-list', 'data-testid': 'cook-list' }, ingredientsSection(u), steps);
+    mount(page.body, card, list);
+    mount(page.foot, nav2);
+    list.scrollTop = keep; card.scrollTop = keepCard;
     tick();
   }
 

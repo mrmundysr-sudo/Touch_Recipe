@@ -44,3 +44,6 @@ Same branch `ccr-ios-rescue-review-fix` (after `4977a52`). Recipe Rescue rebuilt
 
 ## 2026-11-13 photos
 Same branch `ccr-ios-rescue-review-fix`. Recipe photo finding, choosing and framing built; PDF embedded-picture extraction added to the native bridge (needs the macOS probe and a device). Not uploaded to TestFlight. See `docs/knowledge/reports/2026-11-13-photos-and-lists.md`.
+
+## 2026-11-13 Cook Mode, times, grocery, zoom/pan
+Branch `ccr-ios-cookmode-zoom-fix`, cut from `ccr-ios-rescue-review-fix` @ `dd20586` (untouched). Not merged, not delivered, not uploaded to TestFlight. See `docs/knowledge/reports/2026-11-13-cook-rescue-zoom.md`.

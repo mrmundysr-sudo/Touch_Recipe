@@ -71,6 +71,7 @@ export function detailScreen(params, ctx, nav) {
     const more = h('button', { type: 'button', class: 'sp-mini', 'aria-label': 'More options', 'data-testid': 'detail-more', style: 'font-size:28px', onclick: () => moreMenu(r) }, '⋯');
     const ph = r.photo ? photoImg(ctx.photos, r.photo, { fallback: r.title, alt: `Photo of ${r.title}`, cls: 'sp-photo', frame: r.photoFrame }) : null;
     if (ph) { ph.setAttribute('role', 'button'); ph.style.cursor = 'pointer'; ph.dataset.art = 'photo'; ph.addEventListener('click', () => photoMenu(r)); }
+    const info = [['Course', r.course]].filter(([, v]) => v);
     const meta = [['Prep', minutesLabel(r.prepMinutes)], ['Cook', minutesLabel(r.cookMinutes)], ['Total', minutesLabel(effectiveTotal(r))]];
     const ingNodes = !r.ingredients.length ? [h('div', { class: 'sp-warn' }, 'No ingredients yet. Tap “Edit ingredients” to add some.')] : r.ingredients.map((ing) => {
       if (ing.header) return h('div', { role: 'heading', 'aria-level': '3', style: 'font-weight:700;color:var(--forest);padding-top:6px' }, ing.text);
@@ -96,7 +97,8 @@ export function detailScreen(params, ctx, nav) {
         r.description.trim() ? h('p', { style: 'margin:6px 0 0' }, r.description) : null,
         src ? h('div', { role: r.sourceUrl ? 'link' : null, tabindex: r.sourceUrl ? '0' : null, style: 'color:var(--forest);text-decoration:underline;min-height:32px;padding:4px 0', onclick: () => { if (r.sourceUrl && !openLink(r.sourceUrl)) say("The link couldn't be opened."); } }, `Source: ${src}`) : null,
         r.notes.trim() ? h('p', { style: 'margin:6px 0 0' }, `Notes: ${r.notes}`) : null),
-      h('div', { class: 'sheet-row' }, ...meta.map(([l, v]) => h('div', { role: 'text', 'aria-label': `${l} time: ${v ?? 'not set'}`, class: 'sp-line', style: 'flex-direction:column;align-items:center;text-align:center;min-height:0' }, h('span', { style: 'font-size:13px;opacity:.7' }, l), h('strong', null, v ?? '—')))),
+      info.length ? h('div', { class: 'sheet-row', 'data-testid': 'detail-info' }, ...info.map(([l, v]) => h('div', { role: 'text', 'aria-label': `${l}: ${v}`, class: 'sp-line', style: 'flex:1 1 0;min-width:0;flex-direction:column;align-items:center;text-align:center;min-height:0' }, h('span', { style: 'font-size:13px;opacity:.7' }, l), h('strong', { style: 'overflow-wrap:anywhere' }, v)))) : null,
+      h('div', { class: 'sheet-row', 'data-testid': 'detail-times' }, ...meta.map(([l, v]) => h('div', { role: 'text', 'aria-label': `${l} time: ${v ?? 'not set'}`, class: 'sp-line', style: 'flex-direction:column;align-items:center;text-align:center;min-height:0' }, h('span', { style: 'font-size:13px;opacity:.7' }, l), h('strong', null, v ?? '—')))),
       h('div', { class: 'sp-line', style: 'justify-content:space-between;align-items:center' }, h('strong', null, 'Servings'),
         h('div', { style: 'display:flex;align-items:center;gap:6px' }, h('button', { type: 'button', class: 'sp-mini', 'aria-label': 'Fewer servings', 'data-art': 'serv_dec', onclick: () => step(-1) }, '−'),
           h('strong', { 'aria-live': 'polite', 'aria-label': `Servings: ${serv ?? 'not set'}`, 'data-testid': 'servings-value', style: 'min-width:2ch;text-align:center;font-size:22px' }, serv != null ? String(serv) : '—'),

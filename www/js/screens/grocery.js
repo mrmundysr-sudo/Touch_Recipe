@@ -65,12 +65,21 @@ export function groceryScreen(params, ctx, nav) {
   }
 
   function row(item) {
-    const name = h('input', { type: 'text', value: item.name, 'aria-label': 'Item name', autocapitalize: 'sentences', enterkeyhint: 'next',
-      style: `flex:1;min-width:0;border:0;background:transparent;font-size:calc(17px * var(--ts));color:var(--ink);padding:0 6px 0 0;${item.checked ? 'text-decoration:line-through' : ''}`,
-      onblur: () => { const v = name.value.trim(); if (v && v !== item.name) ctx.repo.updateGroceryItem({ ...item, name: v, edited: true }); else name.value = item.name; } });
-    const qty = h('input', { type: 'text', value: item.quantityText, placeholder: 'qty', 'aria-label': 'Quantity and unit', enterkeyhint: 'done',
-      style: 'width:78px;border:0;border-radius:6px;background:rgba(233,216,183,.55);padding:7px 6px;font-size:calc(15px * var(--ts));color:var(--ink);flex:none',
-      onblur: () => { if (qty.value !== item.quantityText) ctx.repo.updateGroceryItem({ ...item, quantityText: qty.value.trim(), edited: true }); } });
+    // Long names and amounts wrap onto more lines instead of being clipped; the boxes grow to fit what they hold.
+    const grow = (el) => { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; };
+    const name = h('textarea', { rows: '1', 'aria-label': 'Item name', autocapitalize: 'sentences', enterkeyhint: 'next', 'data-testid': `grocery-name:${item.id}`,
+      style: `flex:1 1 0;min-width:0;border:0;background:transparent;font:inherit;font-size:calc(17px * var(--ts));line-height:1.25;color:var(--ink);padding:12px 6px 12px 0;resize:none;overflow:hidden;overflow-wrap:anywhere;${item.checked ? 'text-decoration:line-through' : ''}`,
+      oninput: () => grow(name),
+      onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); name.blur(); } },
+      onblur: () => { const v = name.value.replace(/\s+/g, ' ').trim(); if (v && v !== item.name) ctx.repo.updateGroceryItem({ ...item, name: v, edited: true }); else name.value = item.name; } });
+    name.value = item.name;
+    const qty = h('textarea', { rows: '1', placeholder: 'qty', 'aria-label': 'Quantity and unit', enterkeyhint: 'done', 'data-testid': `grocery-qty:${item.id}`,
+      style: 'flex:0 1 96px;min-width:64px;max-width:34%;border:0;border-radius:6px;background:rgba(233,216,183,.55);padding:8px 6px;font:inherit;font-size:calc(15px * var(--ts));line-height:1.25;color:var(--ink);resize:none;overflow:hidden;overflow-wrap:anywhere;text-align:right',
+      oninput: () => grow(qty),
+      onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); qty.blur(); } },
+      onblur: () => { const v = qty.value.replace(/\s+/g, ' ').trim(); if (v !== item.quantityText) ctx.repo.updateGroceryItem({ ...item, quantityText: v, edited: true }); } });
+    qty.value = item.quantityText;
+    requestAnimationFrame(() => { grow(name); grow(qty); });
     const r = h('div', { 'data-testid': `grocery-row:${item.id}`, style: 'display:flex;align-items:center;min-height:48px' },
       h('button', { type: 'button', role: 'checkbox', 'aria-checked': String(item.checked), 'aria-label': `${item.name} purchased`, 'data-testid': `grocery-check:${item.id}`, style: 'width:48px;height:48px;border:0;background:transparent;display:flex;align-items:center;justify-content:center;flex:none;padding:0',
         onclick: () => ctx.repo.updateGroceryItem({ ...item, checked: !item.checked }) },
