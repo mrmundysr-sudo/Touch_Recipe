@@ -45,3 +45,9 @@ test('quantity lines with no unit word stay ingredients', () => {
   const d = T.parse(['Egg Dish', 'Ingredients', '6 large eggs', '2 ripe avocados, halved', '3 green onions, thinly sliced', 'Directions', 'Whisk the eggs well and cook them in a hot pan until just set, about 3 minutes.'].join('\n')).recipe;
   assert.equal(d.ingredients.length, 3); assert.equal(d.directions.length, 1);
 });
+
+test('social post furniture (video length, counts, buttons) is not read as steps', () => {
+  const r = T.parse(['Best Ribs I Have Ever Done', '8:09', '1.7K', 'Like', 'See more', 'Ingredients:', '1 rack pork spareribs', '2 tablespoons brown sugar', 'Directions:', 'Smoke the ribs for two hours, then wrap them tightly in foil.'].join('\n')).recipe;
+  assert.equal(r.ingredients.length, 2); assert.equal(r.directions.length, 1);
+  assert.ok(!r.directions.some((d) => /^(8:09|1\.7K)$/.test(d.text)));
+});

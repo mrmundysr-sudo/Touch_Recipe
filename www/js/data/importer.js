@@ -199,7 +199,7 @@ export class ImportService {
           const t = Text.parse(og, ImportMethod.SOCIAL_CAPTION, r.finalUrl);
           if (t.recipe.ingredients.length || t.recipe.directions.length || social) {
             draft = { ...t, recipe: { ...t.recipe, sourceUrl: r.finalUrl, sourceName: host.replace(/^www\./, ''), title: t.recipe.title.trim() ? t.recipe.title : draft.recipe.title },
-              warnings: [warn('recipe', 'Social platforms rarely share full recipes. We used the post\'s public caption; the rest may need to be typed in or pasted.', Severity.WARNING), ...t.warnings.filter((w) => w.severity !== Severity.INFO)],
+              warnings: [...(/(…|\.\.\.)\s*$/.test(og.trim()) ? [warn('recipe', 'This post\'s caption was cut short (it ends in "…"), so the end of the recipe is missing. Open the post, tap See more, copy the whole caption, and use Paste or Type Recipe; your link can go in the source field.', Severity.WARNING)] : []), warn('recipe', 'Social platforms rarely share full recipes. We used the post\'s public caption; the rest may need to be typed in or pasted.', Severity.WARNING), ...t.warnings.filter((w) => w.severity !== Severity.INFO)],
               imageCandidates: draft.imageCandidates, confidence: Confidence.LOW };
           }
         }

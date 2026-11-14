@@ -275,3 +275,5 @@ hr.div { border: 0; border-top: 1px solid var(--outline); opacity: .4; margin: 1
 .rr-fit[hidden]{display:none}
 .cook-card .cook-head{display:flex;align-items:center;gap:10px}
 @media (max-height:700px){.cook-card{max-height:56%} .cook-card [data-testid=step-text]{font-size:calc(18px * var(--ts)) !important} .cook-card [data-testid=step-number]{font-size:30px !important}}
+
+.rr-wrapfield{resize:none;overflow:hidden;overflow-wrap:anywhere;line-height:1.25;font-family:inherit;min-height:44px}

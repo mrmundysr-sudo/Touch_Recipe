@@ -108,8 +108,15 @@ export function rescueScreen(params, ctx, nav) {
 
   // ---------- OUR side: the recipe ----------
   const group = (label, control) => h('label', { class: 'rr-group' }, h('span', { class: 'rr-label' }, label), control);
-  const textField = (label, value, onCommit, { testid, inputmode = null, placeholder = '' } = {}) => {
-    const el = h('input', { class: 'rr-field', type: 'text', inputmode, placeholder, value: value ?? '', 'data-testid': testid });
+  const textField = (label, value, onCommit, { testid, inputmode = null, placeholder = '', wrap = false } = {}) => {
+    // a title can be long: it wraps onto more lines instead of being clipped at the edge
+    const el = wrap ? h('textarea', { class: 'rr-field rr-wrapfield', rows: '1', placeholder, 'data-testid': testid }) : h('input', { class: 'rr-field', type: 'text', inputmode, placeholder, value: value ?? '', 'data-testid': testid });
+    if (wrap) {
+      el.value = value ?? '';
+      const grow = () => { el.style.height = 'auto'; el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`; };
+      el.addEventListener('input', grow); el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } });
+      requestAnimationFrame(grow);
+    }
     el.addEventListener('change', () => onCommit(el.value));
     return group(label, el);
   };
@@ -119,7 +126,7 @@ export function rescueScreen(params, ctx, nav) {
     if (finds.length) out.push(h('div', { class: 'rr-notes' }, ...finds.map((f) => h('div', { class: `sp-warn${f.severity === 'ERROR' ? ' error' : ''}` }, f.message))));
     const review = R.linesToReview(r).length;
     if (review) out.push(h('div', { class: 'sp-warn', 'data-testid': 'review-count' }, `${review} line${review === 1 ? '' : 's'} marked "Check this line". They are shown exactly as they were read: compare them with the original, then fix or delete them.`));
-    out.push(textField('Title', r.title, (v) => field((s) => R.setTitle(s, v)), { testid: 'rr-title' }));
+    out.push(textField('Title', r.title, (v) => field((s) => R.setTitle(s, v)), { testid: 'rr-title', wrap: true }));
     out.push(h('div', { class: 'rr-pair' },
       textField('Servings', r.servings ?? '', (v) => field((s) => (v.trim() ? R.setServings(s, v) : R.clearServings(s))), { testid: 'rr-servings', inputmode: 'numeric' }),
       textField('Prep minutes', r.prepMinutes ?? '', (v) => field((s) => R.setTime(s, 'prep', v)), { testid: 'rr-prep', inputmode: 'numeric' }),

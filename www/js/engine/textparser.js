@@ -39,6 +39,8 @@ const COUNT_LINE = /^\W*ingredients?\s*:\s*\d{1,3}\W*$/i;      // "Ingredients: 
 const SUBMITTED = /^\W*submitted by\s+(\S.{0,60}?)(?:\s+\d{1,3})?\s*$/i;   // a trailing number is the page's review count, not part of the name
 const EDITOR_NOTE = /^\W*editor'?s? note\s*:?\s*(.*)$/i;
 const AMOUNT_ONLY = /^\W*\d{1,3}(?:[./]\d{1,3})?\W*$/;
+// Page furniture from social posts that is never part of a recipe: video lengths ("8:09"), counts ("1.7K"), and buttons ("Like", "See more").
+const SOCIAL_NOISE = /^\W*(?:\d{1,2}:\d{2}(?::\d{2})?|\d[\d.,]*\s*[KkMm]|\d[\d.,]*\s*[KkMm]?\s*(?:likes?|comments?|shares?|views?|reactions?|plays?)|(?:all reactions?|like|comment|share|send|follow|reply|see more|see translation|see less|most relevant|top fan|write a comment|view more comments?)\W*)$/i;
 const TIP_LINE = /^\W*((?:cook(?:ing|'s|s)|chef'?s?)? ?tips?)\s*:\s*(\S.*)$/i;
 const COURSE_LINE = /^\W*(course|category)\s*[:\-]?\s*(\S.{0,40}?)(?=\s+(?:prep(?:aration)?|cook(?:ing)?|total|ready in|serv(?:es|ings?)|yield|makes)\b|$)(.*)$/i;
 const META_EACH = /(prep(?:aration)?(?: time)?|cook(?:ing)?(?: time)?|total(?: time)?|ready in|serv(?:es|ings?)|yield|makes)\s*[:\-]?\s*(.*?)(?=\s+(?:prep(?:aration)?(?: time)?|cook(?:ing)?(?: time)?|total(?: time)?|ready in|serv(?:es|ings?)|yield|makes)\b|$)/gi;
@@ -155,6 +157,7 @@ export function parse(raw, method = ImportMethod.TEXT, sourceUrl = null, titleHi
 
   for (let line of lines) {
     if (!line) continue;
+    if (SOCIAL_NOISE.test(line)) continue;
     order++;
     // "Course Main Course Prep Time 15 mins Cook Time 40 mins": Course is its own field; the times that follow are read below
     const crs = COURSE_LINE.exec(line);
