@@ -39,3 +39,6 @@
 
 ## K-036 Rescue gesture standard: partial port
 Rescue implements PAN/ZOOM one-finger modes and the live status line from the Touch Gesture Standard, but not the sensitivity slider, frame-timing readout, first-use intro dialog, or TalkBack/VoiceOver custom actions (the +/- buttons are the accessible alternative). Real-device feel unverified.
+
+## K-037 Shared-recipe tap-to-open unverified on device
+The .touchrecipe document type is registered by tools/patch_ios.py and opened through Capacitor `appUrlOpen`; verify with two devices. Fallback: Print & Share > "Open a shared recipe file". Android does not yet open these files (same format as the backup).

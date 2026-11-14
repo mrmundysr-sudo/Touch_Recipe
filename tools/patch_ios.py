@@ -28,6 +28,12 @@ pl["CFBundleDisplayName"] = "Touch Recipe"
 pl["NSCameraUsageDescription"] = "Touch Recipe uses the camera to photograph a recipe or add a photo to one."
 pl["NSPhotoLibraryUsageDescription"] = "Touch Recipe lets you choose a photo or scan for a recipe from your library."
 pl["NSPhotoLibraryAddUsageDescription"] = "Touch Recipe can save recipe photos you take."
+# .touchrecipe files (recipes sent from another Touch Recipe user) open in this app: a registered file type; Capacitor delivers the opened URL as `appUrlOpen`
+pl["UTExportedTypeDeclarations"] = [{"UTTypeIdentifier": "com.mundymorning.touchrecipe.share", "UTTypeDescription": "Touch Recipe shared recipes",
+    "UTTypeConformsTo": ["public.data", "public.archive"], "UTTypeTagSpecification": {"public.filename-extension": ["touchrecipe"], "public.mime-type": "application/x-touchrecipe"}}]
+pl["CFBundleDocumentTypes"] = [{"CFBundleTypeName": "Touch Recipe shared recipes", "CFBundleTypeRole": "Viewer", "LSHandlerRank": "Owner",
+    "LSItemContentTypes": ["com.mundymorning.touchrecipe.share"]}]
+pl["LSSupportsOpeningDocumentsInPlace"] = False
 pl_path.write_bytes(plistlib.dumps(pl))
 
 src = Image.open(ROOT / "tools" / "icons" / "icon-1024.png").convert("RGBA")

@@ -287,3 +287,12 @@ hr.div { border: 0; border-top: 1px solid var(--outline); opacity: .4; margin: 1
 .gl-link{min-height:44px;padding:0;border:0;background:transparent;color:var(--forest);font-weight:700;font-size:calc(16px * var(--ts));text-decoration:underline;text-underline-offset:4px}
 .gl-toolbar .gl-link{flex:0 1 auto}
 .sp[data-testid=grocery] .sp-foot .bigbtn, .sp[data-testid=grocery] .sp-foot button{box-shadow:none}
+
+/* Share between Touch Recipe users */
+.sh-list{display:flex;flex-direction:column;gap:2px;max-height:46vh;overflow-y:auto;overscroll-behavior:contain}
+.sh-row{display:flex;align-items:center;gap:14px;min-height:56px;padding:6px 4px;border:0;border-bottom:1px solid var(--outline,#9C9079);background:transparent;color:var(--on-surface,#2A2118);text-align:left;font-size:calc(17px * var(--ts));font-weight:600}
+.sh-box{flex:none;width:28px;height:28px;border:2px solid var(--forest,#1F4D3A);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:800}
+.sh-row.on .sh-box{background:var(--forest,#1F4D3A);color:#FFF4E0}
+.sh-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--outline,#9C9079)}
+.sh-thumb{flex:none;width:64px;height:64px;object-fit:cover;border-radius:10px}
+.sh-main{flex:1;min-width:0}.sh-title{font-weight:700;overflow-wrap:anywhere}.sh-sub{font-size:calc(14px * var(--ts));opacity:.8;margin-bottom:6px}

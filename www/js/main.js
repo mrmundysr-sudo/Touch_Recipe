@@ -63,6 +63,7 @@ export async function boot({ backend = new IdbBackend(), storage = globalThis.lo
   await registerLateRoutes();
   const nav = new Nav(host, routes, ctx);
   ctx.nav = nav;
+  import('./screens/sharing.js').then((m) => m.listenForOpenedFiles(ctx)).catch((e) => console.error(e));
   window.__app = { ctx, nav };
   nav.go(Routes.SPLASH, {}, { root: true });
   if (window.__TOUR__) setTimeout(() => import('./tour.js').then((m) => m.runTour({ ctx, nav })).catch((e) => console.error(e)), 2500);

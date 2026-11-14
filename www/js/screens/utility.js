@@ -11,6 +11,7 @@ import { DEFAULT_AISLES } from '../engine/grocery.js';
 import { BackupManager, BackupException, saveFile } from '../data/backup.js';
 import { notifier } from '../data/notify.js';
 import { recipeText, shareText, pickFile } from '../ui/shared.js';
+import { sendSheet, openSharedFileFromPicker } from './sharing.js';
 import { aisleName } from './grocery.js';
 
 function utilityPage(nav, title, build, { back = Routes.DRAWER } = {}) {
@@ -202,6 +203,8 @@ export function printScreen(params, ctx, nav) {
       mount(body, p('Share as text with any app. In the share sheet, choose Print to print it or Save to Files for a PDF.'), h2('Meal plan and grocery list'), p(Planner.rangeLabel(week())),
         h('div', { class: 'sheet-row' }, bigButton('Share meal plan', () => shareText('Meal plan', planText()), { primary: false }), bigButton('Print meal plan', () => shareText('Meal plan', planText()), { primary: false })),
         h('div', { class: 'sheet-row', style: 'margin-top:8px' }, bigButton('Share grocery list', () => shareText('Grocery list', groceryText()), { primary: false }), bigButton('Print grocery list', () => shareText('Grocery list', groceryText()), { primary: false })),
+        h('hr', { class: 'div' }), h2('To another Touch Recipe user'), p('Send recipes exactly as they are, with photos, to a friend who also has Touch Recipe. They choose what to add.'),
+        h('div', { class: 'sheet-row' }, bigButton('Send recipes…', () => sendSheet(ctx), { primary: false, testid: 'send-recipes' }), bigButton('Open a shared recipe file', () => openSharedFileFromPicker(ctx), { primary: false, testid: 'open-shared' })),
         h('hr', { class: 'div' }), h2('A recipe'), !recipes.length ? p('Save a recipe first, then you can share or print it here.') : null,
         recipes.map((r) => h('div', { class: 'row-line', style: 'min-height:56px' }, h('div', { style: 'flex:1;font-weight:600' }, r.title.trim() || 'Untitled recipe'), textButton('Share', () => shareText(r.title, recipeText(r, null))), textButton('Print', () => shareText(r.title, recipeText(r, null))))));
     };
