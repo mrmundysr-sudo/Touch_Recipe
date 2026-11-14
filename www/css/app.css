@@ -277,3 +277,13 @@ hr.div { border: 0; border-top: 1px solid var(--outline); opacity: .4; margin: 1
 @media (max-height:700px){.cook-card{max-height:56%} .cook-card [data-testid=step-text]{font-size:calc(18px * var(--ts)) !important} .cook-card [data-testid=step-number]{font-size:30px !important}}
 
 .rr-wrapfield{resize:none;overflow:hidden;overflow-wrap:anywhere;line-height:1.25;font-family:inherit;min-height:44px}
+
+.gl-toolbar{flex:none;display:flex;flex-wrap:wrap;gap:8px}
+.gl-toolbar .rr-tool{flex:1 1 auto;white-space:normal}
+
+/* Grocery List reads as writing on the page: no boxes around the items, thin rules between them, plain text controls */
+.sp-body[data-testid=grocery-list]{gap:6px;padding:4px 20px 24px}
+.gl-toolbar{gap:18px}
+.gl-link{min-height:44px;padding:0;border:0;background:transparent;color:var(--forest);font-weight:700;font-size:calc(16px * var(--ts));text-decoration:underline;text-underline-offset:4px}
+.gl-toolbar .gl-link{flex:0 1 auto}
+.sp[data-testid=grocery] .sp-foot .bigbtn, .sp[data-testid=grocery] .sp-foot button{box-shadow:none}
