@@ -263,7 +263,7 @@ hr.div { border: 0; border-top: 1px solid var(--outline); opacity: .4; margin: 1
 .rr-tool{min-height:44px;min-width:44px;padding:0 12px;border-radius:12px;border:2px solid var(--outline,#9C9079);background:transparent;color:var(--on-surface,#2A2118);font-size:calc(15px * var(--ts));font-weight:600}
 .rr-tool.on{border-color:var(--tomato,#CF4A27);background:rgba(207,74,39,.14);color:var(--on-surface,#2A2118)}
 .rr-tool:disabled{opacity:.45}
-.rr-tool[data-testid=zoom-btn],.rr-tool[data-testid=pan-btn]{flex:1 1 0;white-space:nowrap;padding:0 8px}
+.rr-tool[data-testid=zoom-btn],.rr-tool[data-testid=pan-btn],.rr-tool[data-testid=select-btn]{flex:1 1 0;white-space:nowrap;padding:0 6px;min-height:56px}
 .rr-zrow{flex:1 1 100%;display:flex;gap:8px;align-items:center}
 .rr-zstatus{flex:1;font-size:calc(13px * var(--ts));color:var(--on-surface-var,#50443A)}
 .rr-active{outline:3px solid var(--tomato,#CF4A27);outline-offset:-1px}

@@ -61,3 +61,15 @@ test('zoom maths: independent views, clamped to the pane, zoom keeps the point u
   const back = PZ.panBy(a, 9999, 9999, ...size); assert.deepEqual([back.x, back.y], [0, 0]);
   assert.equal(PZ.cssTransform(PZ.fit()), ''); assert.equal(PZ.percent(a), '200%');
 });
+
+// ---- one-finger controls (Touch Gesture Standard) ----
+import * as PZ1 from '../www/js/ui/panzoom.js';
+test('one-finger zoom is exponential: 160px up = one doubling, up then down returns exactly', () => {
+  assert.equal(PZ1.zoomFactor(-160), 2); assert.equal(PZ1.zoomFactor(160), 0.5);
+  assert.ok(Math.abs(PZ1.zoomFactor(-37) * PZ1.zoomFactor(37) - 1) < 1e-12);
+});
+test('soft start is continuous: 0 at the touch point, 1 at the knee, no step', () => {
+  assert.deepEqual(PZ1.knee(0, 0), { x: 0, y: 0 });
+  const a = PZ1.knee(0, 3.999), b = PZ1.knee(0, 4); assert.ok(Math.abs(a.y - b.y) < 0.01);
+  assert.deepEqual(PZ1.knee(0, 10), { x: 0, y: 10 });
+});

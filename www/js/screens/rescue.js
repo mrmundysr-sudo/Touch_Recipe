@@ -25,9 +25,12 @@ export function rescueScreen(params, ctx, nav) {
   const editors = new Set();
   // View state for each side lives here, outside render(), so it survives redraws, edits and switching between the sides on a narrow phone.
   const view = { original: PZ.fit(), recipe: PZ.fit() };
-  const sel = { zoom: null, pan: null };            // which side the magnifier / Pan button currently points at (null = off)
+  // One finger does one thing, chosen with the three buttons (Touch Gesture Standard): SELECT text (the default, so text can be copied), PAN, or ZOOM.
+  const MODES = { select: 'Select text', pan: 'Pan', zoom: 'Zoom' };
+  const SAY = { select: 'SELECT: press and hold a word to select text, then copy it and paste it into the recipe.', pan: 'PAN: drag one finger to move the page.', zoom: 'ZOOM: slide one finger up to zoom in, down to zoom out.' };
+  let mode = 'select'; try { const m = localStorage.getItem('touchrecipe.rescue.mode'); if (m === 'pan' || m === 'zoom') mode = m; } catch { /* no storage */ }
+  let lastSide = 'original';                       // the side the +/- buttons act on (the one last touched)
   const SIDE = { original: 'Original', recipe: 'Recipe' };
-  const cycle = (cur) => (cur == null ? 'original' : cur === 'original' ? 'recipe' : null);   // first tap Original, second Recipe, third off
   const paneEls = {};                               // side -> { pane, zoom (inner wrapper), wrap }
   const page = ScrollPage({ title: 'Recipe Rescue', testid: 'rescue', slot: null, onBack: () => leave() });
   const undoBtn = iconBtn('Undo', '↶', () => stepHistory(R.undo), ''); const redoBtn = iconBtn('Redo', '↷', () => stepHistory(R.redo), '');
@@ -157,6 +160,11 @@ export function rescueScreen(params, ctx, nav) {
   }
 
   // ---------- the ORIGINAL side ----------
+  async function copyText(t) {
+    try { await navigator.clipboard.writeText(t); say('Copied. Paste it into the recipe.'); return; } catch { /* fall back */ }
+    const ta = h('textarea', { style: 'position:fixed;opacity:0;top:0' }); ta.value = t; document.body.append(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch { /* no */ } ta.remove(); say(ok ? 'Copied. Paste it into the recipe.' : 'Press and hold the text to select and copy it.');
+  }
   function originalSide() {
     const src = st.draft.source; const out = [h('h2', { class: 'rr-h' }, 'Original')];
     if (R.sourceIsEmpty(src)) { out.push(h('p', { class: 'rr-note' }, 'No original was kept for this recipe. You can still type everything on the recipe side.')); return out; }
@@ -169,7 +177,7 @@ export function rescueScreen(params, ctx, nav) {
       out.push(h('div', { class: 'rr-group' }, img, h('div', { class: 'rr-row' }, textButton('Cut a photo out of this…', () => cutFromOriginal(f)))));
     });
     if (src.kind === 'PDF' && src.files?.[0]) out.push(h('div', { class: 'rr-row' }, textButton('Open the PDF', async () => { const b = await drafts.file(src.files[0]); if (b) window.open(URL.createObjectURL(b), '_blank'); })));
-    if ((src.text || '').trim()) out.push(h('div', { class: 'rr-group' }, h('span', { class: 'rr-label' }, 'Text (press and hold to select, then copy)'), h('div', { class: 'rr-original', 'data-testid': 'orig-text' }, src.text.trim())));
+    if ((src.text || '').trim()) out.push(h('div', { class: 'rr-group' }, h('span', { class: 'rr-label' }, 'Text (press and hold a word to select it, then copy and paste it into the recipe)'), h('div', { class: 'rr-row' }, (() => { const b = textButton('Copy all the text', () => copyText(src.text.trim())); b.dataset.testid = 'copy-all'; return b; })()), h('div', { class: 'rr-original', 'data-testid': 'orig-text' }, src.text.trim())));
     return out;
   }
 
@@ -183,10 +191,10 @@ export function rescueScreen(params, ctx, nav) {
     e.zoom.style.transform = PZ.cssTransform(v);
     e.pane.classList.toggle('zoomed', zoomed);
     if (zoomed) { e.pane.scrollTop = 0; e.pane.scrollLeft = 0; }
-    const active = sel.zoom === side || sel.pan === side;
+    const active = mode !== 'select';
     e.wrap.classList.toggle('rr-active', active);
     e.overlay.hidden = !active;
-    e.badge.textContent = `${SIDE[side]} · ${PZ.percent(v)}${sel.zoom === side ? ' · Zoom' : ''}${sel.pan === side ? ' · Pan' : ''}`;
+    e.badge.textContent = `${SIDE[side]} · ${PZ.percent(v)}`;
     e.fit.hidden = PZ.isFit(v); e.badge.hidden = !active && PZ.isFit(v);
     updateBar();
   }
@@ -202,21 +210,18 @@ export function rescueScreen(params, ctx, nav) {
     paneEls[side] = { pane, zoom, wrap, overlay, badge, fit: fitBtn, side };
     PZ.attachGestures(overlay, {
       get: () => view[side], set: (v) => setView(side, v), size: () => sizeOf(side),
-      canPan: () => sel.pan === side, onScroll: (dy) => { pane.scrollTop += dy; },
+      mode: () => mode, onTouch: () => { lastSide = side; updateBar(); }, onScroll: (dy) => { pane.scrollTop += dy; },
     });
     return paneEls[side];
   }
   let bar = null;
-  const pick = (kind) => {
-    commitAll(); sel[kind] = cycle(sel[kind]);
-    const side = sel[kind]; if (side && !wideNow() && tab !== side) { tab = side; render(); return; }   // narrow: show the side that was chosen
-    ['original', 'recipe'].forEach(applyView);
-  };
-  const stepZoom = (f) => { const side = sel.zoom; if (!side || !paneEls[side]) return; const { vw, vh, cw, ch } = sizeOf(side); setView(side, PZ.zoomAt(view[side], f, vw / 2, vh / 2, vw, vh, cw, ch)); };
+  const setMode = (m) => { commitAll(); mode = m; try { localStorage.setItem('touchrecipe.rescue.mode', m); } catch { /* no storage */ } ['original', 'recipe'].forEach(applyView); };
+  const target = () => (wideNow() ? lastSide : tab);
+  const stepZoom = (f) => { const side = target(); if (!paneEls[side]) return; const { vw, vh, cw, ch } = sizeOf(side); setView(side, PZ.zoomAt(view[side], f, vw / 2, vh / 2, vw, vh, cw, ch)); };
   function zoomBar() {
     const btn = (testid, label, onclick) => h('button', { class: 'rr-tool', type: 'button', 'data-testid': testid, onclick }, label);
-    bar = h('div', { class: 'rr-zoombar', role: 'toolbar', 'aria-label': 'Zoom and pan the comparison' },
-      btn('zoom-btn', '', () => pick('zoom')), btn('pan-btn', '', () => pick('pan')),
+    bar = h('div', { class: 'rr-zoombar', role: 'toolbar', 'aria-label': 'What one finger does' },
+      btn('select-btn', '', () => setMode('select')), btn('pan-btn', '', () => setMode('pan')), btn('zoom-btn', '', () => setMode('zoom')),
       h('div', { class: 'rr-zrow' }, btn('zoom-out', '−', () => stepZoom(1 / 1.25)), btn('zoom-in', '+', () => stepZoom(1.25)),
         h('div', { class: 'rr-zstatus', 'data-testid': 'zoom-status', 'aria-live': 'polite' })));
     bar.querySelector('[data-testid=zoom-out]').setAttribute('aria-label', 'Zoom out'); bar.querySelector('[data-testid=zoom-in]').setAttribute('aria-label', 'Zoom in');
@@ -224,14 +229,15 @@ export function rescueScreen(params, ctx, nav) {
   }
   function updateBar() {
     if (!bar) return;
-    const z = bar.querySelector('[data-testid=zoom-btn]'), p = bar.querySelector('[data-testid=pan-btn]');
-    z.textContent = `🔍 Zoom: ${sel.zoom ? SIDE[sel.zoom] : 'off'}`; p.textContent = `✋ Pan: ${sel.pan ? SIDE[sel.pan] : 'off'}`;
-    z.setAttribute('aria-pressed', String(!!sel.zoom)); p.setAttribute('aria-pressed', String(!!sel.pan));
-    z.classList.toggle('on', !!sel.zoom); p.classList.toggle('on', !!sel.pan);
-    z.setAttribute('aria-label', `Zoom: ${sel.zoom ? SIDE[sel.zoom] + ' selected' : 'off'}. Tap to choose Original, then Recipe, then off.`);
-    p.setAttribute('aria-label', `Pan: ${sel.pan ? SIDE[sel.pan] + ' selected' : 'off'}. Tap to choose Original, then Recipe, then off.`);
-    bar.querySelector('[data-testid=zoom-in]').disabled = bar.querySelector('[data-testid=zoom-out]').disabled = !sel.zoom;
-    bar.querySelector('[data-testid=zoom-status]').textContent = `Original ${PZ.percent(view.original)} · Recipe ${PZ.percent(view.recipe)}`;
+    const labels = { select: '✎ Select text', pan: '✋ Pan', zoom: '🔍 Zoom' };
+    for (const m of Object.keys(MODES)) {
+      const b = bar.querySelector(`[data-testid=${m}-btn]`);
+      b.textContent = labels[m]; b.setAttribute('aria-pressed', String(mode === m)); b.classList.toggle('on', mode === m);
+      b.setAttribute('aria-label', `${MODES[m]}${mode === m ? ', selected' : ''}`);
+    }
+    bar.querySelector('[data-testid=zoom-in]').disabled = bar.querySelector('[data-testid=zoom-out]').disabled = false;
+    const o = PZ.percent(view.original), r = PZ.percent(view.recipe);
+    bar.querySelector('[data-testid=zoom-status]').textContent = `${SAY[mode]} Original ${o} · Recipe ${r}`;
   }
 
   // Wide (a phone on its side, a tablet): the original on the left, our recipe on the right, each scrolling on its own. Upright: one at a time, full width.

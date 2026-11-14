@@ -36,3 +36,6 @@
 | K-032 | Parity | Course field, colon-less times, can-size grocery parsing, cup roll-up, Cook Mode layout and Rescue zoom/pan exist only in the iOS web app; the Kotlin app is unchanged. |
 | K-033 | Parity / import | The "quantity line is an ingredient", "Cooking:" heading, tip-to-notes and Review text-wrapping changes exist only in the iOS web app. The peppers fix was reproduced from the recipe's text structure, not the exact page HTML; run the real URL on a device. |
 | K-034 | Import / social | Facebook/Instagram shares only expose the public (often truncated) caption, and the sandbox cannot fetch Facebook (robots/login), so the Facebook share cases were NOT reproduced from the real post. Only the noise filter (video length, counts, buttons), the truncated-caption warning and Rescue title wrapping were added. Still open: the odd "2 hours at 260" fragments, and prefill quality for real posts need the real caption text from a device (Rescue Original pane). |
+
+## K-036 Rescue gesture standard: partial port
+Rescue implements PAN/ZOOM one-finger modes and the live status line from the Touch Gesture Standard, but not the sensitivity slider, frame-timing readout, first-use intro dialog, or TalkBack/VoiceOver custom actions (the +/- buttons are the accessible alternative). Real-device feel unverified.

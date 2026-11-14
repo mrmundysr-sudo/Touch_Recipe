@@ -43,3 +43,8 @@ KNOWN_ISSUES K-030..K-032, BRANCH_STATUS.
 - Kotlin/Android parity not changed. Swift untouched, iOS CI (`ios-check.yml`) result to be read from the pushed branch.
 - Zoom/pan verified with synthetic pointer events, not a real two-finger touch.
 - Merge/release authorized: No
+
+## Update 2026-11-14: one-finger zoom/pan and copyable text in Recipe Rescue
+- Pinch/spread removed. Rescue now follows the Touch Gesture Standard v1.1 (Touch Photo Collage): three radio buttons (Select text / Pan / Zoom, 56px tall), PAN = one finger drags, ZOOM = slide up zooms in, down zooms out (`2^(-dy/160)`, exponential, sideways ignored), soft-start knee of 4px, taps change nothing, spoken status line (aria-live). Each pane keeps its own zoom/position; Fit resets a pane. Mode is remembered.
+- Default mode is Select text: the gesture layer is hidden, so the Original text can be long-press selected and pasted into the recipe fields; a "Copy all the text" button was added. The rendered PDF page is an image and has no selectable text; the extracted text below it is the copyable source.
+- Not ported: sensitivity slider, frame timing overlay, first-use dialog, TalkBack custom actions (see K-036). Evidence: tools/e2e-cook-rescue-zoom.cjs passes; e2e 34, rescue 9, rescue-plain 26, photo 13; new unit tests for zoomFactor/knee. Not verified on a real iPhone.

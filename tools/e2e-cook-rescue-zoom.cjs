@@ -125,53 +125,61 @@ const SIZES = [[390, 844], [375, 667], [320, 568]];
     if (w !== 390) { await page.context().close(); continue; }
     // ---- zoom and pan (narrow phone: one side at a time) ----
     const tid = (i) => page.locator(`[data-testid="${i}"]`);
-    const pinch = (side, factor) => page.evaluate(({ side, factor }) => {
-      const o = document.querySelector(`[data-testid=gesture-${side}]`); const r = o.getBoundingClientRect(); const cx = r.left + r.width / 2, cy = r.top + r.height / 2, d0 = 60;
-      const ev = (type, id, x, y) => o.dispatchEvent(new PointerEvent(type, { pointerId: id, clientX: x, clientY: y, bubbles: true, cancelable: true, isPrimary: id === 1 }));
-      ev('pointerdown', 1, cx - d0, cy); ev('pointerdown', 2, cx + d0, cy);
-      for (let i = 1; i <= 5; i++) { const d = d0 + (d0 * factor - d0) * (i / 5); ev('pointermove', 1, cx - d, cy); ev('pointermove', 2, cx + d, cy); }
-      ev('pointerup', 1, cx - d0 * factor, cy); ev('pointerup', 2, cx + d0 * factor, cy);
-    }, { side, factor });
-    const drag = (side, dx, dy) => page.evaluate(({ side, dx, dy }) => {
-      const o = document.querySelector(`[data-testid=gesture-${side}]`); const r = o.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2;
+    // one finger: slide(side, dy) = one finger sliding vertically in 8 events from the pane centre; drag = a diagonal drag
+    const finger = (side, dx, dy) => page.evaluate(({ side, dx, dy }) => {
+      const o = document.querySelector(`[data-testid=gesture-${side}]`); if (!o || o.hidden) return false; const r = o.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2;
       const ev = (type, px, py) => o.dispatchEvent(new PointerEvent(type, { pointerId: 7, clientX: px, clientY: py, bubbles: true, cancelable: true, isPrimary: true }));
-      ev('pointerdown', x, y); for (let i = 1; i <= 4; i++) ev('pointermove', x + dx * i / 4, y + dy * i / 4); ev('pointerup', x + dx, y + dy);
+      ev('pointerdown', x, y); for (let i = 1; i <= 8; i++) ev('pointermove', x + dx * i / 8, y + dy * i / 8); ev('pointerup', x + dx, y + dy); return true;
     }, { side, dx, dy });
+    const scaleOf = async (side) => { const t = await page.evaluate((s) => document.querySelector(`[data-testid=pane-${s}] .rr-zoom`)?.style.transform || '', side); const m = /scale\(([\d.]+)\)/.exec(t); return m ? parseFloat(m[1]) : 1; };
     const state = (side) => page.evaluate((s) => { const z = document.querySelector(`[data-testid=pane-${s}] .rr-zoom`); return z ? z.style.transform : null; }, side);
-    const status = async () => (await tid('zoom-status').innerText()).trim();
+    const pressed = async (id) => (await tid(id).getAttribute('aria-pressed')) === 'true';
 
-    check(await tid('zoom-btn').count() === 1 && await tid('pan-btn').count() === 1, 'Rescue: magnifier (Zoom) and Pan buttons exist');
+    check(await tid('select-btn').count() === 1 && await tid('pan-btn').count() === 1 && await tid('zoom-btn').count() === 1, 'Rescue: Select text, Pan and Zoom buttons exist');
+    const zb = await rect(page, '[data-testid=zoom-btn]'); check(zb.b - zb.t >= 54, 'mode buttons are at least 56 tall (large targets)');
     await tid('tab-original').click(); await page.waitForTimeout(150);
+    check(await pressed('select-btn') && await page.locator('[data-testid=gesture-original]').isHidden(), 'the default is Select text: nothing sits over the text, so it can be selected and copied');
+    check(/SELECT/.test(await tid('zoom-status').innerText()), 'the status says in words what one finger does (select)');
+    // selection works: select the original text and copy it
+    const sel = await page.evaluate(() => { const el = document.querySelector('[data-testid=orig-text]'); if (!el) return null; const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); return { text: s.toString().slice(0, 30), us: getComputedStyle(el).userSelect }; });
+    check(sel && sel.us === 'text' && sel.text.length > 5, `the original text is selectable (${JSON.stringify(sel)})`);
+    check(await tid('copy-all').count() === 1, 'a "Copy all the text" button is offered');
+    // ZOOM mode
     await tid('zoom-btn').click(); await page.waitForTimeout(100);
-    check((await tid('zoom-btn').innerText()).includes('Original') && (await tid('zoom-btn').getAttribute('aria-pressed')) === 'true', 'first tap on the magnifier selects Original, and says so');
-    check(await tid('pane-original').count() === 1 && await page.locator('.rr-wrap.rr-active').count() === 1, 'the active pane is highlighted');
-    await pinch('original', 2); await page.waitForTimeout(100);
-    const sO = await state('original'); check(/scale\(2/.test(sO || ''), `pinch zooms the Original (${sO})`);
-    await tid('zoom-btn').click(); await page.waitForTimeout(250);   // second tap -> Recipe (narrow phone shows the Recipe side)
-    check((await tid('zoom-btn').innerText()).includes('Recipe') && await tid('pane-recipe').count() === 1, 'second tap on the magnifier selects Recipe and shows that side');
+    check(await pressed('zoom-btn') && !(await pressed('select-btn')) && /ZOOM: slide one finger up/.test(await tid('zoom-status').innerText()), 'Zoom mode is selected (one at a time) and explained in words');
+    check(await page.locator('.rr-wrap.rr-active').count() >= 1, 'the active pane is highlighted');
+    await finger('original', 0, -80); await page.waitForTimeout(100);
+    const z1 = await scaleOf('original'); check(Math.abs(z1 - 2 ** (80 / 160)) < 0.05, `one finger sliding up 80px zooms in by 2^(80/160) (${z1.toFixed(3)})`);
+    await finger('original', 0, 80); await page.waitForTimeout(100);
+    const z2 = await scaleOf('original'); check(Math.abs(z2 - 1) < 0.02, `sliding back down returns to the start (${z2.toFixed(3)})`);
+    await finger('original', 0, -160); await page.waitForTimeout(100); const z3 = await scaleOf('original'); check(Math.abs(z3 - 2) < 0.08, `160px up is one doubling (${z3.toFixed(3)})`);
+    const posBefore = await state('original'); await finger('original', 90, 0); await page.waitForTimeout(100);
+    check(await state('original') === posBefore, 'sideways movement is ignored in Zoom mode');
+    await tid('zoom-btn').click(); // still zoom; tap-only touch must change nothing
+    const tapBefore = await state('original');
+    await page.evaluate(() => { const o = document.querySelector('[data-testid=gesture-original]'); const r = o.getBoundingClientRect(); const ev = (t, y) => o.dispatchEvent(new PointerEvent(t, { pointerId: 9, clientX: r.left + 50, clientY: r.top + y, bubbles: true, cancelable: true })); ev('pointerdown', 50); ev('pointermove', 54); ev('pointerup', 54); });
+    check(await state('original') === tapBefore, 'a tap changes nothing');
+    // the other side is untouched (switch to Recipe, zoom it on its own)
+    await tid('tab-recipe').click(); await page.waitForTimeout(250);
     check(await state('recipe') === '', 'the Recipe is still at fit while the Original is zoomed');
-    await pinch('recipe', 3); await page.waitForTimeout(100);
-    const sR = await state('recipe'); check(/scale\(3/.test(sR || ''), `Recipe zooms on its own (${sR})`);
-    // text cannot be edited by accident through the overlay
+    await finger('recipe', 0, -240); await page.waitForTimeout(100);
+    const zr = await scaleOf('recipe'); check(zr > 2.7 && zr <= 3, `Recipe zooms on its own with one finger (${zr.toFixed(2)})`);
     const before = await tid('rr-title').inputValue(); const tb = await rect(page, '[data-testid=gesture-recipe]');
     await page.mouse.click(tb.l + 40, tb.t + 40); await page.keyboard.type('zzz');
-    check((await tid('rr-title').inputValue()) === before && !(await page.evaluate(() => /INPUT|TEXTAREA/.test(document.activeElement?.tagName || ''))), 'taps on a zoom/pan-selected pane do not edit or focus text');
-    // Pan mode
-    await tid('zoom-btn').click(); await page.waitForTimeout(100);
-    check((await tid('zoom-btn').innerText()).includes('off'), 'third tap turns the magnifier off');
+    check((await tid('rr-title').inputValue()) === before && !(await page.evaluate(() => /INPUT|TEXTAREA/.test(document.activeElement?.tagName || ''))), 'taps in Zoom/Pan mode do not edit or focus text');
+    // PAN mode
     await tid('pan-btn').click(); await page.waitForTimeout(100);
-    check((await tid('pan-btn').innerText()).includes('Original'), 'first tap on Pan selects Original'); await page.waitForTimeout(200);
-    const beforePan = await state('original'); await drag('original', -60, -80); await page.waitForTimeout(100);
-    const afterPan = await state('original'); check(afterPan !== beforePan && /translate\(-?\d/.test(afterPan), `one-finger drag pans the Original (${beforePan} -> ${afterPan})`);
-    await tid('pan-btn').click(); await page.waitForTimeout(250);
-    check((await tid('pan-btn').innerText()).includes('Recipe') && await tid('pane-recipe').count() === 1, 'second tap on Pan selects Recipe');
-    const recBefore = await state('recipe'); await drag('recipe', -30, -200); await page.waitForTimeout(100); const recAfter = await state('recipe');
-    check(recAfter !== recBefore && /scale\(3/.test(recAfter), `Recipe pans independently, still at 3x (${recAfter})`);
-    // switching sides keeps each side's view
-    await tid('tab-original').click(); await page.waitForTimeout(200);
-    check(await state('original') === afterPan, 'switching to Original keeps its zoom and position');
+    check(await pressed('pan-btn') && !(await pressed('zoom-btn')) && /PAN: drag one finger/.test(await tid('zoom-status').innerText()), 'Pan mode is selected and explained in words');
+    const recBefore = await state('recipe'); await finger('recipe', -30, -200); await page.waitForTimeout(100); const recAfter = await state('recipe');
+    check(recAfter !== recBefore && Math.abs((await scaleOf('recipe')) - zr) < 1e-6, `one-finger drag pans the Recipe and never changes its zoom (${recAfter})`);
+    await tid('tab-original').click(); await page.waitForTimeout(250);
+    const afterPan0 = await state('original'); await finger('original', -60, -80); await page.waitForTimeout(100);
+    const afterPan = await state('original'); check(afterPan !== afterPan0 && /translate\(-?\d/.test(afterPan) && Math.abs((await scaleOf('original')) - z3) < 1e-6, `one-finger drag pans the Original (${afterPan0} -> ${afterPan})`);
     await tid('tab-recipe').click(); await page.waitForTimeout(200);
     check(await state('recipe') === recAfter, 'switching back to Recipe keeps its zoom and position');
+    // back to Select text: the overlay goes away and fields work again
+    await tid('select-btn').click(); await page.waitForTimeout(150);
+    check(await page.locator('[data-testid=gesture-recipe]').isHidden() && await pressed('select-btn'), 'Select text removes the gesture layer');
     // reset per pane
     await tid('fit-recipe').click(); await page.waitForTimeout(100);
     check(await state('recipe') === '', 'Fit resets the Recipe');
